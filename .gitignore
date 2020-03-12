@@ -1,0 +1,13 @@
+bin/*
+!bin/.keep
+
+lst/*
+!lst/.keep
+
+*.map
+*.lst
+*.o
+*c.d
+*s.d
+
+prj/*.sublime-workspace
