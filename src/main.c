@@ -54,7 +54,6 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
 static void led_setup(void);
 
 /*******************************************************************************
@@ -86,7 +85,7 @@ int main(void)
   {
     if(pps_elapsed())
     {
-      TIM2_CNT = 0;
+      timebase_reset();
       break;
     }
   }
@@ -110,7 +109,7 @@ int main(void)
     {
       while(1)
       {
-        if((GPIOA_IDR & BIT_09) == 0)
+        if(tdc_check_irq())
         {
           tdc_write(2, tdc_read(2));
           if(GPIOA_IDR & BIT_09)
@@ -121,7 +120,7 @@ int main(void)
 
 
       float ps = get_tdc_ps();
-
+      get_tic();
 
       enable_tdc();
 
@@ -161,8 +160,6 @@ int main(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
 
 
 
