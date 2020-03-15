@@ -37,6 +37,8 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
+#define TIM2_VECTOR 28u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -199,7 +201,7 @@ static void enable_timer(void)
   out: none
 ==============================================================================*/
 {
-  vic_enableirq(28, capture_irq);
+  vic_enableirq(TIM2_VECTOR, capture_irq);
 
   /* enable gpio a */
   RCC_AHB1ENR |= BIT_00;
