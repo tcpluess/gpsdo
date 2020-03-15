@@ -158,9 +158,9 @@ float get_tdc_ps(void)
 
 uint32_t get_tdc(void)
 {
-  uint32_t calib1 = tdc_read24(ADDR_CALIB1);
-  uint32_t calib2 = tdc_read24(ADDR_CALIB2);
-  uint32_t time1 = tdc_read(ADDR_TIME1);
+  uint64_t calib1 = tdc_read24(ADDR_CALIB1);
+  uint64_t calib2 = tdc_read24(ADDR_CALIB2);
+  uint64_t time1 = tdc_read(ADDR_TIME1);
 
   uint32_t ps = (time1 * (CAL_PERIODS - 1u) * PERIOD_PS)/(calib2 - calib1);
   return ps;
