@@ -52,7 +52,7 @@
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-__attribute__((aligned (1024))) static void* vector_table[] =
+__attribute__((aligned (1024))) static funcptr_t vector_table[] =
 {
     /* __initial_sp */                      0,
     /* Reset_Handler */                     0,
@@ -163,9 +163,9 @@ void vic_init(void)
   VTOR = (uint32_t)vector_table;
 }
 
-void vic_enableirq(uint32_t intnum, void* func)
+void vic_enableirq(uint32_t intnum, funcptr_t func)
 {
-  vector_table[intnum] = func;
+  vector_table[intnum + 16] = func;
   if(intnum < 32)
   {
     NVIC_ISER0 = (1u << intnum);

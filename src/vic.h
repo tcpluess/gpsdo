@@ -45,13 +45,15 @@
  * TYPE DEFINITIONS
  ******************************************************************************/
 
+typedef void(*funcptr_t)(void);
+
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)
  ******************************************************************************/
 
 extern void vic_init(void);
 
-extern void vic_enableirq(uint32_t intnum, void* func);
+extern void vic_enableirq(uint32_t intnum, funcptr_t func);
 
 /*******************************************************************************
  * END OF CODE
