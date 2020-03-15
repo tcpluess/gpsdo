@@ -1,0 +1,25 @@
+
+
+Breakpoint=3060125703: 146: 21, State=BP_STATE_DISABLED
+Breakpoint=3060125703: 198: 7, State=BP_STATE_DISABLED
+Breakpoint=3060125703: 546: 3, State=BP_STATE_DISABLED
+OpenDocument="main.c", FilePath="D:/tmp/gpsdo_firmware/src/main.c", Line=63
+OpenDocument="adt7301.c", FilePath="D:/tmp/gpsdo_firmware/src/adt7301.c", Line=46
+OpenDocument="crt0.s", FilePath="D:/tmp/gpsdo_firmware/src/crt0.s", Line=32
+OpenToolbar="Debug", Floating=0, x=0, y=0
+OpenToolbar="Breakpoints", Floating=0, x=1, y=0
+OpenWindow="Registers 1", DockArea=LEFT, x=0, y=1, w=308, h=286, FilterBarShown=0, ToolBarShown=0, FilteredItems=[], RefreshRate=1
+OpenWindow="Source Files", DockArea=LEFT, x=0, y=0, w=308, h=313, FilterBarShown=1, ToolBarShown=0
+OpenWindow="Disassembly", DockArea=RIGHT, x=0, y=0, w=768, h=372, FilterBarShown=0, ToolBarShown=0, ExecCountersShown=0, InstEncodingsShown=0
+OpenWindow="Source", x=0, y=0, w=0, h=0, FilterBarShown=0, ToolBarShown=0, ExecCountersShown=0
+OpenWindow="Memory 1", DockArea=BOTTOM, x=1, y=0, w=956, h=317, FilterBarShown=0, ToolBarShown=0, EditorAddress=0x2001FD80
+OpenWindow="Watched Data", DockArea=RIGHT, x=0, y=1, w=768, h=243, FilterBarShown=0, ToolBarShown=0
+OpenWindow="Functions", DockArea=LEFT, x=0, y=1, w=308, h=286, FilterBarShown=1, ToolBarShown=0
+OpenWindow="Console", DockArea=BOTTOM, x=0, y=0, w=958, h=317, FilterBarShown=0, ToolBarShown=0
+TableHeader="Registers 1", SortCol="Name", SortOrder="ASCENDING", VisibleCols=["Name";"Value";"Description"], ColWidths=[154;105;224]
+TableHeader="Watched Data", SortCol="Expression", SortOrder="ASCENDING", VisibleCols=["Expression";"Value";"Location";"Refresh"], ColWidths=[152;210;212;194]
+TableHeader="Functions", SortCol="Name", SortOrder="ASCENDING", VisibleCols=["Name";"Address";"Size";"#Insts";"Source"], ColWidths=[86;77;44;57;116]
+TableHeader="Source Files", SortCol="File", SortOrder="ASCENDING", VisibleCols=["File";"Status";"Size";"#Insts";"Path"], ColWidths=[138;62;44;57;332]
+TableHeader="Power Sampling", SortCol="Index", SortOrder="ASCENDING", VisibleCols=["Index";"Time";"Ch 0"], ColWidths=[100;100;100]
+TableHeader="RegisterSelectionDialog", SortCol="Name", SortOrder="ASCENDING", VisibleCols=["Auto";"Name";"Address";"Description"], ColWidths=[27;27;27;27]
+WatchedExpression="cap"

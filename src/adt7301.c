@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    main module
+ * Description:    adt7301 driver
  *
  * Compiler:       ANSI-C
  *
- * Filename:       main.c
+ * Filename:       adt7301.c
  *
  * Version:        1.0
  *
@@ -28,15 +28,9 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "adt7301.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "adt7301.h"
-
-#include "rs232.h"
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
-#include "vic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -54,134 +48,50 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
-static void led_setup(void);
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
-
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-
-
-int main(void)
+void tmp_init(void)
 {
-  led_setup();
-  timebase_init();
-  vic_init();
-  dac_setup();
-  tmp_init();
-  rs232_init();
-  setup_tdc();
+  /* enable gpio port b and configure the spi pins */
+  RCC_AHB1ENR |= BIT_01;
 
-  set_dac(32768);
+  GPIOB_MODER &= ~((3u << 13) | (3u << 12) |(3u << 10));
+  GPIOB_MODER |= (1u << 10) | (1u << 14);
 
-  ppsenable(true);
+  /* ss and clk to inactive state */
+  GPIOB_BSRR = BIT_05 | BIT_07;
+}
 
-  while(1)
+float get_tmp(void)
+{
+  uint32_t ret = 0;
+
+  /* ss active */
+  GPIOB_BSRR = BIT_21;
+  for(int i = 0; i < 16; i++)
   {
-    if(pps_elapsed())
+    GPIOB_BSRR = BIT_23;
+    ret = ret << 1;
+    if(GPIOB_IDR & BIT_06)
     {
-      TIM2_CNT = 0;
-      break;
+      ret |= BIT_00;
     }
+    GPIOB_BSRR = BIT_07;
   }
+  GPIOB_BSRR = BIT_05;
 
-  enable_tdc();
-
-#define KP 2000.0f
-#define KI 50.0f
-#define AVG 5.0f
-
-  float esum = 32768.0f/KI;
-  float e;
-  float efc;
-  float efcfilt = 32768.0f;
-  float tmp;
-  float sollphase = -2.0f;
-
-  while(1)
-  {
-    if(pps_elapsed())
-    {
-      while(1)
-      {
-        if((GPIOA_IDR & BIT_09) == 0)
-        {
-          tdc_write(2, tdc_read(2));
-          if(GPIOA_IDR & BIT_09)
-            break;
-        }
-      }
-
-
-
-      float ps = get_tdc_ps();
-
-
-      enable_tdc();
-
-      int32_t cap = TIM2_CCR3;
-      float phase;
-      if(cap > 5000000u)
-      {
-        phase = 10e6f - cap;
-      }
-      else
-      {
-        phase = -cap;
-      }
-      phase += ps;
-
-      e = phase - sollphase;
-      tmp = esum + e;
-      if((tmp < (65535.0f/KI)) && (tmp > 0))
-        esum = tmp;
-      efc = KI*esum + KP*e;
-      efcfilt = ((AVG-1)*efcfilt + efc) / AVG;
-      if(efcfilt > 65535)
-        efcfilt = 65535;
-      else if(efcfilt < 0)
-        efcfilt = 0;
-      uint16_t dacval = efcfilt;
-      set_dac(dacval);
-
-      float tmp = get_tmp();
-      printf("%f %f %d %f\n", tmp, e, dacval, esum);
-    }
-
-  }
-  return 0;
+  return ((float)ret)/32.0f;
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static void led_setup(void)
-{
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
-}
 
 /*******************************************************************************
  * END OF CODE

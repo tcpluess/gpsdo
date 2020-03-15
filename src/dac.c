@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    main module
+ * Description:    adt7301 driver
  *
  * Compiler:       ANSI-C
  *
- * Filename:       main.c
+ * Filename:       adt7301.c
  *
  * Version:        1.0
  *
@@ -28,15 +28,9 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "dac.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "adt7301.h"
-
-#include "rs232.h"
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
-#include "vic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -46,6 +40,10 @@
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
+#define DAC_SS(x) GPIOB_BSRR = ((x) != 0) ? BIT_12 : BIT_28
+#define DAC_SCK(x) GPIOB_BSRR = ((x) != 0) ? BIT_13 : BIT_29
+#define DAC_MOSI(x) GPIOB_BSRR = ((x) != 0) ? BIT_15 : BIT_31
+
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
  ******************************************************************************/
@@ -54,134 +52,48 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
-static void led_setup(void);
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
-
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-
-
-int main(void)
+void dac_setup(void)
 {
-  led_setup();
-  timebase_init();
-  vic_init();
-  dac_setup();
-  tmp_init();
-  rs232_init();
-  setup_tdc();
+  /* enable gpio b */
+  RCC_AHB1ENR |= BIT_01;
 
-  set_dac(32768);
+  GPIOB_MODER |= (1u << 24) | (1u << 26) | (1u << 30);
+  GPIOB_BSRR = BIT_12|BIT_13|BIT_15;
+}
 
-  ppsenable(true);
+void set_dac(uint16_t data)
+{
+  uint32_t tmpdata = data;
 
-  while(1)
+  /* set ss low */
+  DAC_SS(0);
+
+  for(int i = 0; i < 24; i++)
   {
-    if(pps_elapsed())
-    {
-      TIM2_CNT = 0;
-      break;
-    }
+    /* output MSB first */
+
+  DAC_SCK(1);
+  DAC_MOSI(tmpdata & BIT_23);
+    tmpdata = tmpdata << 1;
+    /* sck low */
+    DAC_SCK(0);
   }
 
-  enable_tdc();
-
-#define KP 2000.0f
-#define KI 50.0f
-#define AVG 5.0f
-
-  float esum = 32768.0f/KI;
-  float e;
-  float efc;
-  float efcfilt = 32768.0f;
-  float tmp;
-  float sollphase = -2.0f;
-
-  while(1)
-  {
-    if(pps_elapsed())
-    {
-      while(1)
-      {
-        if((GPIOA_IDR & BIT_09) == 0)
-        {
-          tdc_write(2, tdc_read(2));
-          if(GPIOA_IDR & BIT_09)
-            break;
-        }
-      }
-
-
-
-      float ps = get_tdc_ps();
-
-
-      enable_tdc();
-
-      int32_t cap = TIM2_CCR3;
-      float phase;
-      if(cap > 5000000u)
-      {
-        phase = 10e6f - cap;
-      }
-      else
-      {
-        phase = -cap;
-      }
-      phase += ps;
-
-      e = phase - sollphase;
-      tmp = esum + e;
-      if((tmp < (65535.0f/KI)) && (tmp > 0))
-        esum = tmp;
-      efc = KI*esum + KP*e;
-      efcfilt = ((AVG-1)*efcfilt + efc) / AVG;
-      if(efcfilt > 65535)
-        efcfilt = 65535;
-      else if(efcfilt < 0)
-        efcfilt = 0;
-      uint16_t dacval = efcfilt;
-      set_dac(dacval);
-
-      float tmp = get_tmp();
-      printf("%f %f %d %f\n", tmp, e, dacval, esum);
-    }
-
-  }
-  return 0;
+  /* set ss high */
+  DAC_SS(1);
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static void led_setup(void)
-{
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
-}
 
 /*******************************************************************************
  * END OF CODE

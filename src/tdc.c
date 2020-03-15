@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    main module
+ * Description:    adt7301 driver
  *
  * Compiler:       ANSI-C
  *
- * Filename:       main.c
+ * Filename:       adt7301.c
  *
  * Version:        1.0
  *
@@ -28,15 +28,9 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "tdc.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "adt7301.h"
-
-#include "rs232.h"
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
-#include "vic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -46,6 +40,11 @@
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
+#define TDC_CSB(x) GPIOA_BSRR = ((x) != 0) ? BIT_04 : BIT_20
+#define TDC_SCK(x) GPIOA_BSRR = ((x) != 0) ? BIT_05 : BIT_21
+#define TDC_MOSI(x) GPIOA_BSRR = ((x) != 0) ? BIT_07 : BIT_23
+#define TDC_ENA(x) GPIOA_BSRR = ((x) != 0) ? BIT_03 : BIT_19
+
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
  ******************************************************************************/
@@ -54,108 +53,72 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
-static void led_setup(void);
+static uint8_t tdc_8bit(uint16_t data);
+static uint32_t tdc_24bit(uint32_t data);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-
-
-int main(void)
+void setup_tdc(void)
 {
-  led_setup();
-  timebase_init();
-  vic_init();
-  dac_setup();
-  tmp_init();
-  rs232_init();
-  setup_tdc();
+  /* enable port a */
+  RCC_AHB1ENR |= BIT_00;
 
-  set_dac(32768);
+  GPIOA_MODER |= (1u << 6) | (1u << 8) | (1u << 10) | (1u << 14);
+  GPIOA_PUPDR |= (1u << 18); // pullup for TDC_IRQ
 
-  ppsenable(true);
+  TDC_CSB(1);
+  TDC_SCK(0);
+  TDC_ENA(1);
+}
 
-  while(1)
-  {
-    if(pps_elapsed())
-    {
-      TIM2_CNT = 0;
-      break;
-    }
-  }
+uint8_t tdc_read(uint8_t addr)
+{
+  uint8_t ret;
+  uint16_t tmp = addr;
+  tmp <<= 8;
+  ret = tdc_8bit(tmp);
+  return ret;
+}
 
-  enable_tdc();
+uint8_t tdc_read24(uint8_t addr)
+{
+  uint32_t ret;
+  uint32_t tmp = addr;
+  tmp <<= 24;
+  ret = tdc_24bit(tmp);
+  return ret;
+}
 
-#define KP 2000.0f
-#define KI 50.0f
-#define AVG 5.0f
+void tdc_write(uint8_t addr, uint8_t data)
+{
+  uint16_t tmp = BIT_06 | addr;
+  tmp <<= 8;
+  tmp |= data;
+  tdc_8bit(tmp);
+}
 
-  float esum = 32768.0f/KI;
-  float e;
-  float efc;
-  float efcfilt = 32768.0f;
-  float tmp;
-  float sollphase = -2.0f;
+void enable_tdc(void)
+{
+  tdc_write(0, BIT_00);
+}
 
-  while(1)
-  {
-    if(pps_elapsed())
-    {
-      while(1)
-      {
-        if((GPIOA_IDR & BIT_09) == 0)
-        {
-          tdc_write(2, tdc_read(2));
-          if(GPIOA_IDR & BIT_09)
-            break;
-        }
-      }
+float get_tdc_ps(void)
+{
+  float calib1 = tdc_read24(0x1b);
+  float calib2 = tdc_read24(0x1c);
+
+  float time1 = tdc_read24(0x10);
+  float time2 = tdc_read24(0x12);
+  float clkcnt = tdc_read24(0x11);
 
 
-
-      float ps = get_tdc_ps();
-
-
-      enable_tdc();
-
-      int32_t cap = TIM2_CCR3;
-      float phase;
-      if(cap > 5000000u)
-      {
-        phase = 10e6f - cap;
-      }
-      else
-      {
-        phase = -cap;
-      }
-      phase += ps;
-
-      e = phase - sollphase;
-      tmp = esum + e;
-      if((tmp < (65535.0f/KI)) && (tmp > 0))
-        esum = tmp;
-      efc = KI*esum + KP*e;
-      efcfilt = ((AVG-1)*efcfilt + efc) / AVG;
-      if(efcfilt > 65535)
-        efcfilt = 65535;
-      else if(efcfilt < 0)
-        efcfilt = 0;
-      uint16_t dacval = efcfilt;
-      set_dac(dacval);
-
-      float tmp = get_tmp();
-      printf("%f %f %d %f\n", tmp, e, dacval, esum);
-    }
-
-  }
-  return 0;
+  return (float)(9.0f*(time1-time2)/(calib2-calib1) + clkcnt);
 }
 
 /*******************************************************************************
@@ -163,24 +126,43 @@ int main(void)
  ******************************************************************************/
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-static void led_setup(void)
+static uint8_t tdc_8bit(uint16_t data)
 {
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
+  uint8_t tmp = 0;
+
+  TDC_CSB(0);
+  for(int i = 0; i < 16; i++)
+  {
+    TDC_SCK(0);
+    TDC_MOSI(data & BIT_15);
+    tmp <<= 1;
+    data <<= 1;
+    if(GPIOA_IDR & BIT_06)
+      tmp |= BIT_00;
+    TDC_SCK(1);
+  }
+  TDC_CSB(1);
+  return tmp;
+}
+
+static uint32_t tdc_24bit(uint32_t data)
+{
+  uint32_t tmp = 0;
+
+  TDC_CSB(0);
+  for(int i = 0; i < 32; i++)
+  {
+    TDC_SCK(0);
+    TDC_MOSI(data & BIT_31);
+    tmp <<= 1;
+    data <<= 1;
+    if(GPIOA_IDR & BIT_06)
+      tmp |= BIT_00;
+    TDC_SCK(1);
+  }
+  TDC_CSB(1);
+  tmp &= 0xffffffu;
+  return tmp;
 }
 
 /*******************************************************************************

@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    main module
+ * Description:    adt7301 driver
  *
  * Compiler:       ANSI-C
  *
- * Filename:       main.c
+ * Filename:       adt7301.c
  *
  * Version:        1.0
  *
@@ -28,19 +28,17 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "rs232.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "adt7301.h"
-
-#include "rs232.h"
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
-#include "vic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
+
+#define BAUD 57600u
+#define BAUD_INT ((uint32_t)(10000000u/(16u*BAUD)))
+#define BAUD_FRAC ((uint32_t)(10000000u/BAUD-16u*BAUD_INT+0.5f))
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -54,134 +52,101 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
-static void led_setup(void);
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
-
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-
-
-int main(void)
+extern void rs232_init(void)
 {
-  led_setup();
-  timebase_init();
-  vic_init();
-  dac_setup();
-  tmp_init();
-  rs232_init();
-  setup_tdc();
+  /* enable port d */
+  RCC_AHB1ENR |= BIT_03;
 
-  set_dac(32768);
+  /* select uart pins for pd5 and pd6 */
+  GPIOD_MODER |= (2u << 10) | (2u << 12);
+  GPIOD_AFRL |= (7u << 20) | (7u << 24);
 
-  ppsenable(true);
+  /* enable usart2 */
+  RCC_APB1ENR |= BIT_17;
 
-  while(1)
+
+  /* div = 10e6/(16*B) */
+  USART2_BRR = (BAUD_FRAC << 0) | (BAUD_INT << 4);
+
+  USART2_CR1 = BIT_13 | BIT_03 | BIT_02;
+}
+
+void uart0Putch(char c)
+{
+  do
   {
-    if(pps_elapsed())
+    if(USART2_SR & BIT_07)
     {
-      TIM2_CNT = 0;
       break;
     }
+  } while(true);
+  USART2_DR = c;
+}
+
+_ssize_t _write_r (
+    struct _reent *r,
+    int file,
+    const void *ptr,
+    size_t len)
+{
+  int i;
+  const unsigned char *p;
+
+  p = (const unsigned char*) ptr;
+
+  for (i = 0; i < len; i++) {
+    if (*p == '\n' ) uart0Putch('\r');
+   uart0Putch(*p++);
   }
 
-  enable_tdc();
+  return len;
+}
 
-#define KP 2000.0f
-#define KI 50.0f
-#define AVG 5.0f
 
-  float esum = 32768.0f/KI;
-  float e;
-  float efc;
-  float efcfilt = 32768.0f;
-  float tmp;
-  float sollphase = -2.0f;
+int _isatty(int file)
+{
+  return 1;
+}
 
-  while(1)
+_ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
+{
+#if 0
+  char c;
+  int  i;
+  unsigned char *p;
+
+  p = (unsigned char*)ptr;
+
+  for (i = 0; i < len; i++)
   {
-    if(pps_elapsed())
+    //c = uart0GetchW();
+
+    *p++ = c;
+    //uart0Putch(c);
+
+    if (c == 0x0D && i <= (len - 2))
     {
-      while(1)
-      {
-        if((GPIOA_IDR & BIT_09) == 0)
-        {
-          tdc_write(2, tdc_read(2));
-          if(GPIOA_IDR & BIT_09)
-            break;
-        }
-      }
-
-
-
-      float ps = get_tdc_ps();
-
-
-      enable_tdc();
-
-      int32_t cap = TIM2_CCR3;
-      float phase;
-      if(cap > 5000000u)
-      {
-        phase = 10e6f - cap;
-      }
-      else
-      {
-        phase = -cap;
-      }
-      phase += ps;
-
-      e = phase - sollphase;
-      tmp = esum + e;
-      if((tmp < (65535.0f/KI)) && (tmp > 0))
-        esum = tmp;
-      efc = KI*esum + KP*e;
-      efcfilt = ((AVG-1)*efcfilt + efc) / AVG;
-      if(efcfilt > 65535)
-        efcfilt = 65535;
-      else if(efcfilt < 0)
-        efcfilt = 0;
-      uint16_t dacval = efcfilt;
-      set_dac(dacval);
-
-      float tmp = get_tmp();
-      printf("%f %f %d %f\n", tmp, e, dacval, esum);
+      *p = 0x0A;
+      //uart0Putch(0x0A);
+      return i + 2;
     }
-
   }
+  return i;
+#endif
   return 0;
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static void led_setup(void)
-{
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
-}
 
 /*******************************************************************************
  * END OF CODE
