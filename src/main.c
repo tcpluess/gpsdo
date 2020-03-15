@@ -70,9 +70,9 @@ static void led_setup(void);
 
 int main(void)
 {
+  vic_init();
   led_setup();
   timebase_init();
-  vic_init();
   dac_setup();
   tmp_init();
   rs232_init();
