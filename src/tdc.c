@@ -36,6 +36,21 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
+#define CAL_PERIODS 20u
+#if CAL_PERIODS == 2u
+#define CONFIG2 (0u << 6)
+#elif CAL_PERIODS == 10u
+#define CONFIG2 (1u << 6)
+#elif CAL_PERIODS == 20u
+#define CONFIG2 (2u << 6)
+#elif CAL_PERIODS == 40u
+#define CONFIG2 (3u << 6)
+#else
+#error "CAL_PERIODS must be one of 2, 10, 20 or 40"
+#endif
+
+#define ADDR_CONFIG2 0x01u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -75,6 +90,8 @@ void setup_tdc(void)
   TDC_CSB(1);
   TDC_SCK(0);
   TDC_ENA(1);
+
+  tdc_write(ADDR_CONFIG2, CONFIG2);
 }
 
 uint8_t tdc_read(uint8_t addr)
