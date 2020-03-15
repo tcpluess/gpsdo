@@ -32,6 +32,7 @@
  ******************************************************************************/
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /*******************************************************************************
  * CONSTANT DEFINITIONS
@@ -60,6 +61,8 @@ extern void tdc_write(uint8_t addr, uint8_t data);
 extern void enable_tdc(void);
 
 extern float get_tdc_ps(void);
+
+extern bool tdc_check_irq(void);
 
 /*******************************************************************************
  * END OF CODE

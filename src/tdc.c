@@ -49,7 +49,24 @@
 #error "CAL_PERIODS must be one of 2, 10, 20 or 40"
 #endif
 
+#define MEASUREMENT_MODE 1u
+#if MEASUREMENT_MODE == 1u
+#define CONFIG1 0u
+#elif MEASUREMENT_MODE == 2u
+#define CONFIG1 (1u << 1)
+#else
+#error "MEASUREMENT_MODE must be one of 1 or 2"
+#endif
+
+#define ADDR_CONFIG1 0x00u
 #define ADDR_CONFIG2 0x01u
+#define ADDR_TIME1 0x10u
+#define ADDR_CALIB1 0x1bu
+#define ADDR_CALIB2 0x1cu
+
+#define PERIOD_PS 100000u
+
+#define NEW_MEAS_INT (1u << 0)
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -91,6 +108,7 @@ void setup_tdc(void)
   TDC_SCK(0);
   TDC_ENA(1);
 
+  tdc_write(ADDR_CONFIG1, CONFIG1);
   tdc_write(ADDR_CONFIG2, CONFIG2);
 }
 
@@ -136,6 +154,28 @@ float get_tdc_ps(void)
 
 
   return (float)(9.0f*(time1-time2)/(calib2-calib1) + clkcnt);
+}
+
+uint32_t get_tdc(void)
+{
+  uint32_t calib1 = tdc_read24(ADDR_CALIB1);
+  uint32_t calib2 = tdc_read24(ADDR_CALIB2);
+  uint32_t time1 = tdc_read(ADDR_TIME1);
+
+  uint32_t ps = (time1 * (CAL_PERIODS - 1u) * PERIOD_PS)/(calib2 - calib1);
+  return ps;
+}
+
+bool tdc_check_irq(void)
+{
+  if((GPIOA_IDR & BIT_09) == 0)
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
 }
 
 /*******************************************************************************
