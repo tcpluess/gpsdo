@@ -112,32 +112,34 @@ void ppsenable(bool enable)
 
 void timebase_reset(void)
 {
-  TIM2_CNT = 0;
+  TIM2_CNT = 140;
 }
 
-int64_t get_tic(void)
+float get_tic(void)
 {
   /* get the interpolator value (in picoseconds) and the capture value (in
      periods) from the tdc and the capture register, respectively */
-  uint32_t tic_ps = get_tdc();
+  float tic_ps = get_tdc();
   uint32_t tic = TIM2_CCR3;
 
   /* convert the # of periods to picoseconds */
-  uint64_t ti = tic;
-  ti = ti * 100000;
-
-  /* to find the exact time interval, the interpolator value must be added */
-  ti = ti + tic_ps;
+  float ti = tic;
 
   /* this brings the time interval into the range -0.5sec to +0.5sec */
-  if(ti >= 500000000000)
+  float ret;
+  if(ti > 5000000.0f)
   {
-    return 1000000000000 - ti;
+    ret = 10000000.0f - ti;
   }
   else
   {
-    return -ti;
+    ret = -ti;
   }
+
+
+  /* to find the exact time interval, the interpolator value must be added */
+  ret = ret + tic_ps;
+  return ret;
 }
 
 /*******************************************************************************

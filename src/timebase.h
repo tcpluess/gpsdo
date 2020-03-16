@@ -58,7 +58,7 @@ extern void ppsenable(bool enable);
 
 extern void timebase_reset(void);
 
-extern int64_t get_tic(void);
+extern float get_tic(void);
 
 /*******************************************************************************
  * END OF CODE
