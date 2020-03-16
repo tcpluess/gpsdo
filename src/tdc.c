@@ -36,7 +36,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define CAL_PERIODS 20u
+#define CAL_PERIODS 40u
 #if CAL_PERIODS == 2u
 #define CONFIG2 (0u << 6)
 #elif CAL_PERIODS == 10u
@@ -63,6 +63,7 @@
 #define ADDR_TIME1 0x10u
 #define ADDR_CALIB1 0x1bu
 #define ADDR_CALIB2 0x1cu
+#define ADDR_INT_STATUS 0x02u
 
 #define PERIOD_PS 100000u
 
@@ -87,6 +88,9 @@
 
 static uint8_t tdc_8bit(uint16_t data);
 static uint32_t tdc_24bit(uint32_t data);
+static uint32_t tdc_read24(uint8_t addr);
+static uint8_t tdc_read(uint8_t addr);
+static void tdc_write(uint8_t addr, uint8_t data);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -112,7 +116,7 @@ void setup_tdc(void)
   tdc_write(ADDR_CONFIG2, CONFIG2);
 }
 
-uint8_t tdc_read(uint8_t addr)
+static uint8_t tdc_read(uint8_t addr)
 {
   uint8_t ret;
   uint16_t tmp = addr;
@@ -121,7 +125,7 @@ uint8_t tdc_read(uint8_t addr)
   return ret;
 }
 
-uint8_t tdc_read24(uint8_t addr)
+static uint32_t tdc_read24(uint8_t addr)
 {
   uint32_t ret;
   uint32_t tmp = addr;
@@ -130,7 +134,7 @@ uint8_t tdc_read24(uint8_t addr)
   return ret;
 }
 
-void tdc_write(uint8_t addr, uint8_t data)
+static void tdc_write(uint8_t addr, uint8_t data)
 {
   uint16_t tmp = BIT_06 | addr;
   tmp <<= 8;
@@ -143,26 +147,14 @@ void enable_tdc(void)
   tdc_write(0, BIT_00);
 }
 
-float get_tdc_ps(void)
+float get_tdc(void)
 {
-  float calib1 = tdc_read24(0x1b);
-  float calib2 = tdc_read24(0x1c);
+  /* the internal calculations need to be done using 64bit numbers */
+  float calib1 = tdc_read24(ADDR_CALIB1);
+  float calib2 = tdc_read24(ADDR_CALIB2);
+  float time1 = tdc_read24(ADDR_TIME1);
 
-  float time1 = tdc_read24(0x10);
-  float time2 = tdc_read24(0x12);
-  float clkcnt = tdc_read24(0x11);
-
-
-  return (float)(9.0f*(time1-time2)/(calib2-calib1) + clkcnt);
-}
-
-uint32_t get_tdc(void)
-{
-  uint64_t calib1 = tdc_read24(ADDR_CALIB1);
-  uint64_t calib2 = tdc_read24(ADDR_CALIB2);
-  uint64_t time1 = tdc_read(ADDR_TIME1);
-
-  uint32_t ps = (time1 * (CAL_PERIODS - 1u) * PERIOD_PS)/(calib2 - calib1);
+  float ps = (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
   return ps;
 }
 
@@ -176,6 +168,19 @@ bool tdc_check_irq(void)
   {
     return false;
   }
+}
+
+void tdc_int_ack(void)
+{
+  uint8_t irq = tdc_read(ADDR_INT_STATUS);
+  tdc_write(ADDR_INT_STATUS, irq);
+  do
+  {
+    if(GPIOA_IDR & BIT_09)
+    {
+      break;
+    }
+  } while(true);
 }
 
 /*******************************************************************************

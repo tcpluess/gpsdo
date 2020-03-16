@@ -52,17 +52,13 @@
 
 extern void setup_tdc(void);
 
-extern uint8_t tdc_read24(uint8_t addr);
-
-extern uint8_t tdc_read(uint8_t addr);
-
-extern void tdc_write(uint8_t addr, uint8_t data);
-
 extern void enable_tdc(void);
 
-extern float get_tdc_ps(void);
-
 extern bool tdc_check_irq(void);
+
+extern void tdc_int_ack(void);
+
+extern float get_tdc(void);
 
 /*******************************************************************************
  * END OF CODE
