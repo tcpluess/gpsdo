@@ -72,6 +72,18 @@ void dac_setup(void)
 void set_dac(uint16_t data)
 {
   uint32_t tmpdata = data;
+  static uint16_t previousdata = 0;
+
+  /* check if this data has already been loaded into the dac
+     and bail out if so to keep the dac as quiet as possible */
+  if(data == previousdata)
+  {
+    return;
+  }
+  else
+  {
+    previousdata = data;
+  }
 
   /* set ss low */
   DAC_SS(0);
