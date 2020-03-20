@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Company:        HOCHSCHULE LUZERN, HORW, SWITZERLAND
+ * Company:
  *
  * Project:        -
  *
@@ -18,11 +18,6 @@
  * Author:         Tobias Pluess
  *
  * Creation-Date:  06.02.2013
- *------------------------------------------------------------------------------
- * $HeadURL: http://hb9etc.ch/svn/pluess/src/processors/stm32f407.h $
- * $Revision: 9 $
- * $Author: tobias $
- * $Date: 2013-02-06 21:20:28 +0100 (Wed, 06 Feb 2013) $
  *******************************************************************************
    Modification History:
    [1.0]    06.02.2013    Tobias Pluess
