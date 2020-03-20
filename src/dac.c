@@ -67,6 +67,7 @@ void dac_setup(void)
 
   GPIOB_MODER |= (1u << 24) | (1u << 26) | (1u << 30);
   GPIOB_BSRR = BIT_12|BIT_13|BIT_15;
+  set_dac(32768);
 }
 
 void set_dac(uint16_t data)
@@ -91,11 +92,9 @@ void set_dac(uint16_t data)
   for(int i = 0; i < 24; i++)
   {
     /* output MSB first */
-
-  DAC_SCK(1);
-  DAC_MOSI(tmpdata & BIT_23);
+    DAC_SCK(1);
+    DAC_MOSI(tmpdata & BIT_23);
     tmpdata = tmpdata << 1;
-    /* sck low */
     DAC_SCK(0);
   }
 
