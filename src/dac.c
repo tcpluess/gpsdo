@@ -32,17 +32,17 @@
 #include "stm32f407.h"
 #include "misc.h"
 
+#include <stdbool.h>
+
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
+#define DAC_INITIAL_VALUE 32767u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
-
-#define DAC_SS(x) GPIOB_BSRR = ((x) != 0) ? BIT_12 : BIT_28
-#define DAC_SCK(x) GPIOB_BSRR = ((x) != 0) ? BIT_13 : BIT_29
-#define DAC_MOSI(x) GPIOB_BSRR = ((x) != 0) ? BIT_15 : BIT_31
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -51,6 +51,9 @@
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
+
+static void spi_ss(bool enable);
+static void spi_transmit(uint8_t data);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -65,18 +68,33 @@ void dac_setup(void)
   /* enable gpio b */
   RCC_AHB1ENR |= BIT_01;
 
-  GPIOB_MODER |= (1u << 24) | (1u << 26) | (1u << 30);
-  GPIOB_BSRR = BIT_12|BIT_13|BIT_15;
-  set_dac(32768);
+  /* enable spi2 */
+  RCC_APB1ENR |= BIT_14;
+
+  /* ss gpio, mosi and sck: spi2 (alt. func. 5) */
+  GPIOB_MODER |= (2u << 30) | (2u << 26) | (1u << 24);
+  GPIOB_AFRH |= (5u << 20) | (5u << 28);
+
+  /* configure the spi2: cpol=0, cpha=1, msb first, use highest baud rate.
+     the 8 bits data format must be used because the dac expects a frame of
+     24 bits but the spi can only transmit 8 or 16 bits at a time. so, one
+     24 bit transfer will be split up into 3 transfers of 8 bit each */
+  SPI2_CR1 = BIT_14 | BIT_09 | BIT_08 | BIT_02 | BIT_00;
+  SPI2_CR2 = 0;
+
+  /* enable spi2 */
+  SPI2_CR1 |= BIT_06;
+
+  /* default state: chip select not active; set dac to initial value */
+  spi_ss(false);
+  set_dac(DAC_INITIAL_VALUE);
 }
 
 void set_dac(uint16_t data)
 {
-  uint32_t tmpdata = data;
-  static uint16_t previousdata = 0;
-
   /* check if this data has already been loaded into the dac
      and bail out if so to keep the dac as quiet as possible */
+  static uint16_t previousdata = 0u;
   if(data == previousdata)
   {
     return;
@@ -86,25 +104,60 @@ void set_dac(uint16_t data)
     previousdata = data;
   }
 
-  /* set ss low */
-  DAC_SS(0);
+  /* slave select */
+  spi_ss(true);
 
-  for(int i = 0; i < 24; i++)
-  {
-    /* output MSB first */
-    DAC_SCK(1);
-    DAC_MOSI(tmpdata & BIT_23);
-    tmpdata = tmpdata << 1;
-    DAC_SCK(0);
-  }
+  /* first byte is always zero, then upper byte, then lower byte */
+  spi_transmit(0u);
+  spi_transmit(data >> 8);
+  spi_transmit((uint8_t)data);
 
-  /* set ss high */
-  DAC_SS(1);
+  /* unselect */
+  spi_ss(false);
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+/*============================================================================*/
+static void spi_ss(bool enable)
+/*------------------------------------------------------------------------------
+  Function:
+  asserts or deasserts the slave select pin
+  in:  enable -> assert ss for the dac if true, and deassert otherwise.
+  out: none
+==============================================================================*/
+{
+  if(enable)
+  {
+    GPIOB_BSRR = BIT_28;
+  }
+  else
+  {
+    GPIOB_BSRR = BIT_12;
+  }
+}
+
+/*============================================================================*/
+static void spi_transmit(uint8_t data)
+/*------------------------------------------------------------------------------
+  Function:
+  waits unti the tx buffer is empty, then transmits one data byte
+  in:  data -> 1 data byte
+  out: none
+==============================================================================*/
+{
+  do
+  {
+    if(SPI2_SR & BIT_01)
+    {
+      break;
+    }
+  } while(true);
+
+  SPI2_DR = data;
+}
 
 /*******************************************************************************
  * END OF CODE
