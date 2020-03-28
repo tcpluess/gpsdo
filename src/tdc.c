@@ -131,22 +131,23 @@ void setup_tdc(void)
 
 void enable_tdc(void)
 {
-  tdc_write(0, BIT_00);
+  /* sets the enable bit in the config register */
+  tdc_write(ADDR_CONFIG1, BIT_00);
 }
 
 float get_tdc(void)
 {
-  /* the internal calculations need to be done using 64bit numbers */
   float calib1 = tdc_read24(ADDR_CALIB1);
   float calib2 = tdc_read24(ADDR_CALIB2);
   float time1 = tdc_read24(ADDR_TIME1);
 
-  float ns = 100*(time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+  float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
   return ns;
 }
 
 bool tdc_check_irq(void)
 {
+  /* check the logic level of the irq pin */
   if((GPIOA_IDR & BIT_09) == 0)
   {
     return true;
@@ -159,11 +160,15 @@ bool tdc_check_irq(void)
 
 void tdc_int_ack(void)
 {
+  /* read the pending interrupts */
   uint8_t irq = tdc_read(ADDR_INT_STATUS);
+
+  /* by writing a 1 to the pending interrupt bits, they are cleared */
   tdc_write(ADDR_INT_STATUS, irq);
   do
   {
-    if(GPIOA_IDR & BIT_09)
+    /* this should also clear the irq pin */
+    if(!tdc_check_irq())
     {
       break;
     }
