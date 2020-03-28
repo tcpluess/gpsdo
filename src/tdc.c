@@ -81,14 +81,11 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-
-static uint32_t tdc_read24(uint8_t addr);
 static uint8_t tdc_read(uint8_t addr);
+static uint32_t tdc_read24(uint8_t addr);
 static void tdc_write(uint8_t addr, uint8_t data);
-
 static void tdc_hwenable(bool enable);
 static void tdc_ss(bool select);
-
 static uint16_t spi_trans16(uint16_t txdata);
 
 /*******************************************************************************
