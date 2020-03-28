@@ -65,18 +65,13 @@
 #define ADDR_CALIB2 0x1cu
 #define ADDR_INT_STATUS 0x02u
 
-#define PERIOD_PS 100000u
-
 #define NEW_MEAS_INT (1u << 0)
+
+#define DATA_MSK 0xffffffu
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
-
-#define TDC_CSB(x) GPIOA_BSRR = ((x) != 0) ? BIT_04 : BIT_20
-#define TDC_SCK(x) GPIOA_BSRR = ((x) != 0) ? BIT_05 : BIT_21
-#define TDC_MOSI(x) GPIOA_BSRR = ((x) != 0) ? BIT_07 : BIT_23
-#define TDC_ENA(x) GPIOA_BSRR = ((x) != 0) ? BIT_03 : BIT_19
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -86,11 +81,15 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static uint8_t tdc_8bit(uint16_t data);
-static uint32_t tdc_24bit(uint32_t data);
+
 static uint32_t tdc_read24(uint8_t addr);
 static uint8_t tdc_read(uint8_t addr);
 static void tdc_write(uint8_t addr, uint8_t data);
+
+static void tdc_hwenable(bool enable);
+static void tdc_ss(bool select);
+
+static uint16_t spi_trans16(uint16_t txdata);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -105,41 +104,32 @@ void setup_tdc(void)
   /* enable port a */
   RCC_AHB1ENR |= BIT_00;
 
-  GPIOA_MODER |= (1u << 6) | (1u << 8) | (1u << 10) | (1u << 14);
-  GPIOA_PUPDR |= (1u << 18); // pullup for TDC_IRQ
+  /* ss and enable are gpios; mosi, miso and sck belong to spi1.
+     use a internal pullup for the irq pin */
+  GPIOA_MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
+  GPIOA_PUPDR |= (1u << 18);
+  GPIOA_AFRL |= (5u << 20) | (5u << 24) | (5u << 28);
 
-  TDC_CSB(1);
-  TDC_SCK(0);
-  TDC_ENA(1);
+  /* disble the tdc for now */
+  tdc_ss(false);
+  tdc_hwenable(false);
 
+  /* enable spi1 */
+  RCC_APB2ENR |= BIT_12;
+
+  /* configure spi1 */
+  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (5u << 3) |  BIT_02;
+  SPI1_CR2 = 0;
+
+  /* enable spi2 */
+  SPI1_CR1 |= BIT_06;
+
+  /* this resets the internal state of the tdc */
+  tdc_hwenable(true);
+
+  /* configure the measurement mode and # of average cycles */
   tdc_write(ADDR_CONFIG1, CONFIG1);
   tdc_write(ADDR_CONFIG2, CONFIG2);
-}
-
-static uint8_t tdc_read(uint8_t addr)
-{
-  uint8_t ret;
-  uint16_t tmp = addr;
-  tmp <<= 8;
-  ret = tdc_8bit(tmp);
-  return ret;
-}
-
-static uint32_t tdc_read24(uint8_t addr)
-{
-  uint32_t ret;
-  uint32_t tmp = addr;
-  tmp <<= 24;
-  ret = tdc_24bit(tmp);
-  return ret;
-}
-
-static void tdc_write(uint8_t addr, uint8_t data)
-{
-  uint16_t tmp = BIT_06 | addr;
-  tmp <<= 8;
-  tmp |= data;
-  tdc_8bit(tmp);
 }
 
 void enable_tdc(void)
@@ -187,44 +177,135 @@ void tdc_int_ack(void)
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
 
-
-static uint8_t tdc_8bit(uint16_t data)
+/*============================================================================*/
+static uint8_t tdc_read(uint8_t addr)
+/*------------------------------------------------------------------------------
+  Function:
+  read an 8 bit register from the tdc.
+  the data format is as follows: 8 bit register address, followed by one null
+  byte (to have a data transfer of 16 bits)
+  in:  addr -> register address
+  out: 8 bit register data
+==============================================================================*/
 {
-  uint8_t tmp = 0;
-
-  TDC_CSB(0);
-  for(int i = 0; i < 16; i++)
-  {
-    TDC_SCK(0);
-    TDC_MOSI(data & BIT_15);
-    tmp <<= 1;
-    data <<= 1;
-    if(GPIOA_IDR & BIT_06)
-      tmp |= BIT_00;
-    TDC_SCK(1);
-  }
-  TDC_CSB(1);
-  return tmp;
+  uint8_t ret;
+  uint16_t tmp = addr;
+  tmp <<= 8;
+  tdc_ss(true);
+  ret = (uint8_t)spi_trans16(tmp);
+  tdc_ss(false);
+  return ret;
 }
 
-static uint32_t tdc_24bit(uint32_t data)
+/*============================================================================*/
+static uint32_t tdc_read24(uint8_t addr)
+/*------------------------------------------------------------------------------
+  Function:
+  read a 24 bit register from the tdc.
+  the data format is as follows: the 8 bit register address, followed by
+  three null bytes. the received data is msb first
+  in:  addr -> register address
+  out: 24 bit register data
+==============================================================================*/
 {
-  uint32_t tmp = 0;
+  uint32_t ret;
+  uint32_t tmp = addr;
+  tmp <<= 8;
+  tdc_ss(true);
+  ret = spi_trans16(tmp);
+  ret <<= 16;
+  ret |= spi_trans16(0);
+  tdc_ss(false);
+  ret &= DATA_MSK;
+  return ret;
+}
 
-  TDC_CSB(0);
-  for(int i = 0; i < 32; i++)
+/*============================================================================*/
+static void tdc_write(uint8_t addr, uint8_t data)
+/*------------------------------------------------------------------------------
+  Function:
+  write to one of the 8 bit registers
+  in:  addr -> register address
+       data -> data to be written
+  out: none
+==============================================================================*/
+{
+  uint16_t tmp = BIT_06 | addr;
+  tmp <<= 8;
+  tmp |= data;
+  tdc_ss(true);
+  spi_trans16(tmp);
+  tdc_ss(false);
+}
+
+/*============================================================================*/
+static void tdc_hwenable(bool enable)
+/*------------------------------------------------------------------------------
+  Function:
+  controls the enable pin of the tdc which is used to reset internal circuitry
+  in:  enabe -> when true, enables the tdc
+  out: none
+==============================================================================*/
+{
+  if(enable)
   {
-    TDC_SCK(0);
-    TDC_MOSI(data & BIT_31);
-    tmp <<= 1;
-    data <<= 1;
-    if(GPIOA_IDR & BIT_06)
-      tmp |= BIT_00;
-    TDC_SCK(1);
+    GPIOA_BSRR = BIT_03;
   }
-  TDC_CSB(1);
-  tmp &= 0xffffffu;
-  return tmp;
+  else
+  {
+    GPIOA_BSRR = BIT_19;
+  }
+}
+
+/*============================================================================*/
+static void tdc_ss(bool select)
+/*------------------------------------------------------------------------------
+  Function:
+  controls the serial interface of the tdc
+  in:  enabe -> enable the interface for r/w access
+  out: none
+==============================================================================*/
+{
+  if(select)
+  {
+    GPIOA_BSRR = BIT_20;
+  }
+  else
+  {
+    GPIOA_BSRR = BIT_04;
+  }
+}
+
+/*============================================================================*/
+static uint16_t spi_trans16(uint16_t txdata)
+/*------------------------------------------------------------------------------
+  Function:
+  perform a bidirectional data transfer of 16 bits
+  in:  txdata -> data to be sent to the tdc
+  out: returns 16 bits of data received from the tdc
+==============================================================================*/
+{
+  /* wait until tx buffer empty */
+  do
+  {
+    if(SPI1_SR & BIT_01)
+    {
+      break;
+    }
+  } while(true);
+
+  SPI1_DR = txdata;
+
+  /* wait until rx buffer not empty */
+  do
+  {
+    if(SPI1_SR & BIT_00)
+    {
+      break;
+    }
+  } while(true);
+
+  return SPI1_DR;
 }
 
 /*******************************************************************************
