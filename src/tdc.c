@@ -154,8 +154,8 @@ float get_tdc(void)
   float calib2 = tdc_read24(ADDR_CALIB2);
   float time1 = tdc_read24(ADDR_TIME1);
 
-  float ps = (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
-  return ps;
+  float ns = 100*(time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+  return ns;
 }
 
 bool tdc_check_irq(void)
