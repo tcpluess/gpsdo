@@ -37,7 +37,7 @@
  ******************************************************************************/
 
 /* internal reference voltage, VREFINT according to datasheet 1.18V .. 1.24V */
-#define VREF 1.21f
+#define VREF 1210.0f
 
 /* value of the ocxo shunt resistor */
 #define RSHUNT 0.2f
@@ -113,6 +113,7 @@ float get_iocxo(void)
   float ref = ADC1_JDR2;
   return VREF/(GAIN*RSHUNT) * ichan / ref;
 }
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/

@@ -72,7 +72,7 @@ extern void start_conversion(void);
 extern float get_iocxo(void);
 /*------------------------------------------------------------------------------
   Function:
-  return the ocxo currnt; start_conversion needs to be called first
+  return the ocxo currnt in mA; start_conversion needs to be called first
   in:  none
   out: none
 ==============================================================================*/
