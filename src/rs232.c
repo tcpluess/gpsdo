@@ -7,13 +7,13 @@
  *
  * Type:           module
  *
- * Description:    adt7301 driver
+ * Description:    serial port driver for usage with printf() calls
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.c
+ * Filename:       rs232.c
  *
- * Version:        1.0
+ * Version:        1.1
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -22,6 +22,9 @@
    Modification History:
    [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
    - created
+
+   [1.1]    31.03.2020    Tobias Plüss <tpluess@ieee.org>
+   - modify the transmit routine to use the tx empty interrupt
  ******************************************************************************/
 
 /*******************************************************************************
@@ -31,12 +34,14 @@
 #include "rs232.h"
 #include "stm32f407.h"
 #include "misc.h"
+#include "vic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define BAUD 57600u
+#define TXBUFFERSIZE 512u
+#define BAUD 115200u
 #define BAUD_INT ((uint32_t)(10000000u/(16u*BAUD)))
 #define BAUD_FRAC ((uint32_t)(10000000u/BAUD-16u*BAUD_INT+0.5f))
 
@@ -52,9 +57,20 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void irq_handler(void);
+
+static void enable_txempty_irq(void);
+static void disable_txempty_irq(void);
+static void buffer_insert(char c);
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+static char txbuffer[TXBUFFERSIZE];
+static volatile uint32_t read_ind;
+static uint32_t write_ind;
+static volatile bool buffer_empty;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -62,6 +78,12 @@
 
 extern void rs232_init(void)
 {
+  read_ind = 0;
+  write_ind = 0;
+  buffer_empty = true;
+
+  vic_enableirq(38, irq_handler);
+
   /* enable port d */
   RCC_AHB1ENR |= BIT_03;
 
@@ -69,47 +91,25 @@ extern void rs232_init(void)
   GPIOD_MODER |= (2u << 10) | (2u << 12);
   GPIOD_AFRL |= (7u << 20) | (7u << 24);
 
-  /* enable usart2 */
+  /* enable and configure usart2 */
   RCC_APB1ENR |= BIT_17;
-
-
-  /* div = 10e6/(16*B) */
   USART2_BRR = (BAUD_FRAC << 0) | (BAUD_INT << 4);
-
   USART2_CR1 = BIT_13 | BIT_03 | BIT_02;
 }
 
-void uart0Putch(char c)
+_ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
-  do
+  const unsigned char *p = (const unsigned char*)ptr;
+  for(int i = 0; i < len; i++)
   {
-    if(USART2_SR & BIT_07)
+    if(*p == '\n')
     {
-      break;
+      buffer_insert('\r');
     }
-  } while(true);
-  USART2_DR = c;
-}
-
-_ssize_t _write_r (
-    struct _reent *r,
-    int file,
-    const void *ptr,
-    size_t len)
-{
-  int i;
-  const unsigned char *p;
-
-  p = (const unsigned char*) ptr;
-
-  for (i = 0; i < len; i++) {
-    if (*p == '\n' ) uart0Putch('\r');
-   uart0Putch(*p++);
+    buffer_insert(*p++);
   }
-
   return len;
 }
-
 
 int _isatty(int file)
 {
@@ -147,6 +147,104 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+/*============================================================================*/
+static void irq_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this is the interrupt handler for the usart.
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* check if there is something in the buffer. as long as read_ind and
+     write_ind are different, there is data to be transmitted */
+  if(read_ind != write_ind)
+  {
+    /* send the next character and go to the next read position, take care
+       of wrapping the read index */
+    USART2_DR = txbuffer[read_ind];
+    read_ind++;
+    if(read_ind == TXBUFFERSIZE)
+    {
+      read_ind = 0;
+    }
+  }
+  else
+  {
+    /* if the read_ind and write_ind are the same, the buffer is empty.
+       the interrupt needs to be disabled because it can only be acknowledged
+       by writing to the data register */
+    buffer_empty = true;
+    disable_txempty_irq();
+  }
+}
+
+/*============================================================================*/
+static void enable_txempty_irq(void)
+/*------------------------------------------------------------------------------
+  Function:
+  switch on the tx empty itnerrupt. as soon as this interrupt is enabled, it is
+  triggered all the time and can only be acknowledged by writing to the data
+  register
+  in:  none
+  out: none
+==============================================================================*/
+{
+  USART2_CR1 |= BIT_07;
+}
+
+/*============================================================================*/
+static void disable_txempty_irq(void)
+/*------------------------------------------------------------------------------
+  Function:
+  switch on the tx empty itnerrupt
+  in:  none
+  out: none
+==============================================================================*/
+{
+  USART2_CR1 &= ~BIT_07;
+}
+
+/*============================================================================*/
+static void buffer_insert(char c)
+/*------------------------------------------------------------------------------
+  Function:
+  insert a character into the tx buffer
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* this can only proceed if one of the following conditions is met:
+     a) the buffer is empty - in this case there is nothing in the buffer
+        and it can be used immediately
+     b) read index is not the same as write index - if they are equal it means
+        the buffer is overflowing */
+  do
+  {
+    if(buffer_empty)
+    {
+      break;
+    }
+    if(read_ind != write_ind)
+    {
+      break;
+    }
+  } while(true);
+
+  /* put the character into the buffer */
+  txbuffer[write_ind] = c;
+  buffer_empty = false;
+
+  write_ind++;
+  if(write_ind == TXBUFFERSIZE)
+  {
+    write_ind = 0;
+  }
+
+  /* actual transmission is handled only in the interrupt routine */
+  enable_txempty_irq();
+}
 
 /*******************************************************************************
  * END OF CODE
