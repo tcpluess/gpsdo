@@ -55,6 +55,16 @@ extern void vic_init(void);
 
 extern void vic_enableirq(uint32_t intnum, funcptr_t func);
 
+__attribute__((always_inline)) static inline void __enable_irq(void)
+{
+  asm volatile ("cpsie i");
+}
+
+__attribute__((always_inline)) static inline void __disable_irq(void)
+{
+  asm volatile ("cpsid i");
+}
+
 /*******************************************************************************
  * END OF CODE
  ******************************************************************************/
