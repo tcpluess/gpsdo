@@ -163,22 +163,25 @@ void vic_init(void)
   VTOR = (uint32_t)vector_table;
 }
 
-void vic_enableirq(uint32_t intnum, funcptr_t func)
+void vic_enableirq(int32_t intnum, funcptr_t func)
 {
   vector_table[intnum + 16] = func;
-  if(intnum < 32)
+  if(intnum > 0)
   {
-    NVIC_ISER0 = (1u << intnum);
-  }
-  else if(intnum < 64)
-  {
-    intnum -= 32u;
-    NVIC_ISER1 = (1u << intnum);
-  }
-  else if(intnum < 96)
-  {
-    intnum -= 64;
-    NVIC_ISER2 = (1u << intnum);
+    if(intnum < 32)
+    {
+      NVIC_ISER0 = (1u << intnum);
+    }
+    else if(intnum < 64)
+    {
+      intnum -= 32u;
+      NVIC_ISER1 = (1u << intnum);
+    }
+    else if(intnum < 96)
+    {
+      intnum -= 64;
+      NVIC_ISER2 = (1u << intnum);
+    }
   }
 }
 

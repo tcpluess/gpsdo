@@ -53,7 +53,7 @@ typedef void(*funcptr_t)(void);
 
 extern void vic_init(void);
 
-extern void vic_enableirq(uint32_t intnum, funcptr_t func);
+extern void vic_enableirq(int32_t intnum, funcptr_t func);
 
 __attribute__((always_inline)) static inline void __enable_irq(void)
 {
