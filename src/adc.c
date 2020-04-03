@@ -37,10 +37,10 @@
  ******************************************************************************/
 
 /* internal reference voltage, VREFINT according to datasheet 1.18V .. 1.24V */
-#define VREF 1210.0f
+#define VREF 1210.0f /* mV */
 
 /* value of the ocxo shunt resistor */
-#define RSHUNT 0.2f
+#define RSHUNT 0.2f /* ohm */
 
 /* gain of the INA193 */
 #define GAIN 20.0f
