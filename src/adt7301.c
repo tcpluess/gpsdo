@@ -68,7 +68,7 @@ void tmp_init(void)
   GPIOB_BSRR = BIT_05 | BIT_07;
 }
 
-float get_tmp(void)
+float get_temperature(void)
 {
   uint32_t ret = 0;
 
