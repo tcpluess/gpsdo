@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    adt7301 driver
+ * Description:    module for various timing topics for the gpsdo
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.c
+ * Filename:       timebase.c
  *
  * Version:        1.0
  *
@@ -38,7 +38,33 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define TIM2_VECTOR 28u
+/* interrupt vector numbers for the systick and the timer 2 */
+#define TIM2_VECTOR 28
+#define SYSTICK_VECTOR -1
+
+//#define USE_PLL
+
+#ifdef USE_PLL
+#define HSECLK 10000000u
+#define CPUCLK 160000000u
+#define PLLP 0u
+#define PLLQ 2u
+#define PLLM 5u
+#define PLLN 160u
+#define PPRE2 7u
+#define PPRE1 7u
+
+#define FVCO (HSECLK/PLLM*PLLN)
+#define PLL_INCLK (HSECLK/PLLM)
+
+#if (PLL_INCLK < 1000000u) || (PLL_INCLK > 2000000u)
+#error "The input clock to the PLL shall be between 1MHz and 2MHz"
+#endif
+
+#if (FVCO < 100000000u) || (FVCO > 432000000)
+#error "The VCO frequency shall be between 100MHz and 432MHz"
+#endif
+#endif
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -58,11 +84,16 @@ static void configure_ppsenable(void);
 static void enable_timer(void);
 static void capture_irq(void);
 
+static void systick_handler(void);
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
 static volatile bool pps;
+static volatile bool res;
+static volatile uint32_t tic_capture;
+static volatile uint64_t uptime_msec;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -71,10 +102,21 @@ static volatile bool pps;
 void timebase_init(void)
 {
   pps = false;
+  res = false;
+  uptime_msec = 0;
+
+  /* the systick timer is used to calculate the uptime in msec */
+  SYSTICKRVR = (((10000000u / 8u) / 1000) - 1u);
+  SYSTICKCSR = (BIT_01 | BIT_00);
+  vic_enableirq(SYSTICK_VECTOR, systick_handler);
+
+  /* enable the external oscillator and the mco output and start the timer */
   enable_osc();
   enable_mco();
   configure_ppsenable();
   enable_timer();
+
+  /* the 1pps output is disabled by default */
   ppsenable(false);
 }
 
@@ -112,24 +154,27 @@ void ppsenable(bool enable)
 
 void timebase_reset(void)
 {
-  TIM2_CNT = 140;
+  pps = false;
+  res = true;
 }
+
+
 
 float get_tic(void)
 {
-  /* get the interpolator value (in picoseconds) and the capture value (in
+  /* get the interpolator value (in periods) and the capture value (in
      periods) from the tdc and the capture register, respectively */
-  float tic_ps = get_tdc();
-  uint32_t tic = TIM2_CCR3;
+  float tdc = get_tdc();
+  uint32_t tic = tic_capture;
 
-  /* convert the # of periods to picoseconds */
+
   float ti = tic;
 
   /* this brings the time interval into the range -0.5sec to +0.5sec */
   float ret;
-  if(ti > 5000000.0f)
+  if(ti > 5e6f)
   {
-    ret = 10000000.0f - ti;
+    ret = (10e6f - ti);
   }
   else
   {
@@ -138,8 +183,20 @@ float get_tic(void)
 
 
   /* to find the exact time interval, the interpolator value must be added */
-  ret = ret + tic_ps;
+  ret = ret*100 + tdc;
   return ret;
+}
+
+void set_pps_duration(uint32_t ms)
+{
+  /* convert milliseconds to 100ns */
+  ms = ms*10000;
+  TIM2_CCR2 = ms;
+}
+
+uint64_t get_uptime_msec(void)
+{
+  return uptime_msec;
 }
 
 /*******************************************************************************
@@ -165,6 +222,8 @@ static void enable_osc(void)
     }
   } while(true);
 
+#ifndef USE_PLL
+
   /* switch the cpu clock to the ext. osc. and wait until it is switched */
   RCC_CFGR |= BIT_00;
   do
@@ -175,15 +234,37 @@ static void enable_osc(void)
     }
   } while(true);
 
-  /* disable internal osc. */
-  RCC_CR &= ~BIT_00;
+#else
+
+  /* configure the clock dividers such that the peripheral clocks are 10MHz */
+  RCC_CFGR = (PPRE2 << 13) | (PPRE1 << 10);
+
+  /* configure the pll for 160MHz ahb clock */
+  RCC_PLLCFGR = (PLLQ << 24) | BIT_22 | (PLLP << 16) | (PLLN << 6) | PLLM;
+
+  /* enable the pll and wait until it is ready */
+  RCC_CR |= BIT_24;
   do
   {
-    if((RCC_CR & BIT_01) == 0)
+    if(RCC_CR & BIT_25)
     {
       break;
     }
   } while(true);
+
+  /* switch to the pll clock */
+  RCC_CFGR |= BIT_01;
+  do
+  {
+    if((RCC_CFGR & (BIT_03 | BIT_02)) == BIT_03)
+    {
+      break;
+    }
+  } while(true);
+#endif
+
+  /* disable internal osc. */
+  RCC_CR &= ~BIT_00;
 }
 
 /*============================================================================*/
@@ -207,7 +288,7 @@ static void enable_mco(void)
 static void configure_ppsenable(void)
 /*------------------------------------------------------------------------------
   Function:
-  configure the enable signal for the pps signal
+  configure the enable for the pps signal
   in:  none
   out: none
 ==============================================================================*/
@@ -219,10 +300,6 @@ static void configure_ppsenable(void)
   GPIOB_MODER |= (1u << 18);
   ppsenable(false);
 }
-
-
-
-
 
 /*============================================================================*/
 static void enable_timer(void)
@@ -243,18 +320,22 @@ static void enable_timer(void)
   /* enable timer */
   RCC_APB1ENR |= BIT_00;
 
+#ifdef USE_PLL
+  /* prescaler 1 - the timer clock is divided by 2 */
+  TIM2_PSC = 1u;
+#else
   /* no prescaler, timer 2 runs with 10 MHz clock */
   TIM2_PSC = 0;
+#endif
 
   /* timer wraps after 1 second */
   TIM2_ARR = 9999999u;
 
-  /* pwm mode for the pps output */
+  /* pwm mode for the pps output, set pulse duration */
   TIM2_SMCR = 0;
   TIM2_CCER = 0;
   TIM2_CCMR1 = (6u << 12) | BIT_11;
-//  TIM2_CCER = BIT_04;
-  TIM2_CCR2 = TIM2_ARR/4;
+  set_pps_duration(100u);
 
 
   /* capture mode for ch3 */
@@ -268,15 +349,24 @@ static void enable_timer(void)
 
 static void capture_irq(void)
 {
-  static bool stat = false;
-  if(stat)
-    GPIOE_BSRR = BIT_15;
-  else
-    GPIOE_BSRR = BIT_31;
-  stat = !stat;
   pps = true;
+  if(res)
+  {
+    res = false;
+    TIM2_CNT = 0;
+    tic_capture = 0;
+  }
+  else
+  {
+    tic_capture = TIM2_CCR3;
+  }
 
   TIM2_SR = 0;
+}
+
+static void systick_handler(void)
+{
+  uptime_msec++;
 }
 
 /*******************************************************************************

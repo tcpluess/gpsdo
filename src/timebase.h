@@ -60,6 +60,14 @@ extern void timebase_reset(void);
 
 extern float get_tic(void);
 
+extern void set_pps_duration(uint32_t ms);
+
+void reset_elapsed_ms(void);
+
+uint32_t get_elapsed_ms(void);
+
+extern uint64_t get_uptime_msec(void);
+
 /*******************************************************************************
  * END OF CODE
  ******************************************************************************/
