@@ -5,6 +5,8 @@ MEMORY
   ccmram (rwx) : ORIGIN = 0x01000000, LENGTH = 64K
 }
 
+GROUP(libgcc.a libc.a libm.a libnosys.a)
+
 SECTIONS
 {
   .text :
