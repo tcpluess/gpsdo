@@ -37,6 +37,10 @@
 #include "tdc.h"
 #include "timebase.h"
 #include "vic.h"
+#include "adc.h"
+#include "ublox.h"
+
+#include <math.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -61,97 +65,218 @@ static void led_setup(void);
  ******************************************************************************/
 
 
+#define OSCGAIN 120.0/32768.0
+
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
+typedef enum
+{
+  init,
+  wait_ready,
+  lock1,
+  lock2,
+  lock3
+} status_t;
 
+extern void lea_init(void);
 
 int main(void)
 {
   vic_init();
   led_setup();
   timebase_init();
+  ublox_init();
+  rs232_init();
   dac_setup();
   tmp_init();
-  rs232_init();
   setup_tdc();
+  adc_init();
 
-  set_dac(32768);
 
+
+  /* this is for debug only; enable the pps output such that it can be used
+     as trigger signal for the scope */
   ppsenable(true);
-
-  while(1)
-  {
-    if(pps_elapsed())
-    {
-      timebase_reset();
-      break;
-    }
-  }
-
+timebase_reset();
+  /* enable the interpolator */
   enable_tdc();
 
-#define KP 2000.0f
-#define KI 50.0f
-#define AVG 5.0f
+double KP;
+double KI;
+float AVG;
 
-  float esum = 32768.0f/KI;
+  double esum = 32767.0f;
   float e;
   float efc;
-  float efcfilt = 32768.0f;
-  float tmp;
-  float sollphase = -2.0f;
+  //float efcfilt = 32768.0f;
+
+  float f = 0.0f;
+
+  float ticfilt = 0.0f;
+  float ticfiltlast = 0.0f;
+
+
+  status_t mstatus = init;
+  int loopcount = 0;
+  uint16_t dacval = 32768;
+
+  float soll = 1000.0f;
+
+
+extern gpsinfo_t info;
 
   while(1)
   {
+    gps_worker();
+
+    /* do nothing until a 1pps pulse has been registered */
     if(pps_elapsed())
     {
-      while(1)
+      start_conversion();
+
+
+
+      /*do
+      {*/
+      do
       {
         if(tdc_check_irq())
         {
-          tdc_write(2, tdc_read(2));
-          if(GPIOA_IDR & BIT_09)
-            break;
+          break;
         }
-      }
+      } while(1);
+          tdc_int_ack();
 
 
+        loopcount++;
 
-      float ps = get_tdc_ps();
-      get_tic();
+        switch(mstatus)
+        {
+          case init:
+          {
+            KP = 1.0/(OSCGAIN * 10);
+            KI = 10;
+            AVG = 1.0f;
+            if(fabs(e) > 100.0)
+            {
+              loopcount=0;
+            }
+            else if(loopcount > 600)
+            {
+              mstatus = lock1;
+              loopcount = 0;
+            }
+          }
+          break;
 
+          case lock1:
+          {
+            KP = 1.0/(OSCGAIN * 100);
+            KI = 100;
+            AVG = 1.0f;
+
+            if(fabs(e) > 30.0)
+            {
+              loopcount = 0;
+            }
+            else if(loopcount > 3600)
+            {
+              mstatus = lock2;
+              loopcount = 0;
+            }
+          }
+          break;
+
+          case lock2:
+          {
+            KP = 1.0/(OSCGAIN*1000);
+            KI = 1000;
+            AVG = 1.0f;
+            /*if(fabs(e)>10)
+            {
+              loopcount=0;
+            }
+            else if(loopcount > 1800)
+            {
+              mstatus = lock3;
+              loopcount = 0;
+            }*/
+          }
+
+          case lock3:
+          {
+            KP = 1.0/(OSCGAIN*2000);
+            KI = 2000;
+            AVG = 0.02f;
+          }
+          break;
+        }
+
+f = get_timepulse_error();
+      /* obtain the phase error measured */
+      float tic = get_tic()-f;
+
+      /*if(fabs(tic - ticfilt) < 10.0f)
+      {*/
+       // ticfilt += (tic - ticfilt) * AVG;
+      ticfilt = tic;
+     // ticfilt = tic;
+      //}
+
+      /* enable the interpolator for the next measurement */
       enable_tdc();
 
-      int32_t cap = TIM2_CCR3;
-      float phase;
-      if(cap > 5000000u)
-      {
-        phase = 10e6f - cap;
-      }
-      else
-      {
-        phase = -cap;
-      }
-      phase += ps;
+      // THIS WOULD BE A QUICK AND DIRTY PI-CONTROLLER
+      // 300 ns offset due to input synchronization logic!!!
+      e = ticfilt + 300 - soll; //+ (ticfilt-ticfiltlast);
+      ticfiltlast = ticfilt;
 
-      e = phase - sollphase;
-      tmp = esum + e;
-      if((tmp < (65535.0f/KI)) && (tmp > 0))
-        esum = tmp;
-      efc = KI*esum + KP*e;
-      efcfilt = ((AVG-1)*efcfilt + efc) / AVG;
+      double P = e*KP;
+      double I = P/KI;
+      esum = esum + I;
+      if(esum > 65535)
+        esum = 65535;
+      else if(esum < 0)
+        esum = 0;
+      efc = P + esum;
+      /*efcfilt = AVG*efc + (1.0f-AVG)*efcfilt;
       if(efcfilt > 65535)
         efcfilt = 65535;
       else if(efcfilt < 0)
-        efcfilt = 0;
-      uint16_t dacval = efcfilt;
+        efcfilt = 0;*/
+      if(efc > 65535)
+        efc=65535;
+      else if(efc < 0)
+        efc = 0;
+      dacval = efc;
       set_dac(dacval);
 
+
+      // do nothing but print the phase
+      float i = get_iocxo();
       float tmp = get_tmp();
-      printf("%f %f %d %f\n", tmp, e, dacval, esum);
+
+      printf("%-12.3f %-7d %-10.6f %-d %-d %-f %-f %-f %f %f %f %f %d\n", e, dacval, esum, mstatus, loopcount,f,tic,ticfilt,i,info.lat,info.lon, tmp, info.numsv);
+      //printf("%f %f %d %d %f\n", ticfilt+300, soll, loopcount, dacval, f);
+      //printf("%f %f %f %f\n",mytdc,mtic,mret, e);
+
+      //ubx_pvt(&info);
+
+
+
+
     }
+
+   /* if((get_elapsed_ms() > 20) && qry)
+    {
+      GPIOE_BSRR = BIT_14;
+      qry = false;
+
+      GPIOE_BSRR = BIT_30;
+    }*/
 
   }
   return 0;
@@ -160,18 +285,6 @@ int main(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
-
-
-
-
-
-
-
-
-
-
 
 static void led_setup(void)
 {
