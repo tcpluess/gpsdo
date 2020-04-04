@@ -257,7 +257,7 @@ f = get_timepulse_error();
 
       // do nothing but print the phase
       float i = get_iocxo();
-      float tmp = get_tmp();
+      float tmp = get_temperature();
 
       printf("%-12.3f %-7d %-10.6f %-d %-d %-f %-f %-f %f %f %f %f %d\n", e, dacval, esum, mstatus, loopcount,f,tic,ticfilt,i,info.lat,info.lon, tmp, info.numsv);
       //printf("%f %f %d %d %f\n", ticfilt+300, soll, loopcount, dacval, f);

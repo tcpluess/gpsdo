@@ -7,11 +7,11 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    driver for the DAC8501
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       dac.h
  *
  * Version:        1.0
  *
@@ -72,4 +72,3 @@ extern void set_dac(uint16_t data);
  ******************************************************************************/
 
 #endif
-

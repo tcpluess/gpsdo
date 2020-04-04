@@ -7,13 +7,13 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    implementation of the ublox binary protocol
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       ublox.h
  *
- * Version:        1.0
+ * Version:        1.1
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -22,10 +22,14 @@
    Modification History:
    [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
    - created
+
+   [1.1]    01.04.2020    Tobias Plüss <tpluess@ieee.org>
+   - use interrupts
+   - configure periodic messages (e.g. UBX_TIM_TP, UBX_NAV_PVT)
  ******************************************************************************/
 
-#ifndef __LEA_H__
-#define __LEA_H__
+#ifndef __UBLOX_H__
+#define __UBLOX_H__
 
 /*******************************************************************************
  * INCLUDE FILES

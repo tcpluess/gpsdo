@@ -17,7 +17,7 @@
  *
  * Author:         Tobias Pluess
  *
- * Creation-Date:  19.08.2012
+ * Creation-Date:  19.08.2005
  *******************************************************************************
    Modification History:
    [1.0]    19.08.2005    Tobias Pluess

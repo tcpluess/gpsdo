@@ -7,11 +7,11 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    helper functions for the vector interrupt controller
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       vic.h
  *
  * Version:        1.0
  *
@@ -51,16 +51,45 @@ typedef void(*funcptr_t)(void);
  * FUNCTION PROTOTYPES (PUBLIC)
  ******************************************************************************/
 
+/*============================================================================*/
 extern void vic_init(void);
+/*------------------------------------------------------------------------------
+  Function:
+  initialise the vic (namely, configure the vector table)
+  in:  none
+  out: none
+==============================================================================*/
 
+/*============================================================================*/
 extern void vic_enableirq(int32_t intnum, funcptr_t func);
+/*------------------------------------------------------------------------------
+  Function:
+  configure a handler for an interrupt and enable it
+  in:  intnum -> interrupt number
+       func -> interrupt handler
+  out: none
+==============================================================================*/
 
+/*============================================================================*/
 __attribute__((always_inline)) static inline void __enable_irq(void)
+/*------------------------------------------------------------------------------
+  Function:
+  globally enable interrupts
+  in:  none
+  out: none
+==============================================================================*/
 {
   asm volatile ("cpsie i");
 }
 
+/*============================================================================*/
 __attribute__((always_inline)) static inline void __disable_irq(void)
+/*------------------------------------------------------------------------------
+  Function:
+  globally disable interrupts
+  in:  none
+  out: none
+==============================================================================*/
 {
   asm volatile ("cpsid i");
 }
@@ -70,4 +99,3 @@ __attribute__((always_inline)) static inline void __disable_irq(void)
  ******************************************************************************/
 
 #endif
-

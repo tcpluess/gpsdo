@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    adt7301 driver
+ * Description:    helper functions for the vector interrupt controller
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.c
+ * Filename:       vic.c
  *
  * Version:        1.0
  *

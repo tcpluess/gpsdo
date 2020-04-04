@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    adt7301 driver
+ * Description:    driver for the DAC8501
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.c
+ * Filename:       dac.c
  *
  * Version:        1.0
  *

@@ -7,13 +7,13 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    serial port driver for usage with printf() calls
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       rs232.h
  *
- * Version:        1.0
+ * Version:        1.1
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -22,6 +22,9 @@
    Modification History:
    [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
    - created
+
+   [1.1]    31.03.2020    Tobias Plüss <tpluess@ieee.org>
+   - modify the transmit routine to use the tx empty interrupt
  ******************************************************************************/
 
 #ifndef __RS232_H__

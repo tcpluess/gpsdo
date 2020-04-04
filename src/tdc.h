@@ -7,13 +7,13 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    driver for the TDC7200 time to digital converter
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       tdc.h
  *
- * Version:        1.0
+ * Version:        1.1
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -22,6 +22,9 @@
    Modification History:
    [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
    - created
+
+   [1.1]    01.04.2020    Tobias Plüss <tpluess@ieee.org>
+   - use hardware spi interface
  ******************************************************************************/
 
 #ifndef __TDC_H__

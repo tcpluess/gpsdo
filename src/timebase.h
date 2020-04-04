@@ -7,11 +7,11 @@
  *
  * Type:           header file
  *
- * Description:    adt7301 driver
+ * Description:    module for various timing topics for the gpsdo
  *
  * Compiler:       ANSI-C
  *
- * Filename:       adt7301.h
+ * Filename:       timebase.h
  *
  * Version:        1.0
  *
