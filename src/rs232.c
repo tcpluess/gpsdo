@@ -236,11 +236,13 @@ static void buffer_insert(char c)
   txbuffer[write_ind] = c;
   buffer_empty = false;
 
+  __disable_irq();
   write_ind++;
   if(write_ind == TXBUFFERSIZE)
   {
     write_ind = 0;
   }
+  __enable_irq();
 
   /* actual transmission is handled only in the interrupt routine */
   enable_txempty_irq();
