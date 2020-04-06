@@ -129,6 +129,9 @@ static void spi_ss(bool enable)
   out: none
 ==============================================================================*/
 {
+  /* wait until not busy */
+  while(SPI2_SR & BIT_07);
+
   if(enable)
   {
     GPIOB_BSRR = BIT_28;

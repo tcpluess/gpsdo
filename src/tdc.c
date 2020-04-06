@@ -271,6 +271,9 @@ static void tdc_ss(bool select)
   out: none
 ==============================================================================*/
 {
+  /* wait until not busy */
+  while(SPI1_SR & BIT_07);
+
   if(select)
   {
     GPIOA_BSRR = BIT_20;
