@@ -51,7 +51,7 @@
 #define SYNC2 0x62u
 
 #define BAUD_INITIAL 9600u
-#define BAUD_RECONFIGURE 230400u
+#define BAUD_RECONFIGURE 9600u
 #define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
@@ -133,6 +133,7 @@ static ubxbuffer_t txb;
 static ubxbuffer_t rxb;
 static float tp;
 gpsinfo_t info;
+svindata_t svinfo;
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -147,6 +148,7 @@ static void ubx_configure_baud(uint32_t baudrate);
 static void start_transmit(const ubxbuffer_t* tmp);
 static void set_ubx_rate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
+static void unpack_svin(const uint8_t* rdata, svindata_t* info);
 static void ubx_rxhandler(void);
 static void ubx_txhandler(void);
 static void ubx_irq_handler(void);
@@ -156,6 +158,10 @@ static uint32_t unpack_u4(const uint8_t* data, uint32_t offset);
 static uint16_t unpack_u2(const uint8_t* data, uint32_t offset);
 static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value);
 
+static void ubx_configure_tmode(uint8_t mode, float lat, float lon, float alt, uint32_t dur);
+static void ubx_configure_navmodel(int8_t elev);
+
+static void config_gnss(void);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -178,10 +184,36 @@ void ublox_init(void)
   GPIOD_BSRR = BIT_26;
 }
 
+bool gps_wait_ack(void)
+{
+  bool ret;
+  while(rxb.valid == false);
+  /*__disable_irq();
+  rxb.valid = false;
+  __enable_irq();*/
+  if(rxb.msgclass == 0x05)
+  {
+    if(rxb.msgid == 0x01)
+    {
+      ret = true;
+    }
+    else
+    {
+      ret = false;
+    }
+  }
+
+  __disable_irq();
+  rxb.valid = false;
+  __enable_irq();
+  return ret;
+}
+
 void gps_worker(void)
 {
   static workerstatus_t status = reset;
   static uint64_t timestamp = 0;
+  static uint32_t numvalidfix = 0;
 
   if(timestamp >= get_uptime_msec())
   {
@@ -218,14 +250,51 @@ void gps_worker(void)
     case configure_messages:
     {
       USART3_CR1 |= BIT_05; // enable rx not empty interrupt
-      set_ubx_rate(0x0d, 0x01, 1);
-      set_ubx_rate(0x01, 0x07, 1);
+
+      do
+      {
+        printf("configure gnss...\n");
+        config_gnss();
+      } while(gps_wait_ack() == false);
+
+      do
+      {
+        printf("configure navigation model...\n");
+        ubx_configure_navmodel(5); //10 degree elevation mask
+      } while(gps_wait_ack() == false);
+
+      do
+      {
+        printf("configure sawtooth correction...\n");
+        set_ubx_rate(0x0d, 0x01, 1);
+      } while(gps_wait_ack() == false);
+
+      do
+      {
+        printf("configure position output...\n");
+        set_ubx_rate(0x01, 0x07, 1);
+      } while(gps_wait_ack() == false);
+
+      do
+      {
+        printf("configure survey-in...\n");
+        set_ubx_rate(0x0d, 0x04, 1);
+      } while(gps_wait_ack() == false);
+
+      do
+      {
+        printf("configure timing mode...\n");
+        ubx_configure_tmode(0, 0, 0, 0, 0);
+      } while(gps_wait_ack() == false);
+
+      timestamp = get_uptime_msec() + 1000u;
       status = normal;
       break;
     }
 
     case normal:
     {
+
       if(rxb.valid)
       {
         if((rxb.msgclass == 0x0d) && (rxb.msgid == 0x01))
@@ -237,9 +306,22 @@ void gps_worker(void)
         else if((rxb.msgclass == 0x01) && (rxb.msgid == 0x07))
         {
           unpack_pvt(rxb.msg, &info);
+          if(info.fixtype == 3)
+          {
+            numvalidfix++;
+            if(numvalidfix == 30)
+              ubx_configure_tmode(1, 0, 0, 0, 1800);
+          }
+        }
+        else if((rxb.msgclass == 0x0d) && (rxb.msgid == 0x04))
+        {
+          unpack_svin(rxb.msg, &svinfo);
         }
 
+        __disable_irq();
         rxb.valid = false;
+        __enable_irq();
+
       }
     }
   }
@@ -307,9 +389,36 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->pdop = unpack_u2(rdata, 76);
 }
 
+static void unpack_svin(const uint8_t* rdata, svindata_t* info)
+{
+  info->dur = unpack_u4(rdata, 0);
+  info->x = unpack_i4(rdata, 4);
+  info->y = unpack_i4(rdata, 8);
+  info->z = unpack_i4(rdata, 12);
+  info->meanv = ((float)unpack_u4(rdata, 16))/1e6f;
+  info->obs = unpack_u4(rdata, 20);
+  if(unpack_u1(rdata, 24) > 0)
+  {
+    info->valid = true;
+  }
+  else
+  {
+    info->valid = false;
+  }
+  if(unpack_u1(rdata, 25) > 0)
+  {
+    info->active = true;
+  }
+  else
+  {
+    info->active = false;
+  }
+}
+
 static void start_transmit(const ubxbuffer_t* tmp)
 {
   while(!txb.empty);
+  disable_txempty_irq();
   txb.empty = false;
   memcpy(txb.msg, tmp->msg, tmp->len);
   txb.len = tmp->len;
@@ -347,12 +456,103 @@ static void ubx_configure_tmode(uint8_t mode, float lat, float lon, float alt, u
   pack_u1(tmp.msg, 0, mode);
   pack_u1(tmp.msg, 1, 0);
   pack_u2(tmp.msg, 2, 1);
-  pack_u4(tmp.msg, 4, lat*1e7);
+  pack_u4(tmp.msg, 4, lat*1e7); //fixed posn
   pack_u4(tmp.msg, 8, lon*1e7);
   pack_u4(tmp.msg, 12, alt*100);
-  pack_u4(tmp.msg, 16, 50000);
+  pack_u4(tmp.msg, 16, 0); //fixedposacc
   pack_u4(tmp.msg, 20, dur);
-  pack_u4(tmp.msg, 24, 3000);
+  pack_u4(tmp.msg, 24, 10000);  //svinacclimit=10m
+  start_transmit(&tmp);
+}
+
+static void ubx_configure_navmodel(int8_t elev)
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x24;
+  tmp.len = 36;
+
+  pack_u2(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
+  pack_u1(tmp.msg, 2, 2); //stationary
+  pack_u1(tmp.msg, 3, 0);
+  pack_u4(tmp.msg, 4, 0);
+  pack_u4(tmp.msg, 8, 0);
+  pack_u1(tmp.msg, 12, elev);
+  pack_u1(tmp.msg, 13, 0);
+  pack_u2(tmp.msg, 14, 0);
+  pack_u2(tmp.msg, 16, 0);
+  pack_u2(tmp.msg, 18, 0);
+  pack_u2(tmp.msg, 20, 0);
+  pack_u1(tmp.msg, 22, 0);
+  pack_u1(tmp.msg, 23, 0);
+  pack_u1(tmp.msg, 24, 0); //cn0thresh numsv
+  pack_u1(tmp.msg, 25, 0); //cn0thresh
+  pack_u2(tmp.msg, 26, 0);
+  pack_u2(tmp.msg, 28, 0);
+  pack_u1(tmp.msg, 30, 0);
+
+  pack_u1(tmp.msg, 31, 0);
+  pack_u1(tmp.msg, 32, 0);
+  pack_u1(tmp.msg, 33, 0);
+  pack_u1(tmp.msg, 34, 0);
+  pack_u1(tmp.msg, 35, 0);
+  start_transmit(&tmp);
+}
+
+static void config_gnss(void)
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x3e;
+  tmp.len = 60;
+
+  pack_u1(tmp.msg, 0, 0); //version
+  pack_u1(tmp.msg, 1, 0); //read only
+  pack_u1(tmp.msg, 2, 0xff); //use max number of track channels
+  pack_u1(tmp.msg, 3, 7); //use 4 config blocks
+
+  pack_u1(tmp.msg, 4, 0); //gps
+  pack_u1(tmp.msg, 5, 8);
+  pack_u1(tmp.msg, 6, 16);
+  pack_u1(tmp.msg, 7, 0);
+  pack_u4(tmp.msg, 8, 0x01010000 | BIT_00);
+
+  pack_u1(tmp.msg, 12, 1); //sbas
+  pack_u1(tmp.msg, 13, 1);
+  pack_u1(tmp.msg, 14, 3);
+  pack_u1(tmp.msg, 15, 0);
+  pack_u4(tmp.msg, 16, 0x01010000);
+
+  pack_u1(tmp.msg, 20, 2); //galileo
+  pack_u1(tmp.msg, 21, 4);
+  pack_u1(tmp.msg, 22, 8);
+  pack_u1(tmp.msg, 23, 0);
+  pack_u4(tmp.msg, 24, 0x01010000);
+
+  pack_u1(tmp.msg, 28, 3); //beidou
+  pack_u1(tmp.msg, 29, 8);
+  pack_u1(tmp.msg, 30, 16);
+  pack_u1(tmp.msg, 31, 0);
+  pack_u4(tmp.msg, 32, 0x01010000);
+
+  pack_u1(tmp.msg, 36, 4); //imes
+  pack_u1(tmp.msg, 37, 0);
+  pack_u1(tmp.msg, 38, 8);
+  pack_u1(tmp.msg, 39, 0);
+  pack_u4(tmp.msg, 40, 0x03010000);
+
+  pack_u1(tmp.msg, 44, 5); //qzss
+  pack_u1(tmp.msg, 45, 0);
+  pack_u1(tmp.msg, 46, 3);
+  pack_u1(tmp.msg, 47, 0);
+  pack_u4(tmp.msg, 48, 0x05010000 | BIT_00);
+
+  pack_u1(tmp.msg, 52, 6); //glonass
+  pack_u1(tmp.msg, 53, 8);
+  pack_u1(tmp.msg, 54, 14);
+  pack_u1(tmp.msg, 55, 0);
+  pack_u4(tmp.msg, 56, 0x01010000);
+
   start_transmit(&tmp);
 }
 
@@ -686,7 +886,8 @@ static void ubx_txhandler(void)
 
 static void ubx_irq_handler(void)
 {
-  GPIOE_BSRR = BIT_15;
+    GPIOE_BSRR = BIT_15;
+
   uint32_t status = USART3_SR;
   uint32_t cr = USART3_CR1;
 
@@ -701,7 +902,7 @@ static void ubx_irq_handler(void)
   {
     ubx_txhandler();
   }
- GPIOE_BSRR = BIT_31;
+    GPIOE_BSRR = BIT_31;
 }
 
 static int32_t unpack_i4(const uint8_t* data, uint32_t offset)

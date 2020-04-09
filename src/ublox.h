@@ -36,6 +36,7 @@
  ******************************************************************************/
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /*******************************************************************************
  * CONSTANT DEFINITIONS
@@ -71,6 +72,16 @@ typedef struct
   uint32_t vacc;
   uint16_t pdop;
 } gpsinfo_t;
+
+typedef struct
+{
+  uint32_t dur;
+  int32_t x, y, z;
+  float meanv;
+  uint32_t obs;
+  bool valid;
+  bool active;
+} svindata_t;
 
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)
