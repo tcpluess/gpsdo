@@ -51,7 +51,7 @@
 #define SYNC2 0x62u
 
 #define BAUD_INITIAL 9600u
-#define BAUD_RECONFIGURE 9600u
+#define BAUD_RECONFIGURE 115200u
 #define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
@@ -135,6 +135,11 @@ static float tp;
 gpsinfo_t info;
 svindata_t svinfo;
 
+static ubxbuffer_t buf_pvt;
+static ubxbuffer_t buf_svin;
+static ubxbuffer_t buf_tp;
+static ubxbuffer_t buf_sat;
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -163,6 +168,8 @@ static void ubx_configure_navmodel(int8_t elev);
 
 static void config_gnss(void);
 
+extern uint32_t over;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -172,6 +179,11 @@ void ublox_init(void)
   tp = 0.0f;
   txb.empty = true;
   rxb.valid = false;
+
+  buf_tp.valid = false;
+  buf_svin.valid = false;
+  buf_pvt.valid = false;
+  buf_sat.valid = false;
 
   init_uart();
 
@@ -277,6 +289,12 @@ void gps_worker(void)
 
       do
       {
+        printf("configure satellite info output...\n");
+        set_ubx_rate(0x01, 0x35, 1);
+      } while(gps_wait_ack() == false);
+
+      do
+      {
         printf("configure survey-in...\n");
         set_ubx_rate(0x0d, 0x04, 1);
       } while(gps_wait_ack() == false);
@@ -295,34 +313,37 @@ void gps_worker(void)
     case normal:
     {
 
-      if(rxb.valid)
+      if(buf_tp.valid)
       {
-        if((rxb.msgclass == 0x0d) && (rxb.msgid == 0x01))
-        {
-          /* get the quantisation error in ps and convert to ns */
-          int32_t qerr = unpack_i4(rxb.msg, 8);
-          tp = ((float)qerr) / 1000.0f;
-        }
-        else if((rxb.msgclass == 0x01) && (rxb.msgid == 0x07))
-        {
-          unpack_pvt(rxb.msg, &info);
-          if(info.fixtype == 3)
-          {
-            numvalidfix++;
-            if(numvalidfix == 30)
-              ubx_configure_tmode(1, 0, 0, 0, 1800);
-          }
-        }
-        else if((rxb.msgclass == 0x0d) && (rxb.msgid == 0x04))
-        {
-          unpack_svin(rxb.msg, &svinfo);
-        }
-
-        __disable_irq();
-        rxb.valid = false;
-        __enable_irq();
-
+        int32_t qerr = unpack_i4(buf_tp.msg, 8);
+        tp = ((float)qerr) / 1000.0f;
+        buf_tp.valid = false;
       }
+
+      if(buf_svin.valid)
+      {
+        unpack_svin(buf_svin.msg, &svinfo);
+        buf_svin.valid = false;
+      }
+
+      if(buf_pvt.valid)
+      {
+        unpack_pvt(buf_pvt.msg, &info);
+        buf_pvt.valid = false;
+
+        if(info.fixtype == 3)
+        {
+          numvalidfix++;
+          if(numvalidfix == 10)
+            ubx_configure_tmode(1, 0, 0, 0, 7200);
+        }
+      }
+
+      if(buf_sat.valid)
+      {
+        buf_sat.valid = false;
+      }
+
     }
   }
 }
@@ -610,14 +631,18 @@ static void ubx_rxhandler(void)
   static uint8_t cka;
   static uint8_t ckb;
 
+  static uint8_t msgclass;
+  static uint8_t msgid;
+  static ubxbuffer_t* rxbuf;
+
   /* the received data byte */
   uint8_t tmpdata = USART3_DR;
 
   /* do not overwrite buffer with meaningful data */
-  if(rxb.valid)
+ /* if(rxb.valid)
   {
     return;
-  }
+  }*/
 
   switch(status)
   {
@@ -656,14 +681,39 @@ static void ubx_rxhandler(void)
 
     case ubx_class:
     {
-      rxb.msgclass = tmpdata;
+      msgclass = tmpdata;
       status = ubx_id;
       break;
     }
 
     case ubx_id:
     {
-      rxb.msgid = tmpdata;
+      msgid = tmpdata;
+
+      if((msgclass == 0x0d) && (msgid == 0x01))
+      {
+        rxbuf = &buf_tp;
+      }
+      else if((msgclass == 0x01) && (msgid == 0x07))
+      {
+        rxbuf = &buf_pvt;
+      }
+      else if((msgclass == 0x0d) && (msgid == 0x04))
+      {
+        rxbuf = &buf_svin;
+      }
+      else if((msgclass == 0x01) && (msgid == 0x35))
+      {
+        rxbuf = &buf_sat;
+      }
+      else
+      {
+        rxbuf = &rxb;
+      }
+
+      rxbuf->msgclass = msgclass;
+      rxbuf->msgid = msgid;
+
       status = ubx_len_lsb;
       break;
     }
@@ -681,7 +731,7 @@ static void ubx_rxhandler(void)
       uint16_t lenmsb = tmpdata;
       lenmsb <<= 8;
       len += lenmsb;
-      rxb.len = len;
+      rxbuf->len = len;
 
       /* if the length received will not fit into the receive buffer, then abort */
       if(len > MAX_UBX_LEN)
@@ -699,7 +749,7 @@ static void ubx_rxhandler(void)
 
     case ubx_data:
     {
-      rxb.msg[wrpos] = tmpdata;
+      rxbuf->msg[wrpos] = tmpdata;
       wrpos++;
 
       /* count the length of the received data to know when to start looking
@@ -736,7 +786,7 @@ static void ubx_rxhandler(void)
          worker thread */
       if(tmpdata == ckb)
       {
-        rxb.valid = true;
+        rxbuf->valid = true;
         status = ubx_header1;
       }
       break;
@@ -890,6 +940,11 @@ static void ubx_irq_handler(void)
 
   uint32_t status = USART3_SR;
   uint32_t cr = USART3_CR1;
+
+  if(status & BIT_03)
+  {
+    over++;
+  }
 
   /* rx buffer not empty? */
   if(status & BIT_05)

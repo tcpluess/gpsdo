@@ -56,7 +56,7 @@ PROJECT        = test
 RUN_FROM_FLASH = 0
 USE_HARD_FPU   = 1
 HEAP_SIZE      = 0
-STACK_SIZE     = 1k
+STACK_SIZE     = 8k
 
 #
 # Define linker script file here

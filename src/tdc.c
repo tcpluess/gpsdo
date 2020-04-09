@@ -138,6 +138,7 @@ void enable_tdc(void)
   tdc_write(ADDR_CONFIG1, BIT_00);
 }
 
+extern float tdc;
 float get_tdc(void)
 {
   float calib1 = tdc_read24(ADDR_CALIB1);
@@ -145,6 +146,7 @@ float get_tdc(void)
   float time1 = tdc_read24(ADDR_TIME1);
 
   float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+  tdc = ns;
   return ns;
 }
 

@@ -67,6 +67,7 @@ static void led_setup(void);
 
 #define OSCGAIN 120.0/32768.0
 
+uint32_t over;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -83,6 +84,11 @@ typedef enum
 
 extern void lea_init(void);
 
+float tdc;
+uint32_t tim;
+
+extern svindata_t svinfo;
+
 int main(void)
 {
   vic_init();
@@ -95,7 +101,15 @@ int main(void)
   setup_tdc();
   adc_init();
 
-
+ /* GPIOD_BSRR = BIT_10;
+  while(1)
+  {
+    if(USART2_SR & BIT_05)
+      USART3_DR = USART2_DR;
+    if(USART3_SR & BIT_05)
+      USART2_DR = USART3_DR;
+  }*/
+over=0;
 
   /* this is for debug only; enable the pps output such that it can be used
      as trigger signal for the scope */
@@ -126,12 +140,13 @@ float AVG;
   float soll = 1000.0f;
 
 
+
 extern gpsinfo_t info;
 
   while(1)
   {
-    gps_worker();
 
+    gps_worker();
     /* do nothing until a 1pps pulse has been registered */
     if(pps_elapsed())
     {
@@ -259,7 +274,7 @@ f = get_timepulse_error();
       float i = get_iocxo();
       float tmp = get_temperature();
 
-      printf("%-12.3f %-7d %-10.6f %-d %-d %-f %-f %-f %f %f %f %f %d\n", e, dacval, esum, mstatus, loopcount,f,tic,ticfilt,i,info.lat,info.lon, tmp, info.numsv);
+      printf("%-12.3f %-7d %-d %-d %-f tic=%-f tdc=%-f iocxo=%f lat=%f lon=%f %f numsv=%d svinobs=%lu, act=%d mv=%f valid=%d over=%lu\n", e, dacval,  mstatus, loopcount,f,tic,tdc,i,info.lat,info.lon, tmp, info.numsv, svinfo.obs, svinfo.active, svinfo.meanv, svinfo.valid, over);
       //printf("%f %f %d %d %f\n", ticfilt+300, soll, loopcount, dacval, f);
       //printf("%f %f %f %f\n",mytdc,mtic,mret, e);
 
@@ -269,6 +284,8 @@ f = get_timepulse_error();
 
 
     }
+
+
 
    /* if((get_elapsed_ms() > 20) && qry)
     {

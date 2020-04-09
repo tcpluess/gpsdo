@@ -106,7 +106,11 @@ void timebase_init(void)
   uptime_msec = 0;
 
   /* the systick timer is used to calculate the uptime in msec */
+  #ifndef USE_PLL
   SYSTICKRVR = (((10000000u / 8u) / 1000) - 1u);
+  #else
+  SYSTICKRVR = (((160000000u / 8u) / 1000) - 1u);
+  #endif
   SYSTICKCSR = (BIT_01 | BIT_00);
   vic_enableirq(SYSTICK_VECTOR, systick_handler);
 
@@ -346,6 +350,7 @@ static void enable_timer(void)
 
   TIM2_CR1 = BIT_00;
 }
+extern uint32_t tim;
 
 static void capture_irq(void)
 {
@@ -359,6 +364,7 @@ static void capture_irq(void)
   else
   {
     tic_capture = TIM2_CCR3;
+    tim=tic_capture;
   }
 
   TIM2_SR = 0;

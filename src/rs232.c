@@ -68,9 +68,8 @@ static void buffer_insert(char c);
  ******************************************************************************/
 
 static char txbuffer[TXBUFFERSIZE];
-static volatile uint32_t read_ind;
-static uint32_t write_ind;
-static volatile bool buffer_empty;
+static volatile uint32_t txlen;
+
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -78,9 +77,7 @@ static volatile bool buffer_empty;
 
 extern void rs232_init(void)
 {
-  read_ind = 0;
-  write_ind = 0;
-  buffer_empty = true;
+  txlen = 0;
 
   vic_enableirq(38, irq_handler);
 
@@ -157,10 +154,21 @@ static void irq_handler(void)
   out: none
 ==============================================================================*/
 {
-  /* check if there is something in the buffer. as long as read_ind and
-     write_ind are different, there is data to be transmitted */
-  if(read_ind != write_ind)
+  uint32_t sr = USART2_SR;
+  uint32_t cr = USART2_CR1;
+
+  if((sr & cr) == BIT_07) //TXE?
   {
+  static uint32_t read_ind = 0;
+
+  if(txlen == 0)
+  {
+    disable_txempty_irq();
+    return;
+  }
+
+    txlen--;
+
     /* send the next character and go to the next read position, take care
        of wrapping the read index */
     USART2_DR = txbuffer[read_ind];
@@ -169,14 +177,6 @@ static void irq_handler(void)
     {
       read_ind = 0;
     }
-  }
-  else
-  {
-    /* if the read_ind and write_ind are the same, the buffer is empty.
-       the interrupt needs to be disabled because it can only be acknowledged
-       by writing to the data register */
-    buffer_empty = true;
-    disable_txempty_irq();
   }
 }
 
@@ -215,34 +215,28 @@ static void buffer_insert(char c)
   out: none
 ==============================================================================*/
 {
+static int write_ind = 0;
+
   /* this can only proceed if one of the following conditions is met:
      a) the buffer is empty - in this case there is nothing in the buffer
         and it can be used immediately
      b) read index is not the same as write index - if they are equal it means
         the buffer is overflowing */
-  do
-  {
-    if(buffer_empty)
-    {
-      break;
-    }
-    if(read_ind != write_ind)
-    {
-      break;
-    }
-  } while(true);
+
+    while(txlen == TXBUFFERSIZE);
 
   /* put the character into the buffer */
   txbuffer[write_ind] = c;
-  buffer_empty = false;
 
-  __disable_irq();
   write_ind++;
   if(write_ind == TXBUFFERSIZE)
   {
     write_ind = 0;
   }
+  __disable_irq();
+  txlen++;
   __enable_irq();
+
 
   /* actual transmission is handled only in the interrupt routine */
   enable_txempty_irq();
