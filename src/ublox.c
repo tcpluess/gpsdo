@@ -36,51 +36,57 @@
 #include "stm32f407.h"
 #include "misc.h"
 #include "vic.h"
+#include "timebase.h"
 
 #include <string.h>
-
-#include "timebase.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define IRQ_NUM 39
 
-#define SYNC1 0xb5u
-#define SYNC2 0x62u
+/* usart configuration */
+#define BAUD_INITIAL 9600u /* initial baudrate */
+#define BAUD_RECONFIGURE 115200u /* baudrate after initialisation */
 
-#define BAUD_INITIAL 9600u
-#define BAUD_RECONFIGURE 115200u
+/* macros to set the integer and fractional part of the baudrate generator */
 #define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
+/* usart interrupt vector number */
+#define IRQ_NUM 39
+
+/* maximum length of the buffers */
 #define MAX_UBX_LEN 150u
 
+/* ubx message classes */
 #define UBX_CLASS_NAV 0x01u
 #define UBX_CLASS_ACK 0x05u
 #define UBX_CLASS_CFG 0x06u
 #define UBX_CLASS_TIM 0x0du
 
-#define UBX_ID_NAV_PVT 0x07u
-#define UBX_ID_NAV_SAT 0x35u
-#define UBX_ID_TIM_TP 0x01u
-#define UBX_ID_TIM_SVIN 0x04u
+#define UBX_ID_NAV_PVT 0x07u /* position, velocity, time */
+#define UBX_ID_NAV_SAT 0x35u /* satellite info */
+#define UBX_ID_TIM_TP 0x01u /* timepulse info */
+#define UBX_ID_TIM_SVIN 0x04u /* survey-in data */
+#define UBX_ID_CFG_TMODE2 0x3du /* timing mode configuration */
+#define UBX_ID_CFG_NAVMODEL 0x24u /* navigation model configuration */
+#define UBX_ID_CFG_RATE 0x01u /* message configuration */
+#define UBX_ID_CFG_GNSS 0x3eu /* gnss configuration */
+#define UBX_ID_CFG_PORT 0x00u /* i/o port configuration */
 
-#define CFG_PORT 0x00u
-
-
-
-
-
+#define SYNC1 0xb5u
+#define SYNC2 0x62u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
-/* pseudo functions for unpack and pack 1-byte data */
+/* pseudo functions for unpack and pack */
 #define unpack_u1(x, y) x[y]
 #define pack_u1(x, y, z) x[y] = z
+#define pack_i4(x, y, z) pack_u4(x, y, (uint32_t)(z))
+#define unpack_i4(x, y) ((int32_t)unpack_u4(x, y))
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -160,19 +166,6 @@ static ubxbuffer_t buf_sat;
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-
-
-
-
-
-static int32_t unpack_i4(const uint8_t* data, uint32_t offset);
-static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value);
-static uint32_t unpack_u4(const uint8_t* data, uint32_t offset);
-static uint16_t unpack_u2(const uint8_t* data, uint32_t offset);
-static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value);
-
-
-
 #ifdef DEBUG
 uint32_t rxover;
 #endif
@@ -193,8 +186,12 @@ static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
 static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
 static void ubx_config_navmodel(int8_t elev);
-static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt, uint32_t dur);
-
+static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
+  uint32_t dur);
+static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value);
+static uint32_t unpack_u4(const uint8_t* data, uint32_t offset);
+static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value);
+static uint16_t unpack_u2(const uint8_t* data, uint32_t offset);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -832,57 +829,6 @@ static void uart_irq_handler(void)
     GPIOE_BSRR = BIT_31;
 }
 
-static int32_t unpack_i4(const uint8_t* data, uint32_t offset)
-{
-  int32_t ret = data[offset + 3];
-  ret <<= 8;
-  ret += data[offset + 2];
-  ret <<= 8;
-  ret += data[offset + 1];
-  ret <<= 8;
-  ret += data[offset];
-  return ret;
-}
-
-static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value)
-{
-  buffer[offset] = value;
-  value >>= 8;
-  buffer[offset + 1] = value;
-  value >>= 8;
-  buffer[offset + 2] = value;
-  value >>= 8;
-  buffer[offset + 3] = value;
-}
-
-static uint32_t unpack_u4(const uint8_t* data, uint32_t offset)
-{
-  uint32_t ret = data[offset + 3];
-  ret <<= 8;
-  ret += data[offset + 2];
-  ret <<= 8;
-  ret += data[offset + 1];
-  ret <<= 8;
-  ret += data[offset];
-  return ret;
-}
-
-static uint16_t unpack_u2(const uint8_t* data, uint32_t offset)
-{
-  uint16_t ret = data[offset + 1];
-  ret <<= 8;
-  ret += data[offset];
-  return ret;
-}
-
-static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value)
-{
-  buffer[offset] = value;
-  value >>= 8;
-  buffer[offset + 1] = value;
-}
-
-
 
 /*============================================================================*/
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
@@ -977,7 +923,7 @@ static void ubx_config_baudrate(uint32_t baudrate)
 {
   ubxbuffer_t tmp;
   tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = CFG_PORT;
+  tmp.msgid = UBX_ID_CFG_PORT;
   tmp.len = 20u;
 
   pack_u1(tmp.msg, 0, 1); /* 1 = UART */
@@ -1005,8 +951,8 @@ static void ubx_config_gnss(bool gps, bool glonass, bool galileo)
 ==============================================================================*/
 {
   ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x3e;
+  tmp.msgclass = UBX_CLASS_CFG;
+  tmp.msgid = UBX_ID_CFG_GNSS;
   tmp.len = 60;
 
   pack_u1(tmp.msg, 0, 0); /* version 0 */
@@ -1073,8 +1019,8 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
 ==============================================================================*/
 {
   ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x01;
+  tmp.msgclass = UBX_CLASS_CFG;
+  tmp.msgid = UBX_ID_CFG_RATE;
   tmp.len = 3;
   pack_u1(tmp.msg, 0, msgclass);
   pack_u1(tmp.msg, 1, msgid);
@@ -1096,8 +1042,8 @@ static void ubx_config_navmodel(int8_t elev)
 ==============================================================================*/
 {
   ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x24;
+  tmp.msgclass = UBX_CLASS_CFG;
+  tmp.msgid = UBX_ID_CFG_NAVMODEL;
   tmp.len = 36;
 
   pack_u2(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
@@ -1142,8 +1088,8 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
 ==============================================================================*/
 {
   ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x3d;
+  tmp.msgclass = UBX_CLASS_CFG;
+  tmp.msgid = UBX_ID_CFG_TMODE2;
   tmp.len = 28;
 
   pack_u1(tmp.msg, 0, mode);
@@ -1157,6 +1103,87 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   pack_u4(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
   start_transmit(&tmp);
 }
+
+
+/*============================================================================*/
+static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value)
+/*------------------------------------------------------------------------------
+  Function:
+  convert a unsigned 32-bit number to 4 bytes and store it in a buffer
+  (little endian)
+  in:  buffer -> buffer to put the bytes into
+       offset -> offset into the buffer
+       value -> value to be packed
+  out: none
+==============================================================================*/
+{
+  buffer[offset] = value;
+  value >>= 8;
+  buffer[offset + 1] = value;
+  value >>= 8;
+  buffer[offset + 2] = value;
+  value >>= 8;
+  buffer[offset + 3] = value;
+}
+
+
+/*============================================================================*/
+static uint32_t unpack_u4(const uint8_t* data, uint32_t offset)
+/*------------------------------------------------------------------------------
+  Function:
+  construct a 32-bit unsigned value from raw data bytes in a buffer
+  (little endian)
+  in:  data -> the raw data bytes
+       offset -> offset of the LSB
+  out: returns the unpacked value
+==============================================================================*/
+{
+  uint32_t ret = data[offset + 3];
+  ret <<= 8;
+  ret += data[offset + 2];
+  ret <<= 8;
+  ret += data[offset + 1];
+  ret <<= 8;
+  ret += data[offset];
+  return ret;
+}
+
+
+/*============================================================================*/
+static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value)
+/*------------------------------------------------------------------------------
+  Function:
+  convert an unsigned 16-bit number into raw bytes and store them in a buffer
+  (little endian)
+  in:  buffer -> buffer for the raw data
+       offset -> offset into the buffer
+       value -> value to be packed
+  out: none
+==============================================================================*/
+{
+  buffer[offset] = value;
+  value >>= 8;
+  buffer[offset + 1] = value;
+}
+
+
+/*============================================================================*/
+static uint16_t unpack_u2(const uint8_t* data, uint32_t offset)
+/*------------------------------------------------------------------------------
+  Function:
+  construct a 16-bit unsigned number from a buffer containing raw data bytes
+  (little endian)
+  in:  data -> buffer containing the raw data
+       offset -> offset into the buffer
+  out: returns the unpacked value
+==============================================================================*/
+{
+  uint16_t ret = data[offset + 1];
+  ret <<= 8;
+  ret += data[offset];
+  return ret;
+}
+
 
 /*******************************************************************************
  * END OF CODE
