@@ -91,7 +91,7 @@ extern void rs232_init(void)
   /* enable and configure usart2 */
   RCC_APB1ENR |= BIT_17;
   USART2_BRR = (BAUD_FRAC << 0) | (BAUD_INT << 4);
-  USART2_CR1 = BIT_13 | BIT_03 | BIT_02;
+  USART2_CR1 = BIT_13 | BIT_03;
 }
 
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
