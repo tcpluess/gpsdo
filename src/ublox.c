@@ -57,13 +57,22 @@
 
 #define MAX_UBX_LEN 150u
 
-#define CLASS_CFG 0x06u
+#define UBX_CLASS_NAV 0x01u
+#define UBX_CLASS_ACK 0x05u
+#define UBX_CLASS_CFG 0x06u
+#define UBX_CLASS_TIM 0x0du
+
+#define UBX_ID_NAV_PVT 0x07u
+#define UBX_ID_NAV_SAT 0x35u
+#define UBX_ID_TIM_TP 0x01u
+#define UBX_ID_TIM_SVIN 0x04u
 
 #define CFG_PORT 0x00u
-#define CFG_PORT_LEN 20u
-#define CFG_PORT_ID_UART 1
-#define CFG_UART_8N1 BIT_06 | BIT_07 | BIT_11
-#define CFG_INOUT_MASK_UBX BIT_00
+
+
+
+
+
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -125,13 +134,20 @@ typedef struct
   };
 } ubxbuffer_t;
 
+typedef enum
+{
+  tmode_disable = 0u,
+  tmode_svin = 1u,
+  tmode_fixedpos = 2u
+} tmode_t;
+
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
 static ubxbuffer_t txb;
 static ubxbuffer_t rxb;
-static float tp;
+static float qerr;
 gpsinfo_t info;
 svindata_t svinfo;
 
@@ -144,31 +160,41 @@ static ubxbuffer_t buf_sat;
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static void init_uart(void);
-void ubx_reconfig(void);
-static void enable_txempty_irq(void);
-static void disable_txempty_irq(void);
-static void uart_configure_baud(uint32_t baud);
-static void ubx_configure_baud(uint32_t baudrate);
-static void start_transmit(const ubxbuffer_t* tmp);
-static void set_ubx_rate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
-static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
-static void unpack_svin(const uint8_t* rdata, svindata_t* info);
-static void ubx_rxhandler(void);
-static void ubx_txhandler(void);
-static void ubx_irq_handler(void);
+
+
+
+
+
 static int32_t unpack_i4(const uint8_t* data, uint32_t offset);
 static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value);
 static uint32_t unpack_u4(const uint8_t* data, uint32_t offset);
 static uint16_t unpack_u2(const uint8_t* data, uint32_t offset);
 static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value);
 
-static void ubx_configure_tmode(uint8_t mode, float lat, float lon, float alt, uint32_t dur);
-static void ubx_configure_navmodel(int8_t elev);
 
-static void config_gnss(void);
 
-extern uint32_t over;
+#ifdef DEBUG
+uint32_t rxover;
+#endif
+
+
+static void init_uart(void);
+static void uart_config_baudrate(uint32_t baud);
+static void enable_txempty_irq(void);
+static void disable_txempty_irq(void);
+static void start_transmit(const ubxbuffer_t* tmp);
+static void ubx_rxhandler(void);
+static void ubx_txhandler(void);
+static void uart_irq_handler(void);
+static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
+static void unpack_svin(const uint8_t* rdata, svindata_t* info);
+static void unpack_tp(const uint8_t* rdata, float* ret);
+static void ubx_config_baudrate(uint32_t baudrate);
+static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
+static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
+static void ubx_config_navmodel(int8_t elev);
+static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt, uint32_t dur);
+
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -176,7 +202,7 @@ extern uint32_t over;
 
 void ublox_init(void)
 {
-  tp = 0.0f;
+  qerr = 0.0f;
   txb.empty = true;
   rxb.valid = false;
 
@@ -184,6 +210,10 @@ void ublox_init(void)
   buf_svin.valid = false;
   buf_pvt.valid = false;
   buf_sat.valid = false;
+
+#ifdef DEBUG
+  rxover = 0;
+#endif
 
   init_uart();
 
@@ -252,8 +282,8 @@ void gps_worker(void)
 
     case configure_uart:
     {
-      ubx_configure_baud(BAUD_RECONFIGURE);
-      uart_configure_baud(BAUD_RECONFIGURE);
+      ubx_config_baudrate(BAUD_RECONFIGURE);
+      uart_config_baudrate(BAUD_RECONFIGURE);
       timestamp = get_uptime_msec() + 100u;
       status = configure_messages;
       break;
@@ -265,44 +295,38 @@ void gps_worker(void)
 
       do
       {
-        printf("configure gnss...\n");
-        config_gnss();
+        /* disable all gnss except gps */
+        ubx_config_gnss(true, false, false);
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure navigation model...\n");
-        ubx_configure_navmodel(5); //10 degree elevation mask
+        ubx_config_navmodel(5); //10 degree elevation mask
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure sawtooth correction...\n");
-        set_ubx_rate(0x0d, 0x01, 1);
+        ubx_config_msgrate(0x0d, 0x01, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure position output...\n");
-        set_ubx_rate(0x01, 0x07, 1);
+        ubx_config_msgrate(0x01, 0x07, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure satellite info output...\n");
-        set_ubx_rate(0x01, 0x35, 1);
+        ubx_config_msgrate(0x01, 0x35, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure survey-in...\n");
-        set_ubx_rate(0x0d, 0x04, 1);
+        ubx_config_msgrate(0x0d, 0x04, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        printf("configure timing mode...\n");
-        ubx_configure_tmode(0, 0, 0, 0, 0);
+        ubx_config_tmode(tmode_disable, 0, 0, 0, 0);
       } while(gps_wait_ack() == false);
 
       timestamp = get_uptime_msec() + 1000u;
@@ -315,8 +339,7 @@ void gps_worker(void)
 
       if(buf_tp.valid)
       {
-        int32_t qerr = unpack_i4(buf_tp.msg, 8);
-        tp = ((float)qerr) / 1000.0f;
+        unpack_tp(buf_tp.msg, &qerr);
         buf_tp.valid = false;
       }
 
@@ -335,7 +358,7 @@ void gps_worker(void)
         {
           numvalidfix++;
           if(numvalidfix == 10)
-            ubx_configure_tmode(1, 0, 0, 0, 7200);
+            ubx_config_tmode(tmode_svin, 0, 0, 0, 7200);
         }
       }
 
@@ -350,16 +373,28 @@ void gps_worker(void)
 
 float get_timepulse_error(void)
 {
-  float z = tp;
-  tp = 0;
-  return z;
+#ifdef DEBUG
+  float tmp = qerr;
+  qerr = 0;
+  return tmp;
+#else
+  return qerr;
+#endif
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
 
+/*============================================================================*/
 static void init_uart(void)
+/*------------------------------------------------------------------------------
+  Function:
+  initialise the uart; the initial baudrate 9600 must be used to be able to
+  communicate to the ublox module after reset
+  in:  none
+  out: none
+==============================================================================*/
 {
   /* enable gpio d and configure the uart pins */
   RCC_AHB1ENR |= BIT_03;
@@ -370,12 +405,20 @@ static void init_uart(void)
   RCC_APB1ENR |= BIT_18;
   USART3_BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
   USART3_CR1 = BIT_13 | BIT_03 | BIT_02;
-  vic_enableirq(IRQ_NUM, ubx_irq_handler);
+  vic_enableirq(IRQ_NUM, uart_irq_handler);
 }
 
-static void uart_configure_baud(uint32_t baud)
+
+/*============================================================================*/
+static void uart_config_baudrate(uint32_t baud)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the baudrate of the uart
+  in:  baud -> new baudrate
+  out: none
+==============================================================================*/
 {
-  /* wait until tx done */
+  /* wait until tx done before the baudrate is changed */
   do
   {
     if(USART3_SR & BIT_06)
@@ -387,207 +430,6 @@ static void uart_configure_baud(uint32_t baud)
   USART3_BRR = (BAUD_FRAC(baud) << 0) | (BAUD_INT(baud) << 4);
 }
 
-static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
-{
-  info->year = unpack_u2(rdata, 4);
-  info->month = unpack_u1(rdata, 6);
-  info->day = unpack_u1(rdata, 7);
-  info->hour = unpack_u1(rdata, 8);
-  info->min = unpack_u1(rdata, 9);
-  info->sec = unpack_u1(rdata, 10);
-  info->valid = unpack_u1(rdata, 11);
-  info->tacc = unpack_u4(rdata, 12);
-  info->fixtype = unpack_u1(rdata, 20);
-  info->flags = unpack_u1(rdata, 21);
-  info->xflags = unpack_u1(rdata, 22);
-  info->numsv = unpack_u1(rdata, 23);
-  info->lon = ((float)unpack_i4(rdata, 24))/1e7f;
-  info->lat = ((float)unpack_i4(rdata, 28))/1e7f;
-  info->height = unpack_i4(rdata, 32);
-  info->hmsl = unpack_i4(rdata, 36);
-  info->hacc = unpack_u4(rdata, 40);
-  info->vacc = unpack_u4(rdata, 44);
-  info->pdop = unpack_u2(rdata, 76);
-}
-
-static void unpack_svin(const uint8_t* rdata, svindata_t* info)
-{
-  info->dur = unpack_u4(rdata, 0);
-  info->x = unpack_i4(rdata, 4);
-  info->y = unpack_i4(rdata, 8);
-  info->z = unpack_i4(rdata, 12);
-  info->meanv = ((float)unpack_u4(rdata, 16))/1e6f;
-  info->obs = unpack_u4(rdata, 20);
-  if(unpack_u1(rdata, 24) > 0)
-  {
-    info->valid = true;
-  }
-  else
-  {
-    info->valid = false;
-  }
-  if(unpack_u1(rdata, 25) > 0)
-  {
-    info->active = true;
-  }
-  else
-  {
-    info->active = false;
-  }
-}
-
-static void start_transmit(const ubxbuffer_t* tmp)
-{
-  while(!txb.empty);
-  disable_txempty_irq();
-  txb.empty = false;
-  memcpy(txb.msg, tmp->msg, tmp->len);
-  txb.len = tmp->len;
-  txb.msgclass = tmp->msgclass;
-  txb.msgid = tmp->msgid;
-  enable_txempty_irq();
-}
-
-static void ubx_configure_baud(uint32_t baudrate)
-{
-  ubxbuffer_t tmp;
-  tmp.msgclass = CLASS_CFG;
-  tmp.msgid = CFG_PORT;
-  tmp.len = CFG_PORT_LEN;
-
-  pack_u1(tmp.msg, 0, CFG_PORT_ID_UART);
-  pack_u1(tmp.msg, 1, 0);
-  pack_u2(tmp.msg, 2, 0);
-  pack_u4(tmp.msg, 4, CFG_UART_8N1);
-  pack_u4(tmp.msg, 8, baudrate);
-  pack_u2(tmp.msg, 12, CFG_INOUT_MASK_UBX);
-  pack_u2(tmp.msg, 14, CFG_INOUT_MASK_UBX);
-  pack_u2(tmp.msg, 16, 0);
-  pack_u2(tmp.msg, 18, 0);
-  start_transmit(&tmp);
-}
-
-static void ubx_configure_tmode(uint8_t mode, float lat, float lon, float alt, uint32_t dur)
-{
-  ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x3d;
-  tmp.len = 28;
-
-  pack_u1(tmp.msg, 0, mode);
-  pack_u1(tmp.msg, 1, 0);
-  pack_u2(tmp.msg, 2, 1);
-  pack_u4(tmp.msg, 4, lat*1e7); //fixed posn
-  pack_u4(tmp.msg, 8, lon*1e7);
-  pack_u4(tmp.msg, 12, alt*100);
-  pack_u4(tmp.msg, 16, 0); //fixedposacc
-  pack_u4(tmp.msg, 20, dur);
-  pack_u4(tmp.msg, 24, 10000);  //svinacclimit=10m
-  start_transmit(&tmp);
-}
-
-static void ubx_configure_navmodel(int8_t elev)
-{
-  ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x24;
-  tmp.len = 36;
-
-  pack_u2(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
-  pack_u1(tmp.msg, 2, 2); //stationary
-  pack_u1(tmp.msg, 3, 0);
-  pack_u4(tmp.msg, 4, 0);
-  pack_u4(tmp.msg, 8, 0);
-  pack_u1(tmp.msg, 12, elev);
-  pack_u1(tmp.msg, 13, 0);
-  pack_u2(tmp.msg, 14, 0);
-  pack_u2(tmp.msg, 16, 0);
-  pack_u2(tmp.msg, 18, 0);
-  pack_u2(tmp.msg, 20, 0);
-  pack_u1(tmp.msg, 22, 0);
-  pack_u1(tmp.msg, 23, 0);
-  pack_u1(tmp.msg, 24, 0); //cn0thresh numsv
-  pack_u1(tmp.msg, 25, 0); //cn0thresh
-  pack_u2(tmp.msg, 26, 0);
-  pack_u2(tmp.msg, 28, 0);
-  pack_u1(tmp.msg, 30, 0);
-
-  pack_u1(tmp.msg, 31, 0);
-  pack_u1(tmp.msg, 32, 0);
-  pack_u1(tmp.msg, 33, 0);
-  pack_u1(tmp.msg, 34, 0);
-  pack_u1(tmp.msg, 35, 0);
-  start_transmit(&tmp);
-}
-
-static void config_gnss(void)
-{
-  ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x3e;
-  tmp.len = 60;
-
-  pack_u1(tmp.msg, 0, 0); //version
-  pack_u1(tmp.msg, 1, 0); //read only
-  pack_u1(tmp.msg, 2, 0xff); //use max number of track channels
-  pack_u1(tmp.msg, 3, 7); //use 4 config blocks
-
-  pack_u1(tmp.msg, 4, 0); //gps
-  pack_u1(tmp.msg, 5, 8);
-  pack_u1(tmp.msg, 6, 16);
-  pack_u1(tmp.msg, 7, 0);
-  pack_u4(tmp.msg, 8, 0x01010000 | BIT_00);
-
-  pack_u1(tmp.msg, 12, 1); //sbas
-  pack_u1(tmp.msg, 13, 1);
-  pack_u1(tmp.msg, 14, 3);
-  pack_u1(tmp.msg, 15, 0);
-  pack_u4(tmp.msg, 16, 0x01010000);
-
-  pack_u1(tmp.msg, 20, 2); //galileo
-  pack_u1(tmp.msg, 21, 4);
-  pack_u1(tmp.msg, 22, 8);
-  pack_u1(tmp.msg, 23, 0);
-  pack_u4(tmp.msg, 24, 0x01010000);
-
-  pack_u1(tmp.msg, 28, 3); //beidou
-  pack_u1(tmp.msg, 29, 8);
-  pack_u1(tmp.msg, 30, 16);
-  pack_u1(tmp.msg, 31, 0);
-  pack_u4(tmp.msg, 32, 0x01010000);
-
-  pack_u1(tmp.msg, 36, 4); //imes
-  pack_u1(tmp.msg, 37, 0);
-  pack_u1(tmp.msg, 38, 8);
-  pack_u1(tmp.msg, 39, 0);
-  pack_u4(tmp.msg, 40, 0x03010000);
-
-  pack_u1(tmp.msg, 44, 5); //qzss
-  pack_u1(tmp.msg, 45, 0);
-  pack_u1(tmp.msg, 46, 3);
-  pack_u1(tmp.msg, 47, 0);
-  pack_u4(tmp.msg, 48, 0x05010000 | BIT_00);
-
-  pack_u1(tmp.msg, 52, 6); //glonass
-  pack_u1(tmp.msg, 53, 8);
-  pack_u1(tmp.msg, 54, 14);
-  pack_u1(tmp.msg, 55, 0);
-  pack_u4(tmp.msg, 56, 0x01010000);
-
-  start_transmit(&tmp);
-}
-
-static void set_ubx_rate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
-{
-  ubxbuffer_t tmp;
-  tmp.msgclass = 0x06;
-  tmp.msgid = 0x01;
-  tmp.len = 3;
-  pack_u1(tmp.msg, 0, msgclass);
-  pack_u1(tmp.msg, 1, msgid);
-  pack_u1(tmp.msg, 2, rate);
-  start_transmit(&tmp);
-}
 
 /*============================================================================*/
 static void enable_txempty_irq(void)
@@ -603,6 +445,7 @@ static void enable_txempty_irq(void)
   USART3_CR1 |= BIT_07;
 }
 
+
 /*============================================================================*/
 static void disable_txempty_irq(void)
 /*------------------------------------------------------------------------------
@@ -614,6 +457,27 @@ static void disable_txempty_irq(void)
 {
   USART3_CR1 &= ~BIT_07;
 }
+
+
+/*============================================================================*/
+static void start_transmit(const ubxbuffer_t* tmp)
+/*------------------------------------------------------------------------------
+  Function:
+  start the transmission of a message
+  in:  tmp -> pointer to a message
+  out: none
+==============================================================================*/
+{
+  while(!txb.empty);
+  disable_txempty_irq();
+  txb.empty = false;
+  memcpy(txb.msg, tmp->msg, tmp->len);
+  txb.len = tmp->len;
+  txb.msgclass = tmp->msgclass;
+  txb.msgid = tmp->msgid;
+  enable_txempty_irq();
+}
+
 
 /*============================================================================*/
 static void ubx_rxhandler(void)
@@ -637,12 +501,6 @@ static void ubx_rxhandler(void)
 
   /* the received data byte */
   uint8_t tmpdata = USART3_DR;
-
-  /* do not overwrite buffer with meaningful data */
- /* if(rxb.valid)
-  {
-    return;
-  }*/
 
   switch(status)
   {
@@ -689,26 +547,29 @@ static void ubx_rxhandler(void)
     case ubx_id:
     {
       msgid = tmpdata;
+      rxbuf = &rxb;
 
-      if((msgclass == 0x0d) && (msgid == 0x01))
+      if(msgclass == UBX_CLASS_NAV)
       {
-        rxbuf = &buf_tp;
+        if(msgid == UBX_ID_NAV_SAT)
+        {
+          rxbuf = &buf_sat;
+        }
+        else if(msgid == UBX_ID_NAV_PVT)
+        {
+          rxbuf = &buf_pvt;
+        }
       }
-      else if((msgclass == 0x01) && (msgid == 0x07))
+      else if(msgclass == UBX_CLASS_TIM)
       {
-        rxbuf = &buf_pvt;
-      }
-      else if((msgclass == 0x0d) && (msgid == 0x04))
-      {
-        rxbuf = &buf_svin;
-      }
-      else if((msgclass == 0x01) && (msgid == 0x35))
-      {
-        rxbuf = &buf_sat;
-      }
-      else
-      {
-        rxbuf = &rxb;
+        if(msgid == UBX_ID_TIM_TP)
+        {
+          rxbuf = &buf_tp;
+        }
+        else if(msgid == UBX_ID_TIM_SVIN)
+        {
+          rxbuf = &buf_svin;
+        }
       }
 
       rxbuf->msgclass = msgclass;
@@ -805,6 +666,7 @@ static void ubx_rxhandler(void)
   cka = cka + tmpdata;
   ckb = ckb + cka;
 }
+
 
 /*============================================================================*/
 static void ubx_txhandler(void)
@@ -934,17 +796,27 @@ static void ubx_txhandler(void)
   ckb = ckb + cka;
 }
 
-static void ubx_irq_handler(void)
+
+/*============================================================================*/
+static void uart_irq_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  the interrupt handler; calls the rx and/or tx handlers
+  in:  none
+  out: none
+==============================================================================*/
 {
     GPIOE_BSRR = BIT_15;
 
   uint32_t status = USART3_SR;
   uint32_t cr = USART3_CR1;
 
+#ifdef DEBUG
   if(status & BIT_03)
   {
-    over++;
+    rxover++;
   }
+#endif
 
   /* rx buffer not empty? */
   if(status & BIT_05)
@@ -1008,6 +880,282 @@ static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value)
   buffer[offset] = value;
   value >>= 8;
   buffer[offset + 1] = value;
+}
+
+
+
+/*============================================================================*/
+static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
+/*------------------------------------------------------------------------------
+  Function:
+  unpacks the NAV-PVT (position, velocity, time) message
+  in:  rdata -> raw data
+       info -> gpsinfo structure
+  out: info is populated with position, velocity and time
+==============================================================================*/
+{
+  info->year = unpack_u2(rdata, 4);
+  info->month = unpack_u1(rdata, 6);
+  info->day = unpack_u1(rdata, 7);
+  info->hour = unpack_u1(rdata, 8);
+  info->min = unpack_u1(rdata, 9);
+  info->sec = unpack_u1(rdata, 10);
+  info->valid = unpack_u1(rdata, 11);
+  info->tacc = unpack_u4(rdata, 12);
+  info->fixtype = unpack_u1(rdata, 20);
+  info->flags = unpack_u1(rdata, 21);
+  info->xflags = unpack_u1(rdata, 22);
+  info->numsv = unpack_u1(rdata, 23);
+  info->lon = ((float)unpack_i4(rdata, 24))/1e7f;
+  info->lat = ((float)unpack_i4(rdata, 28))/1e7f;
+  info->height = unpack_i4(rdata, 32);
+  info->hmsl = unpack_i4(rdata, 36);
+  info->hacc = unpack_u4(rdata, 40);
+  info->vacc = unpack_u4(rdata, 44);
+  info->pdop = unpack_u2(rdata, 76);
+}
+
+
+/*============================================================================*/
+static void unpack_svin(const uint8_t* rdata, svindata_t* info)
+/*------------------------------------------------------------------------------
+  Function:
+  unpacks the TIM-SVIN info message
+  in:  rdata -> raw data
+       info -> svindata structure
+  out: info is populated with the survey-in information
+==============================================================================*/
+{
+  info->dur = unpack_u4(rdata, 0);
+  info->x = unpack_i4(rdata, 4);
+  info->y = unpack_i4(rdata, 8);
+  info->z = unpack_i4(rdata, 12);
+  info->meanv = ((float)unpack_u4(rdata, 16))/1e6f;
+  info->obs = unpack_u4(rdata, 20);
+  if(unpack_u1(rdata, 24) > 0)
+  {
+    info->valid = true;
+  }
+  else
+  {
+    info->valid = false;
+  }
+  if(unpack_u1(rdata, 25) > 0)
+  {
+    info->active = true;
+  }
+  else
+  {
+    info->active = false;
+  }
+}
+
+
+/*============================================================================*/
+static void unpack_tp(const uint8_t* rdata, float* ret)
+/*------------------------------------------------------------------------------
+  Function:
+  unpacks the TIM-TP message
+  in:  rdata -> raw data
+       ret -> return value
+  out: returns the timepulse quantisation error in the ret pointer
+==============================================================================*/
+{
+  int32_t tmp = unpack_i4(rdata, 8);
+  *ret = ((float)tmp) / 1000.0f;
+}
+
+
+/*============================================================================*/
+static void ubx_config_baudrate(uint32_t baudrate)
+/*------------------------------------------------------------------------------
+  Function:
+  configures the baud rate of the ublox module
+  in:  baudrate -> new baudrate
+  out: none
+==============================================================================*/
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = UBX_CLASS_CFG;
+  tmp.msgid = CFG_PORT;
+  tmp.len = 20u;
+
+  pack_u1(tmp.msg, 0, 1); /* 1 = UART */
+  pack_u1(tmp.msg, 1, 0);
+  pack_u2(tmp.msg, 2, 0);
+  pack_u4(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
+  pack_u4(tmp.msg, 8, baudrate);
+  pack_u2(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
+  pack_u2(tmp.msg, 14, BIT_00);
+  pack_u2(tmp.msg, 16, 0);
+  pack_u2(tmp.msg, 18, 0);
+  start_transmit(&tmp);
+}
+
+
+/*============================================================================*/
+static void ubx_config_gnss(bool gps, bool glonass, bool galileo)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the gnss system to be used
+  in:  gps -> set to true to use gps (qzss needs to be enabled together with gps
+       glonass -> set to true to use glonass
+       galileo -> set to true to use galileo
+  out: none
+==============================================================================*/
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x3e;
+  tmp.len = 60;
+
+  pack_u1(tmp.msg, 0, 0); /* version 0 */
+  pack_u1(tmp.msg, 1, 0); /* read only */
+  pack_u1(tmp.msg, 2, 0xff); /* use max. # of tracking channels */
+  pack_u1(tmp.msg, 3, 7); /* use 7 config blocks */
+
+  pack_u1(tmp.msg, 4, 0); /* gps */
+  pack_u1(tmp.msg, 5, 8); /* use minimum 8 tracking channels */
+  pack_u1(tmp.msg, 6, 16); /* use at most 16 tracking channels */
+  pack_u1(tmp.msg, 7, 0); /* reserved */
+  pack_u4(tmp.msg, 8, 0x01010000 | (gps ? BIT_00 : 0));
+
+  pack_u1(tmp.msg, 12, 1); /* sbas - should be disabled for timing */
+  pack_u1(tmp.msg, 13, 1);
+  pack_u1(tmp.msg, 14, 3);
+  pack_u1(tmp.msg, 15, 0);
+  pack_u4(tmp.msg, 16, 0x01010000);
+
+  pack_u1(tmp.msg, 20, 2); /* galileo */
+  pack_u1(tmp.msg, 21, 4);
+  pack_u1(tmp.msg, 22, 8);
+  pack_u1(tmp.msg, 23, 0);
+  pack_u4(tmp.msg, 24, 0x01010000 | (galileo ? BIT_00 : 0));
+
+  pack_u1(tmp.msg, 28, 3); /* beidou */
+  pack_u1(tmp.msg, 29, 8);
+  pack_u1(tmp.msg, 30, 16);
+  pack_u1(tmp.msg, 31, 0);
+  pack_u4(tmp.msg, 32, 0x01010000);
+
+  pack_u1(tmp.msg, 36, 4); /* imes */
+  pack_u1(tmp.msg, 37, 0);
+  pack_u1(tmp.msg, 38, 8);
+  pack_u1(tmp.msg, 39, 0);
+  pack_u4(tmp.msg, 40, 0x03010000);
+
+  pack_u1(tmp.msg, 44, 5); /* qzss - should be enabled together with gps */
+  pack_u1(tmp.msg, 45, 0);
+  pack_u1(tmp.msg, 46, 3);
+  pack_u1(tmp.msg, 47, 0);
+  pack_u4(tmp.msg, 48, 0x05010000 | (gps ? BIT_00 : 0));
+
+  pack_u1(tmp.msg, 52, 6); /* glonass */
+  pack_u1(tmp.msg, 53, 8);
+  pack_u1(tmp.msg, 54, 14);
+  pack_u1(tmp.msg, 55, 0);
+  pack_u4(tmp.msg, 56, 0x01010000 | (glonass ? BIT_00 : 0));
+
+  start_transmit(&tmp);
+}
+
+
+/*============================================================================*/
+static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
+/*------------------------------------------------------------------------------
+  Function:
+  configure messages to be periodically sent. the messages of (msgclass, msgid)
+  are configured to be sent periodically with the desired repetition rate
+  in:  msgclass -> message class
+       msgid -> message id
+       rate -> message rate
+  out: none
+==============================================================================*/
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x01;
+  tmp.len = 3;
+  pack_u1(tmp.msg, 0, msgclass);
+  pack_u1(tmp.msg, 1, msgid);
+  pack_u1(tmp.msg, 2, rate);
+  start_transmit(&tmp);
+}
+
+
+/*============================================================================*/
+static void ubx_config_navmodel(int8_t elev)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the navigation model to stationary, set an elevation mask and use
+  automatic mode for utc
+  in:  msgclass -> message class
+       msgid -> message id
+       rate -> message rate
+  out: none
+==============================================================================*/
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x24;
+  tmp.len = 36;
+
+  pack_u2(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
+  pack_u1(tmp.msg, 2, 2); /* dynamic model: stationary */
+  pack_u1(tmp.msg, 3, 0);
+  pack_u4(tmp.msg, 4, 0);
+  pack_u4(tmp.msg, 8, 0);
+  pack_u1(tmp.msg, 12, elev); /* elevation mask */
+  pack_u1(tmp.msg, 13, 0);
+  pack_u2(tmp.msg, 14, 0);
+  pack_u2(tmp.msg, 16, 0);
+  pack_u2(tmp.msg, 18, 0);
+  pack_u2(tmp.msg, 20, 0);
+  pack_u1(tmp.msg, 22, 0);
+  pack_u1(tmp.msg, 23, 0);
+  pack_u1(tmp.msg, 24, 0);
+  pack_u1(tmp.msg, 25, 0);
+  pack_u2(tmp.msg, 26, 0);
+  pack_u2(tmp.msg, 28, 0);
+  pack_u1(tmp.msg, 30, 0); /* utc standard auto */
+  pack_u1(tmp.msg, 31, 0);
+  pack_u1(tmp.msg, 32, 0);
+  pack_u1(tmp.msg, 33, 0);
+  pack_u1(tmp.msg, 34, 0);
+  pack_u1(tmp.msg, 35, 0);
+  start_transmit(&tmp);
+}
+
+
+/*============================================================================*/
+static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
+  uint32_t dur)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the timing mode
+  in:  mode -> disable timing mode, start survey-in or enable fixed pos mode
+       lat -> latitude for fixed position mode
+       lon -> longitude for fixed position mode
+       alt -> altitude for fixed position mode
+       dur -> duration of survey-in
+  out: none
+==============================================================================*/
+{
+  ubxbuffer_t tmp;
+  tmp.msgclass = 0x06;
+  tmp.msgid = 0x3d;
+  tmp.len = 28;
+
+  pack_u1(tmp.msg, 0, mode);
+  pack_u1(tmp.msg, 1, 0);
+  pack_u2(tmp.msg, 2, 1);
+  pack_u4(tmp.msg, 4, lat*1e7); /* for fixed position mode only */
+  pack_u4(tmp.msg, 8, lon*1e7);
+  pack_u4(tmp.msg, 12, alt*100);
+  pack_u4(tmp.msg, 16, 0); /* fixed position accuracy */
+  pack_u4(tmp.msg, 20, dur);
+  pack_u4(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
+  start_transmit(&tmp);
 }
 
 /*******************************************************************************
