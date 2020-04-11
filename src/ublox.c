@@ -82,11 +82,15 @@
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
-/* pseudo functions for unpack and pack */
-#define unpack_u1(x, y) x[y]
-#define pack_u1(x, y, z) x[y] = z
-#define pack_i4(x, y, z) pack_u4(x, y, (uint32_t)(z))
-#define unpack_i4(x, y) ((int32_t)unpack_u4(x, y))
+/* pseudo functions for unpack and pack: */
+/* unsigned 8-bit - works directly on the buffer, but is nicer to have the same
+   interface as for the other data types */
+#define pack_u8_le(x, y, z) x[y] = z
+#define unpack_u8_le(x, y) x[y]
+
+/* signed 32-bit - works the same as for unsigned, but has an embedded cast */
+#define pack_i32_le(x, y, z) pack_u32_le(x, y, (uint32_t)(z))
+#define unpack_i32_le(x, y) ((int32_t)unpack_u32_le(x, y))
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -188,10 +192,10 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
 static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   uint32_t dur);
-static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value);
-static uint32_t unpack_u4(const uint8_t* data, uint32_t offset);
-static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value);
-static uint16_t unpack_u2(const uint8_t* data, uint32_t offset);
+static void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value);
+static uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
+static void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value);
+static uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -840,25 +844,25 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   out: info is populated with position, velocity and time
 ==============================================================================*/
 {
-  info->year = unpack_u2(rdata, 4);
-  info->month = unpack_u1(rdata, 6);
-  info->day = unpack_u1(rdata, 7);
-  info->hour = unpack_u1(rdata, 8);
-  info->min = unpack_u1(rdata, 9);
-  info->sec = unpack_u1(rdata, 10);
-  info->valid = unpack_u1(rdata, 11);
-  info->tacc = unpack_u4(rdata, 12);
-  info->fixtype = unpack_u1(rdata, 20);
-  info->flags = unpack_u1(rdata, 21);
-  info->xflags = unpack_u1(rdata, 22);
-  info->numsv = unpack_u1(rdata, 23);
-  info->lon = ((float)unpack_i4(rdata, 24))/1e7f;
-  info->lat = ((float)unpack_i4(rdata, 28))/1e7f;
-  info->height = unpack_i4(rdata, 32);
-  info->hmsl = unpack_i4(rdata, 36);
-  info->hacc = unpack_u4(rdata, 40);
-  info->vacc = unpack_u4(rdata, 44);
-  info->pdop = unpack_u2(rdata, 76);
+  info->year = unpack_u8_le6_le(rdata, 4);
+  info->month = unpack_u8_le(rdata, 6);
+  info->day = unpack_u8_le(rdata, 7);
+  info->hour = unpack_u8_le(rdata, 8);
+  info->min = unpack_u8_le(rdata, 9);
+  info->sec = unpack_u8_le(rdata, 10);
+  info->valid = unpack_u8_le(rdata, 11);
+  info->tacc = unpack_u32_le(rdata, 12);
+  info->fixtype = unpack_u8_le(rdata, 20);
+  info->flags = unpack_u8_le(rdata, 21);
+  info->xflags = unpack_u8_le(rdata, 22);
+  info->numsv = unpack_u8_le(rdata, 23);
+  info->lon = ((float)unpack_i32_le(rdata, 24))/1e7f;
+  info->lat = ((float)unpack_i32_le(rdata, 28))/1e7f;
+  info->height = unpack_i32_le(rdata, 32);
+  info->hmsl = unpack_i32_le(rdata, 36);
+  info->hacc = unpack_u32_le(rdata, 40);
+  info->vacc = unpack_u32_le(rdata, 44);
+  info->pdop = unpack_u8_le6_le(rdata, 76);
 }
 
 
@@ -872,13 +876,13 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   out: info is populated with the survey-in information
 ==============================================================================*/
 {
-  info->dur = unpack_u4(rdata, 0);
-  info->x = unpack_i4(rdata, 4);
-  info->y = unpack_i4(rdata, 8);
-  info->z = unpack_i4(rdata, 12);
-  info->meanv = ((float)unpack_u4(rdata, 16))/1e6f;
-  info->obs = unpack_u4(rdata, 20);
-  if(unpack_u1(rdata, 24) > 0)
+  info->dur = unpack_u32_le(rdata, 0);
+  info->x = unpack_i32_le(rdata, 4);
+  info->y = unpack_i32_le(rdata, 8);
+  info->z = unpack_i32_le(rdata, 12);
+  info->meanv = ((float)unpack_u32_le(rdata, 16))/1e6f;
+  info->obs = unpack_u32_le(rdata, 20);
+  if(unpack_u8_le(rdata, 24) > 0)
   {
     info->valid = true;
   }
@@ -886,7 +890,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   {
     info->valid = false;
   }
-  if(unpack_u1(rdata, 25) > 0)
+  if(unpack_u8_le(rdata, 25) > 0)
   {
     info->active = true;
   }
@@ -907,7 +911,7 @@ static void unpack_tp(const uint8_t* rdata, float* ret)
   out: returns the timepulse quantisation error in the ret pointer
 ==============================================================================*/
 {
-  int32_t tmp = unpack_i4(rdata, 8);
+  int32_t tmp = unpack_i32_le(rdata, 8);
   *ret = ((float)tmp) / 1000.0f;
 }
 
@@ -926,15 +930,15 @@ static void ubx_config_baudrate(uint32_t baudrate)
   tmp.msgid = UBX_ID_CFG_PORT;
   tmp.len = 20u;
 
-  pack_u1(tmp.msg, 0, 1); /* 1 = UART */
-  pack_u1(tmp.msg, 1, 0);
-  pack_u2(tmp.msg, 2, 0);
-  pack_u4(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
-  pack_u4(tmp.msg, 8, baudrate);
-  pack_u2(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
-  pack_u2(tmp.msg, 14, BIT_00);
-  pack_u2(tmp.msg, 16, 0);
-  pack_u2(tmp.msg, 18, 0);
+  pack_u8_le(tmp.msg, 0, 1); /* 1 = UART */
+  pack_u8_le(tmp.msg, 1, 0);
+  pack_u8_le6_le(tmp.msg, 2, 0);
+  pack_u32_le(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
+  pack_u32_le(tmp.msg, 8, baudrate);
+  pack_u8_le6_le(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
+  pack_u8_le6_le(tmp.msg, 14, BIT_00);
+  pack_u8_le6_le(tmp.msg, 16, 0);
+  pack_u8_le6_le(tmp.msg, 18, 0);
   start_transmit(&tmp);
 }
 
@@ -955,52 +959,52 @@ static void ubx_config_gnss(bool gps, bool glonass, bool galileo)
   tmp.msgid = UBX_ID_CFG_GNSS;
   tmp.len = 60;
 
-  pack_u1(tmp.msg, 0, 0); /* version 0 */
-  pack_u1(tmp.msg, 1, 0); /* read only */
-  pack_u1(tmp.msg, 2, 0xff); /* use max. # of tracking channels */
-  pack_u1(tmp.msg, 3, 7); /* use 7 config blocks */
+  pack_u8_le(tmp.msg, 0, 0); /* version 0 */
+  pack_u8_le(tmp.msg, 1, 0); /* read only */
+  pack_u8_le(tmp.msg, 2, 0xff); /* use max. # of tracking channels */
+  pack_u8_le(tmp.msg, 3, 7); /* use 7 config blocks */
 
-  pack_u1(tmp.msg, 4, 0); /* gps */
-  pack_u1(tmp.msg, 5, 8); /* use minimum 8 tracking channels */
-  pack_u1(tmp.msg, 6, 16); /* use at most 16 tracking channels */
-  pack_u1(tmp.msg, 7, 0); /* reserved */
-  pack_u4(tmp.msg, 8, 0x01010000 | (gps ? BIT_00 : 0));
+  pack_u8_le(tmp.msg, 4, 0); /* gps */
+  pack_u8_le(tmp.msg, 5, 8); /* use minimum 8 tracking channels */
+  pack_u8_le(tmp.msg, 6, 16); /* use at most 16 tracking channels */
+  pack_u8_le(tmp.msg, 7, 0); /* reserved */
+  pack_u32_le(tmp.msg, 8, 0x01010000 | (gps ? BIT_00 : 0));
 
-  pack_u1(tmp.msg, 12, 1); /* sbas - should be disabled for timing */
-  pack_u1(tmp.msg, 13, 1);
-  pack_u1(tmp.msg, 14, 3);
-  pack_u1(tmp.msg, 15, 0);
-  pack_u4(tmp.msg, 16, 0x01010000);
+  pack_u8_le(tmp.msg, 12, 1); /* sbas - should be disabled for timing */
+  pack_u8_le(tmp.msg, 13, 1);
+  pack_u8_le(tmp.msg, 14, 3);
+  pack_u8_le(tmp.msg, 15, 0);
+  pack_u32_le(tmp.msg, 16, 0x01010000);
 
-  pack_u1(tmp.msg, 20, 2); /* galileo */
-  pack_u1(tmp.msg, 21, 4);
-  pack_u1(tmp.msg, 22, 8);
-  pack_u1(tmp.msg, 23, 0);
-  pack_u4(tmp.msg, 24, 0x01010000 | (galileo ? BIT_00 : 0));
+  pack_u8_le(tmp.msg, 20, 2); /* galileo */
+  pack_u8_le(tmp.msg, 21, 4);
+  pack_u8_le(tmp.msg, 22, 8);
+  pack_u8_le(tmp.msg, 23, 0);
+  pack_u32_le(tmp.msg, 24, 0x01010000 | (galileo ? BIT_00 : 0));
 
-  pack_u1(tmp.msg, 28, 3); /* beidou */
-  pack_u1(tmp.msg, 29, 8);
-  pack_u1(tmp.msg, 30, 16);
-  pack_u1(tmp.msg, 31, 0);
-  pack_u4(tmp.msg, 32, 0x01010000);
+  pack_u8_le(tmp.msg, 28, 3); /* beidou */
+  pack_u8_le(tmp.msg, 29, 8);
+  pack_u8_le(tmp.msg, 30, 16);
+  pack_u8_le(tmp.msg, 31, 0);
+  pack_u32_le(tmp.msg, 32, 0x01010000);
 
-  pack_u1(tmp.msg, 36, 4); /* imes */
-  pack_u1(tmp.msg, 37, 0);
-  pack_u1(tmp.msg, 38, 8);
-  pack_u1(tmp.msg, 39, 0);
-  pack_u4(tmp.msg, 40, 0x03010000);
+  pack_u8_le(tmp.msg, 36, 4); /* imes */
+  pack_u8_le(tmp.msg, 37, 0);
+  pack_u8_le(tmp.msg, 38, 8);
+  pack_u8_le(tmp.msg, 39, 0);
+  pack_u32_le(tmp.msg, 40, 0x03010000);
 
-  pack_u1(tmp.msg, 44, 5); /* qzss - should be enabled together with gps */
-  pack_u1(tmp.msg, 45, 0);
-  pack_u1(tmp.msg, 46, 3);
-  pack_u1(tmp.msg, 47, 0);
-  pack_u4(tmp.msg, 48, 0x05010000 | (gps ? BIT_00 : 0));
+  pack_u8_le(tmp.msg, 44, 5); /* qzss - should be enabled together with gps */
+  pack_u8_le(tmp.msg, 45, 0);
+  pack_u8_le(tmp.msg, 46, 3);
+  pack_u8_le(tmp.msg, 47, 0);
+  pack_u32_le(tmp.msg, 48, 0x05010000 | (gps ? BIT_00 : 0));
 
-  pack_u1(tmp.msg, 52, 6); /* glonass */
-  pack_u1(tmp.msg, 53, 8);
-  pack_u1(tmp.msg, 54, 14);
-  pack_u1(tmp.msg, 55, 0);
-  pack_u4(tmp.msg, 56, 0x01010000 | (glonass ? BIT_00 : 0));
+  pack_u8_le(tmp.msg, 52, 6); /* glonass */
+  pack_u8_le(tmp.msg, 53, 8);
+  pack_u8_le(tmp.msg, 54, 14);
+  pack_u8_le(tmp.msg, 55, 0);
+  pack_u32_le(tmp.msg, 56, 0x01010000 | (glonass ? BIT_00 : 0));
 
   start_transmit(&tmp);
 }
@@ -1022,9 +1026,9 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
   tmp.msgclass = UBX_CLASS_CFG;
   tmp.msgid = UBX_ID_CFG_RATE;
   tmp.len = 3;
-  pack_u1(tmp.msg, 0, msgclass);
-  pack_u1(tmp.msg, 1, msgid);
-  pack_u1(tmp.msg, 2, rate);
+  pack_u8_le(tmp.msg, 0, msgclass);
+  pack_u8_le(tmp.msg, 1, msgid);
+  pack_u8_le(tmp.msg, 2, rate);
   start_transmit(&tmp);
 }
 
@@ -1046,29 +1050,29 @@ static void ubx_config_navmodel(int8_t elev)
   tmp.msgid = UBX_ID_CFG_NAVMODEL;
   tmp.len = 36;
 
-  pack_u2(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
-  pack_u1(tmp.msg, 2, 2); /* dynamic model: stationary */
-  pack_u1(tmp.msg, 3, 0);
-  pack_u4(tmp.msg, 4, 0);
-  pack_u4(tmp.msg, 8, 0);
-  pack_u1(tmp.msg, 12, elev); /* elevation mask */
-  pack_u1(tmp.msg, 13, 0);
-  pack_u2(tmp.msg, 14, 0);
-  pack_u2(tmp.msg, 16, 0);
-  pack_u2(tmp.msg, 18, 0);
-  pack_u2(tmp.msg, 20, 0);
-  pack_u1(tmp.msg, 22, 0);
-  pack_u1(tmp.msg, 23, 0);
-  pack_u1(tmp.msg, 24, 0);
-  pack_u1(tmp.msg, 25, 0);
-  pack_u2(tmp.msg, 26, 0);
-  pack_u2(tmp.msg, 28, 0);
-  pack_u1(tmp.msg, 30, 0); /* utc standard auto */
-  pack_u1(tmp.msg, 31, 0);
-  pack_u1(tmp.msg, 32, 0);
-  pack_u1(tmp.msg, 33, 0);
-  pack_u1(tmp.msg, 34, 0);
-  pack_u1(tmp.msg, 35, 0);
+  pack_u8_le6_le(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
+  pack_u8_le(tmp.msg, 2, 2); /* dynamic model: stationary */
+  pack_u8_le(tmp.msg, 3, 0);
+  pack_u32_le(tmp.msg, 4, 0);
+  pack_u32_le(tmp.msg, 8, 0);
+  pack_u8_le(tmp.msg, 12, elev); /* elevation mask */
+  pack_u8_le(tmp.msg, 13, 0);
+  pack_u8_le6_le(tmp.msg, 14, 0);
+  pack_u8_le6_le(tmp.msg, 16, 0);
+  pack_u8_le6_le(tmp.msg, 18, 0);
+  pack_u8_le6_le(tmp.msg, 20, 0);
+  pack_u8_le(tmp.msg, 22, 0);
+  pack_u8_le(tmp.msg, 23, 0);
+  pack_u8_le(tmp.msg, 24, 0);
+  pack_u8_le(tmp.msg, 25, 0);
+  pack_u8_le6_le(tmp.msg, 26, 0);
+  pack_u8_le6_le(tmp.msg, 28, 0);
+  pack_u8_le(tmp.msg, 30, 0); /* utc standard auto */
+  pack_u8_le(tmp.msg, 31, 0);
+  pack_u8_le(tmp.msg, 32, 0);
+  pack_u8_le(tmp.msg, 33, 0);
+  pack_u8_le(tmp.msg, 34, 0);
+  pack_u8_le(tmp.msg, 35, 0);
   start_transmit(&tmp);
 }
 
@@ -1092,21 +1096,21 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   tmp.msgid = UBX_ID_CFG_TMODE2;
   tmp.len = 28;
 
-  pack_u1(tmp.msg, 0, mode);
-  pack_u1(tmp.msg, 1, 0);
-  pack_u2(tmp.msg, 2, 1);
-  pack_u4(tmp.msg, 4, lat*1e7); /* for fixed position mode only */
-  pack_u4(tmp.msg, 8, lon*1e7);
-  pack_u4(tmp.msg, 12, alt*100);
-  pack_u4(tmp.msg, 16, 0); /* fixed position accuracy */
-  pack_u4(tmp.msg, 20, dur);
-  pack_u4(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
+  pack_u8_le(tmp.msg, 0, mode);
+  pack_u8_le(tmp.msg, 1, 0);
+  pack_u8_le6_le(tmp.msg, 2, 1);
+  pack_u32_le(tmp.msg, 4, lat*1e7); /* for fixed position mode only */
+  pack_u32_le(tmp.msg, 8, lon*1e7);
+  pack_u32_le(tmp.msg, 12, alt*100);
+  pack_u32_le(tmp.msg, 16, 0); /* fixed position accuracy */
+  pack_u32_le(tmp.msg, 20, dur);
+  pack_u32_le(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
   start_transmit(&tmp);
 }
 
 
 /*============================================================================*/
-static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value)
+static void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value)
 /*------------------------------------------------------------------------------
   Function:
   convert a unsigned 32-bit number to 4 bytes and store it in a buffer
@@ -1128,7 +1132,7 @@ static void pack_u4(uint8_t* buffer, uint32_t offset, uint32_t value)
 
 
 /*============================================================================*/
-static uint32_t unpack_u4(const uint8_t* data, uint32_t offset)
+static uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset)
 /*------------------------------------------------------------------------------
   Function:
   construct a 32-bit unsigned value from raw data bytes in a buffer
@@ -1150,7 +1154,7 @@ static uint32_t unpack_u4(const uint8_t* data, uint32_t offset)
 
 
 /*============================================================================*/
-static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value)
+static void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value)
 /*------------------------------------------------------------------------------
   Function:
   convert an unsigned 16-bit number into raw bytes and store them in a buffer
@@ -1168,7 +1172,7 @@ static void pack_u2(uint8_t* buffer, uint32_t offset, uint16_t value)
 
 
 /*============================================================================*/
-static uint16_t unpack_u2(const uint8_t* data, uint32_t offset)
+static uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset)
 /*------------------------------------------------------------------------------
   Function:
   construct a 16-bit unsigned number from a buffer containing raw data bytes
