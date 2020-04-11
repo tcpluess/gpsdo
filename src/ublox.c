@@ -78,6 +78,8 @@
 #define SYNC1 0xb5u
 #define SYNC2 0x62u
 
+#define RBUFFER_SIZE 1024u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -166,6 +168,9 @@ static ubxbuffer_t buf_svin;
 static ubxbuffer_t buf_tp;
 static ubxbuffer_t buf_sat;
 
+static uint8_t rxbuffer[RBUFFER_SIZE];
+static volatile uint32_t rbuffer_length;
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -196,6 +201,8 @@ static void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value);
 static uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
 static void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value);
 static uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset);
+
+static void process_messages(void);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -230,7 +237,8 @@ void ublox_init(void)
 bool gps_wait_ack(void)
 {
   bool ret;
-  while(rxb.valid == false);
+  while(rxb.valid == false)
+    process_messages();
   /*__disable_irq();
   rxb.valid = false;
   __enable_irq();*/
@@ -238,17 +246,17 @@ bool gps_wait_ack(void)
   {
     if(rxb.msgid == 0x01)
     {
+      printf("ack\n");
       ret = true;
     }
     else
     {
+      printf("nak\n");
       ret = false;
     }
   }
 
-  __disable_irq();
   rxb.valid = false;
-  __enable_irq();
   return ret;
 }
 
@@ -257,6 +265,8 @@ void gps_worker(void)
   static workerstatus_t status = reset;
   static uint64_t timestamp = 0;
   static uint32_t numvalidfix = 0;
+
+  process_messages();
 
   if(timestamp >= get_uptime_msec())
   {
@@ -359,7 +369,7 @@ void gps_worker(void)
         {
           numvalidfix++;
           if(numvalidfix == 10)
-            ubx_config_tmode(tmode_svin, 0, 0, 0, 7200);
+            ubx_config_tmode(tmode_svin, 0, 0, 0, 24*3600);
         }
       }
 
@@ -479,9 +489,22 @@ static void start_transmit(const ubxbuffer_t* tmp)
   enable_txempty_irq();
 }
 
+static void ubx_rxhandler(void)
+{
+  static int wrpos = 0;
+  uint8_t tmp = USART3_DR;
+  rxbuffer[wrpos] = tmp;
+  rbuffer_length++;
+  wrpos++;
+  if(wrpos == RBUFFER_SIZE)
+  {
+    wrpos = 0;
+  }
+}
+
 
 /*============================================================================*/
-static void ubx_rxhandler(void)
+static void process_messages(void)
 /*------------------------------------------------------------------------------
   Function:
   this is the handler for the rx interrupt on the usart. it processes the
@@ -496,12 +519,31 @@ static void ubx_rxhandler(void)
   static uint8_t cka;
   static uint8_t ckb;
 
+  static uint32_t rdpos = 0;
+
   static uint8_t msgclass;
   static uint8_t msgid;
   static ubxbuffer_t* rxbuf;
 
   /* the received data byte */
-  uint8_t tmpdata = USART3_DR;
+  uint8_t tmpdata;
+  if(rbuffer_length > 0)
+  {
+    __disable_irq();
+    rbuffer_length--;
+    tmpdata = rxbuffer[rdpos];
+    __enable_irq();
+
+    rdpos++;
+    if(rdpos == RBUFFER_SIZE)
+    {
+      rdpos = 0;
+    }
+  }
+  else
+  {
+    return;
+  }
 
   switch(status)
   {
