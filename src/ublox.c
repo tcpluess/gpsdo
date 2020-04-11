@@ -37,6 +37,7 @@
 #include "misc.h"
 #include "vic.h"
 #include "timebase.h"
+#include "convert.h"
 
 #include <string.h>
 
@@ -83,16 +84,6 @@
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
-
-/* pseudo functions for unpack and pack: */
-/* unsigned 8-bit - works directly on the buffer, but is nicer to have the same
-   interface as for the other data types */
-#define pack_u8_le(x, y, z) x[y] = z
-#define unpack_u8_le(x, y) x[y]
-
-/* signed 32-bit - works the same as for unsigned, but has an embedded cast */
-#define pack_i32_le(x, y, z) pack_u32_le(x, y, (uint32_t)(z))
-#define unpack_i32_le(x, y) ((int32_t)unpack_u32_le(x, y))
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -197,10 +188,6 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
 static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   uint32_t dur);
-static void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value);
-static uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
-static void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value);
-static uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset);
 
 static void process_messages(void);
 
@@ -489,12 +476,28 @@ static void start_transmit(const ubxbuffer_t* tmp)
   enable_txempty_irq();
 }
 
+
+/*============================================================================*/
 static void ubx_rxhandler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this is the receive data handler for the usart. it does nothing more than
+  simply store each received data byte in a circular buffer.
+  in:  none
+  out: none
+==============================================================================*/
 {
+  /* wrpos always points to a writable position */
   static int wrpos = 0;
+
+  /* read the received data and put it into the circular buffer */
   uint8_t tmp = USART3_DR;
   rxbuffer[wrpos] = tmp;
   rbuffer_length++;
+
+  /* go to the next position in the buffer and take wrap-around into account;
+     old data is overwritten, no matter whether it was already processed
+     or not! */
   wrpos++;
   if(wrpos == RBUFFER_SIZE)
   {
@@ -507,8 +510,8 @@ static void ubx_rxhandler(void)
 static void process_messages(void)
 /*------------------------------------------------------------------------------
   Function:
-  this is the handler for the rx interrupt on the usart. it processes the
-  incoming data bytes, assembles the messages and verifies the checksum.
+  processes all messages in the receive data buffer and unpacks their data into
+  the different structures.
   in:  none
   out: none
 ==============================================================================*/
@@ -1149,87 +1152,6 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   pack_u32_le(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
   start_transmit(&tmp);
 }
-
-
-/*============================================================================*/
-static void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value)
-/*------------------------------------------------------------------------------
-  Function:
-  convert a unsigned 32-bit number to 4 bytes and store it in a buffer
-  (little endian)
-  in:  buffer -> buffer to put the bytes into
-       offset -> offset into the buffer
-       value -> value to be packed
-  out: none
-==============================================================================*/
-{
-  buffer[offset] = value;
-  value >>= 8;
-  buffer[offset + 1] = value;
-  value >>= 8;
-  buffer[offset + 2] = value;
-  value >>= 8;
-  buffer[offset + 3] = value;
-}
-
-
-/*============================================================================*/
-static uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset)
-/*------------------------------------------------------------------------------
-  Function:
-  construct a 32-bit unsigned value from raw data bytes in a buffer
-  (little endian)
-  in:  data -> the raw data bytes
-       offset -> offset of the LSB
-  out: returns the unpacked value
-==============================================================================*/
-{
-  uint32_t ret = data[offset + 3];
-  ret <<= 8;
-  ret += data[offset + 2];
-  ret <<= 8;
-  ret += data[offset + 1];
-  ret <<= 8;
-  ret += data[offset];
-  return ret;
-}
-
-
-/*============================================================================*/
-static void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value)
-/*------------------------------------------------------------------------------
-  Function:
-  convert an unsigned 16-bit number into raw bytes and store them in a buffer
-  (little endian)
-  in:  buffer -> buffer for the raw data
-       offset -> offset into the buffer
-       value -> value to be packed
-  out: none
-==============================================================================*/
-{
-  buffer[offset] = value;
-  value >>= 8;
-  buffer[offset + 1] = value;
-}
-
-
-/*============================================================================*/
-static uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset)
-/*------------------------------------------------------------------------------
-  Function:
-  construct a 16-bit unsigned number from a buffer containing raw data bytes
-  (little endian)
-  in:  data -> buffer containing the raw data
-       offset -> offset into the buffer
-  out: returns the unpacked value
-==============================================================================*/
-{
-  uint16_t ret = data[offset + 1];
-  ret <<= 8;
-  ret += data[offset];
-  return ret;
-}
-
 
 /*******************************************************************************
  * END OF CODE
