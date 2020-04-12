@@ -83,7 +83,7 @@ static void enable_mco(void);
 static void configure_ppsenable(void);
 static void enable_timer(void);
 static void capture_irq(void);
-
+static void configure_systick(void);
 static void systick_handler(void);
 
 /*******************************************************************************
@@ -103,16 +103,8 @@ void timebase_init(void)
 {
   pps = false;
   res = false;
-  uptime_msec = 0;
 
-  /* the systick timer is used to calculate the uptime in msec */
-  #ifndef USE_PLL
-  SYSTICKRVR = (((10000000u / 8u) / 1000) - 1u);
-  #else
-  SYSTICKRVR = (((160000000u / 8u) / 1000) - 1u);
-  #endif
-  SYSTICKCSR = (BIT_01 | BIT_00);
-  vic_enableirq(SYSTICK_VECTOR, systick_handler);
+  configure_systick();
 
   /* enable the external oscillator and the mco output and start the timer */
   enable_osc();
@@ -352,27 +344,75 @@ static void enable_timer(void)
 }
 extern uint32_t tim;
 
+
+/*============================================================================*/
 static void capture_irq(void)
+/*------------------------------------------------------------------------------
+  Function:
+  the capture interrupt handler is called whenever there is a capture event for
+  timer 2 channel 3. further, if timebase_reset() was called previously, the
+  timer's counter register is set to zero
+  in:  none
+  out: none
+==============================================================================*/
 {
+  /* setting the pps flag lets the main program do its job */
   pps = true;
+
+  /* timebase reset requested? */
   if(res)
   {
+    /* then this is no valid capture event */
     res = false;
     TIM2_CNT = 0;
     tic_capture = 0;
   }
   else
   {
+    /* read out the captured value */
     tic_capture = TIM2_CCR3;
-    tim=tic_capture;
+    tim = tic_capture;
   }
 
+  /* acknowledge */
   TIM2_SR = 0;
 }
 
-static void systick_handler(void)
+
+/*============================================================================*/
+static void configure_systick(void)
+/*------------------------------------------------------------------------------
+  Function:
+  configures the cortex m systick timer for 10ms repetition frequency
+  in:  none
+  out: none
+==============================================================================*/
 {
-  uptime_msec++;
+  uptime_msec = 0;
+
+  /* the systick timer is used to calculate the uptime in msec - the systick
+     handler is called 100 times per second */
+  #ifndef USE_PLL
+  SYSTICKRVR = (((10000000u / 8u) / 100) - 1u);
+  #else
+  SYSTICKRVR = (((160000000u / 8u) / 100) - 1u);
+  #endif
+  SYSTICKCSR = (BIT_01 | BIT_00);
+  vic_enableirq(SYSTICK_VECTOR, systick_handler);
+}
+
+
+/*============================================================================*/
+static void systick_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this is the actual systick handler, called 100 times per second, used to
+  keep track of the uptime
+  in:  none
+  out: none
+==============================================================================*/
+{
+  uptime_msec += 10;
 }
 
 /*******************************************************************************
