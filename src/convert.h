@@ -45,7 +45,14 @@
 /* unsigned 8-bit - works directly on the buffer, but is nicer to have the same
    interface as for the other data types */
 #define pack_u8_le(x, y, z) x[y] = z
-#define unpack_u8_le(x, y) x[y]
+#define unpack_u8_le(x, y) ((uint8_t)x[y])
+
+#define pack_i8_le(x, y, z) x[y] = z
+#define unpack_i8_le(x, y) ((int8_t)x[y])
+
+/* signed 16-bit - works the same as for unsigned, but has an embedded cast */
+#define pack_i16_le(x, y, z) pack_u16_le(x, y, (uint16_t)(z))
+#define unpack_i16_le(x, y) ((int16_t)unpack_u16_le(x, y))
 
 /* signed 32-bit - works the same as for unsigned, but has an embedded cast */
 #define pack_i32_le(x, y, z) pack_u32_le(x, y, (uint32_t)(z))
@@ -86,7 +93,7 @@ extern uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
 
 
 /*============================================================================*/
-extern void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value);
+extern void pack_u16_le(uint8_t* buffer, uint32_t offset, uint16_t value);
 /*------------------------------------------------------------------------------
   Function:
   convert a unsigned 32-bit number to 4 bytes and store it in a buffer
@@ -99,7 +106,7 @@ extern void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value);
 
 
 /*============================================================================*/
-extern uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset);
+extern uint16_t unpack_u16_le(const uint8_t* data, uint32_t offset);
 /*------------------------------------------------------------------------------
   Function:
   convert a unsigned 32-bit number to 4 bytes and store it in a buffer

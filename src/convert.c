@@ -79,7 +79,7 @@ uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset)
 }
 
 
-void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value)
+void pack_u16_le(uint8_t* buffer, uint32_t offset, uint16_t value)
 {
   buffer[offset] = value;
   value >>= 8;
@@ -87,7 +87,7 @@ void pack_u8_le6_le(uint8_t* buffer, uint32_t offset, uint16_t value)
 }
 
 
-uint16_t unpack_u8_le6_le(const uint8_t* data, uint32_t offset)
+uint16_t unpack_u16_le(const uint8_t* data, uint32_t offset)
 {
   uint16_t ret = data[offset + 1];
   ret <<= 8;
