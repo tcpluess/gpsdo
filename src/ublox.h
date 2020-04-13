@@ -42,6 +42,8 @@
  * CONSTANT DEFINITIONS
  ******************************************************************************/
 
+#define MAX_SV 20u
+
 /*******************************************************************************
  * MACRO DEFINITIONS
  ******************************************************************************/
@@ -71,6 +73,7 @@ typedef struct
   uint32_t hacc;
   uint32_t vacc;
   uint16_t pdop;
+  uint64_t age_msec;
 } gpsinfo_t;
 
 typedef struct
@@ -81,7 +84,23 @@ typedef struct
   uint32_t obs;
   bool valid;
   bool active;
+  uint64_t age_msec;
 } svindata_t;
+
+
+typedef struct
+{
+  uint8_t numsv;
+  struct
+  {
+    uint8_t gnssid;
+    uint8_t svid;
+    uint8_t cno;
+    int8_t elev;
+    int16_t azim;
+  } sats[MAX_SV];
+  uint64_t age_msec;
+} sv_info_t;
 
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)

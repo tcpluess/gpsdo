@@ -75,11 +75,15 @@
 #define UBX_ID_CFG_RATE 0x01u /* message configuration */
 #define UBX_ID_CFG_GNSS 0x3eu /* gnss configuration */
 #define UBX_ID_CFG_PORT 0x00u /* i/o port configuration */
+#define UBX_ID_ACK 0x01u
+#define UBX_ID_NAK 0x00u
 
 #define SYNC1 0xb5u
 #define SYNC2 0x62u
 
-#define RBUFFER_SIZE 1024u
+#define RXBUFFER_SIZE 1024u
+
+#define RECEIVE_TIMEOUT 250u /* ms */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -88,19 +92,6 @@
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
  ******************************************************************************/
-
-typedef enum
-{
-  rx_sync1,
-  rx_sync2,
-  rx_class,
-  rx_id,
-  rx_len_lo,
-  rx_len_hi,
-  rx_payload,
-  rx_cka,
-  rx_ckb
-} rxstate_t;
 
 typedef enum
 {
@@ -149,18 +140,15 @@ typedef enum
  ******************************************************************************/
 
 static ubxbuffer_t txb;
-static ubxbuffer_t rxb;
+static bool got_ack;
+static bool got_nak;
+static uint8_t rxdata_raw[RXBUFFER_SIZE];
+static volatile uint32_t num_rxdata;
+
 static float qerr;
 gpsinfo_t info;
 svindata_t svinfo;
-
-static ubxbuffer_t buf_pvt;
-static ubxbuffer_t buf_svin;
-static ubxbuffer_t buf_tp;
-static ubxbuffer_t buf_sat;
-
-static uint8_t rxbuffer[RBUFFER_SIZE];
-static volatile uint32_t rbuffer_length;
+sv_info_t svi;
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -182,6 +170,7 @@ static void uart_irq_handler(void);
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
 static void unpack_tp(const uint8_t* rdata, float* ret);
+static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
 static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
@@ -199,12 +188,9 @@ void ublox_init(void)
 {
   qerr = 0.0f;
   txb.empty = true;
-  rxb.valid = false;
-
-  buf_tp.valid = false;
-  buf_svin.valid = false;
-  buf_pvt.valid = false;
-  buf_sat.valid = false;
+  got_ack = false;
+  got_nak = false;
+  num_rxdata = 0;
 
 #ifdef DEBUG
   rxover = 0;
@@ -223,28 +209,22 @@ void ublox_init(void)
 
 bool gps_wait_ack(void)
 {
-  bool ret;
-  while(rxb.valid == false)
-    process_messages();
-  /*__disable_irq();
-  rxb.valid = false;
-  __enable_irq();*/
-  if(rxb.msgclass == 0x05)
+  while(true)
   {
-    if(rxb.msgid == 0x01)
+    process_messages();
+    if(got_ack)
     {
-      printf("ack\n");
-      ret = true;
+      return true;
+    }
+    else if(got_nak)
+    {
+      return false;
     }
     else
     {
-      printf("nak\n");
-      ret = false;
+      continue;
     }
   }
-
-  rxb.valid = false;
-  return ret;
 }
 
 void gps_worker(void)
@@ -252,10 +232,10 @@ void gps_worker(void)
   static workerstatus_t status = reset;
   static uint64_t timestamp = 0;
   static uint32_t numvalidfix = 0;
+  static uint32_t lasttime = 0;
+  uint64_t currenttime = get_uptime_msec();
 
-  process_messages();
-
-  if(timestamp >= get_uptime_msec())
+  if(timestamp >= currenttime)
   {
     return;
   }
@@ -304,22 +284,22 @@ void gps_worker(void)
 
       do
       {
-        ubx_config_msgrate(0x0d, 0x01, 1);
+        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        ubx_config_msgrate(0x01, 0x07, 1);
+        ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        ubx_config_msgrate(0x01, 0x35, 1);
+        ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
       } while(gps_wait_ack() == false);
 
       do
       {
-        ubx_config_msgrate(0x0d, 0x04, 1);
+        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
       } while(gps_wait_ack() == false);
 
       do
@@ -334,36 +314,19 @@ void gps_worker(void)
 
     case normal:
     {
-
-      if(buf_tp.valid)
+      process_messages();
+      if(info.fixtype == 3)
       {
-        unpack_tp(buf_tp.msg, &qerr);
-        buf_tp.valid = false;
+        numvalidfix++;
+        if(numvalidfix == 10)
+          ubx_config_tmode(tmode_svin, 0, 0, 0, 24*3600);
       }
 
-      if(buf_svin.valid)
-      {
-        unpack_svin(buf_svin.msg, &svinfo);
-        buf_svin.valid = false;
-      }
+      uint64_t msec = currenttime - lasttime;
+      lasttime = currenttime;
+      svinfo.age_msec += msec;
+      info.age_msec += msec;
 
-      if(buf_pvt.valid)
-      {
-        unpack_pvt(buf_pvt.msg, &info);
-        buf_pvt.valid = false;
-
-        if(info.fixtype == 3)
-        {
-          numvalidfix++;
-          if(numvalidfix == 10)
-            ubx_config_tmode(tmode_svin, 0, 0, 0, 24*3600);
-        }
-      }
-
-      if(buf_sat.valid)
-      {
-        buf_sat.valid = false;
-      }
 
     }
   }
@@ -492,14 +455,14 @@ static void ubx_rxhandler(void)
 
   /* read the received data and put it into the circular buffer */
   uint8_t tmp = USART3_DR;
-  rxbuffer[wrpos] = tmp;
-  rbuffer_length++;
+  rxdata_raw[wrpos] = tmp;
+  num_rxdata++;
 
   /* go to the next position in the buffer and take wrap-around into account;
      old data is overwritten, no matter whether it was already processed
      or not! */
   wrpos++;
-  if(wrpos == RBUFFER_SIZE)
+  if(wrpos == RXBUFFER_SIZE)
   {
     wrpos = 0;
   }
@@ -517,200 +480,199 @@ static void process_messages(void)
 ==============================================================================*/
 {
   static irqstatus_t status = ubx_header1;
-  static uint16_t len;
-  static uint32_t wrpos;
-  static uint8_t cka;
-  static uint8_t ckb;
-
   static uint32_t rdpos = 0;
 
-  static uint8_t msgclass;
-  static uint8_t msgid;
-  static ubxbuffer_t* rxbuf;
-
-  /* the received data byte */
+  uint32_t wrpos;
+  uint8_t cka;
+  uint8_t ckb;
+  ubxbuffer_t rxb;
   uint8_t tmpdata;
-  if(rbuffer_length > 0)
-  {
-    __disable_irq();
-    rbuffer_length--;
-    tmpdata = rxbuffer[rdpos];
-    __enable_irq();
+  uint64_t timeout = get_uptime_msec() + RECEIVE_TIMEOUT;
 
-    rdpos++;
-    if(rdpos == RBUFFER_SIZE)
+  /* this loops until at least one message is fully processed or the timeout
+     expires */
+  while(true)
+  {
+    /* check if the timeout expired */
+    if(get_uptime_msec() > timeout)
     {
-      rdpos = 0;
-    }
-  }
-  else
-  {
-    return;
-  }
-
-  switch(status)
-  {
-    /* can only proceed if the sync1 and sync2 bytes are received */
-    case ubx_header1:
-    {
-      if(tmpdata == SYNC1)
-      {
-        status = ubx_header2;
-      }
-
-      /* return instead of break skips the checksum computation at the bottom */
       return;
     }
 
-    case ubx_header2:
+    if(num_rxdata > 0)
     {
-      if(tmpdata == SYNC2)
+      __disable_irq();
+      num_rxdata--;
+      tmpdata = rxdata_raw[rdpos];
+      __enable_irq();
+
+      rdpos++;
+      if(rdpos == RXBUFFER_SIZE)
       {
-        /* if sync1 and then sync2 are received, reset the writing pos
-           in the buffer and restart the checksum computation */
+        rdpos = 0;
+      }
+    }
+    else
+    {
+      continue;
+    }
+
+    switch(status)
+    {
+      /* can only proceed if the sync1 and sync2 bytes are received */
+      case ubx_header1:
+      {
+        if(tmpdata == SYNC1)
+        {
+          status = ubx_header2;
+        }
+
+        continue;
+      }
+
+      case ubx_header2:
+      {
+        if(tmpdata == SYNC2)
+        {
+          status = ubx_class;
+        }
+        else
+        {
+          status = ubx_header1;
+        }
+
+        continue;
+      }
+
+      /* receive the data in the order as described in the ublox manual */
+
+      case ubx_class:
+      {
         cka = 0;
         ckb = 0;
-        status = ubx_class;
-      }
-      else
-      {
-        status = ubx_header1;
+        rxb.msgclass = tmpdata;
+        status = ubx_id;
+        break;
       }
 
-      /* return instead of break skips the checksum computation at the bottom */
-      return;
-    }
-
-    /* receive the data in the order as described in the ublox manual */
-
-    case ubx_class:
-    {
-      msgclass = tmpdata;
-      status = ubx_id;
-      break;
-    }
-
-    case ubx_id:
-    {
-      msgid = tmpdata;
-      rxbuf = &rxb;
-
-      if(msgclass == UBX_CLASS_NAV)
+      case ubx_id:
       {
-        if(msgid == UBX_ID_NAV_SAT)
+        rxb.msgid = tmpdata;
+        status = ubx_len_lsb;
+        break;
+      }
+
+      case ubx_len_lsb:
+      {
+        rxb.len = tmpdata;
+        status = ubx_len_msb;
+        break;
+      }
+
+      case ubx_len_msb:
+      {
+        /* assemble the 16 bit length (little endian) */
+        uint16_t lenmsb = tmpdata;
+        lenmsb <<= 8;
+        rxb.len += lenmsb;
+
+        /* if the length received will not fit into the receive buffer, then abort */
+        if(rxb.len > MAX_UBX_LEN)
         {
-          rxbuf = &buf_sat;
+          status = ubx_header1;
         }
-        else if(msgid == UBX_ID_NAV_PVT)
+        else
         {
-          rxbuf = &buf_pvt;
+          /* reset the writing position in the receive buffer */
+          wrpos = 0;
+          status = ubx_data;
         }
+        break;
       }
-      else if(msgclass == UBX_CLASS_TIM)
+
+      case ubx_data:
       {
-        if(msgid == UBX_ID_TIM_TP)
+        rxb.msg[wrpos] = tmpdata;
+        wrpos++;
+
+        if(wrpos == rxb.len)
         {
-          rxbuf = &buf_tp;
+          status = ubx_cka;
         }
-        else if(msgid == UBX_ID_TIM_SVIN)
+
+        break;
+      }
+
+      case ubx_cka:
+      {
+        /* if the first checksum byte matches, compare the second one;
+           if it doesn't match, abort */
+        if(tmpdata == cka)
         {
-          rxbuf = &buf_svin;
+          status = ubx_ckb;
         }
+        else
+        {
+          status = ubx_header1;
+        }
+
+        continue;
       }
 
-      rxbuf->msgclass = msgclass;
-      rxbuf->msgid = msgid;
-
-      status = ubx_len_lsb;
-      break;
-    }
-
-    case ubx_len_lsb:
-    {
-      len = tmpdata;
-      status = ubx_len_msb;
-      break;
-    }
-
-    case ubx_len_msb:
-    {
-      /* assemble the 16 bit length (little endian) */
-      uint16_t lenmsb = tmpdata;
-      lenmsb <<= 8;
-      len += lenmsb;
-      rxbuf->len = len;
-
-      /* if the length received will not fit into the receive buffer, then abort */
-      if(len > MAX_UBX_LEN)
+      case ubx_ckb:
       {
-        status = ubx_header1;
+        /* if the first AND the second checksum byte match, a complete
+           message has been received and is ready to be processed in the
+           worker thread */
+        if(tmpdata == ckb)
+        {
+          rxb.valid = true;
+
+          if(rxb.msgclass == UBX_CLASS_NAV)
+          {
+            if(rxb.msgid == UBX_ID_NAV_SAT)
+            {
+              unpack_sv(rxb.msg, &svi);
+            }
+            else if(rxb.msgid == UBX_ID_NAV_PVT)
+            {
+              unpack_pvt(rxb.msg, &info);
+            }
+          }
+          else if(rxb.msgclass == UBX_CLASS_TIM)
+          {
+            if(rxb.msgid == UBX_ID_TIM_TP)
+            {
+              unpack_tp(rxb.msg, &qerr);
+            }
+            else if(rxb.msgid == UBX_ID_TIM_SVIN)
+            {
+              unpack_svin(rxb.msg, &svinfo);
+            }
+          }
+          else if(rxb.msgclass == UBX_CLASS_ACK)
+          {
+            if(rxb.msgid == UBX_ID_ACK)
+            {
+              got_ack = true;
+            }
+            else if(rxb.msgid == UBX_ID_NAK)
+            {
+              got_nak = true;
+            }
+          }
+
+          status = ubx_header1;
+        }
+        break;
       }
-      else
-      {
-        /* reset the writing position in the receive buffer */
-        wrpos = 0;
-        status = ubx_data;
-      }
-      break;
+
     }
 
-    case ubx_data:
-    {
-      rxbuf->msg[wrpos] = tmpdata;
-      wrpos++;
-
-      /* count the length of the received data to know when to start looking
-         at the checksum bytes */
-      len--;
-      if(len == 0)
-      {
-        status = ubx_cka;
-      }
-      break;
-    }
-
-    case ubx_cka:
-    {
-      /* if the first checksum byte matches, compare the second one;
-         if it doesn't match, abort */
-      if(tmpdata == cka)
-      {
-        status = ubx_ckb;
-      }
-      else
-      {
-        status = ubx_header1;
-      }
-
-      /* return instead of break skips the checksum computation at the bottom */
-      return;
-    }
-
-    case ubx_ckb:
-    {
-      /* if the first AND the second checksum byte match, a complete
-         message has been received and is ready to be processed in the
-         worker thread */
-      if(tmpdata == ckb)
-      {
-        rxbuf->valid = true;
-        status = ubx_header1;
-      }
-      break;
-    }
-
-    /* normally, this wont happen. make sure the rx interrupt starts in the
-       header1 state if it does happen due to some error */
-    default:
-    {
-      status = ubx_header1;
-      return;
-    }
+    /* fletcher8 checksum */
+    cka = cka + tmpdata;
+    ckb = ckb + cka;
   }
-
-  /* fletcher8 checksum */
-  cka = cka + tmpdata;
-  ckb = ckb + cka;
 }
 
 
@@ -889,7 +851,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   out: info is populated with position, velocity and time
 ==============================================================================*/
 {
-  info->year = unpack_u8_le6_le(rdata, 4);
+  info->year = unpack_u16_le(rdata, 4);
   info->month = unpack_u8_le(rdata, 6);
   info->day = unpack_u8_le(rdata, 7);
   info->hour = unpack_u8_le(rdata, 8);
@@ -907,7 +869,8 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->hmsl = unpack_i32_le(rdata, 36);
   info->hacc = unpack_u32_le(rdata, 40);
   info->vacc = unpack_u32_le(rdata, 44);
-  info->pdop = unpack_u8_le6_le(rdata, 76);
+  info->pdop = unpack_u16_le(rdata, 76);
+  info->age_msec = 0;
 }
 
 
@@ -943,6 +906,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   {
     info->active = false;
   }
+  info->age_msec = 0;
 }
 
 
@@ -962,6 +926,29 @@ static void unpack_tp(const uint8_t* rdata, float* ret)
 
 
 /*============================================================================*/
+static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
+/*------------------------------------------------------------------------------
+  Function:
+  unpack the NAV-SAT message
+  in:  rdata -> raw data
+       svi -> satellites in view info
+  out: none
+==============================================================================*/
+{
+  svi->numsv = unpack_u8_le(rdata, 1);
+  for(uint8_t n = 0; n < svi->numsv; n++)
+  {
+    svi->sats[n].gnssid = unpack_u8_le(rdata, 8 + 12*n);
+    svi->sats[n].svid = unpack_u8_le(rdata, 9 + 12*n);
+    svi->sats[n].cno = unpack_u8_le(rdata, 10 + 12*n);
+    svi->sats[n].elev = unpack_i8_le(rdata, 11 + 12*n);
+    svi->sats[n].azim = unpack_i16_le(rdata, 12 + 12*n);
+  }
+  svi->age_msec = 0;
+}
+
+
+/*============================================================================*/
 static void ubx_config_baudrate(uint32_t baudrate)
 /*------------------------------------------------------------------------------
   Function:
@@ -977,13 +964,13 @@ static void ubx_config_baudrate(uint32_t baudrate)
 
   pack_u8_le(tmp.msg, 0, 1); /* 1 = UART */
   pack_u8_le(tmp.msg, 1, 0);
-  pack_u8_le6_le(tmp.msg, 2, 0);
+  pack_u16_le(tmp.msg, 2, 0);
   pack_u32_le(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
   pack_u32_le(tmp.msg, 8, baudrate);
-  pack_u8_le6_le(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
-  pack_u8_le6_le(tmp.msg, 14, BIT_00);
-  pack_u8_le6_le(tmp.msg, 16, 0);
-  pack_u8_le6_le(tmp.msg, 18, 0);
+  pack_u16_le(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
+  pack_u16_le(tmp.msg, 14, BIT_00);
+  pack_u16_le(tmp.msg, 16, 0);
+  pack_u16_le(tmp.msg, 18, 0);
   start_transmit(&tmp);
 }
 
@@ -1095,23 +1082,23 @@ static void ubx_config_navmodel(int8_t elev)
   tmp.msgid = UBX_ID_CFG_NAVMODEL;
   tmp.len = 36;
 
-  pack_u8_le6_le(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
+  pack_u16_le(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
   pack_u8_le(tmp.msg, 2, 2); /* dynamic model: stationary */
   pack_u8_le(tmp.msg, 3, 0);
   pack_u32_le(tmp.msg, 4, 0);
   pack_u32_le(tmp.msg, 8, 0);
   pack_u8_le(tmp.msg, 12, elev); /* elevation mask */
   pack_u8_le(tmp.msg, 13, 0);
-  pack_u8_le6_le(tmp.msg, 14, 0);
-  pack_u8_le6_le(tmp.msg, 16, 0);
-  pack_u8_le6_le(tmp.msg, 18, 0);
-  pack_u8_le6_le(tmp.msg, 20, 0);
+  pack_u16_le(tmp.msg, 14, 0);
+  pack_u16_le(tmp.msg, 16, 0);
+  pack_u16_le(tmp.msg, 18, 0);
+  pack_u16_le(tmp.msg, 20, 0);
   pack_u8_le(tmp.msg, 22, 0);
   pack_u8_le(tmp.msg, 23, 0);
   pack_u8_le(tmp.msg, 24, 0);
   pack_u8_le(tmp.msg, 25, 0);
-  pack_u8_le6_le(tmp.msg, 26, 0);
-  pack_u8_le6_le(tmp.msg, 28, 0);
+  pack_u16_le(tmp.msg, 26, 0);
+  pack_u16_le(tmp.msg, 28, 0);
   pack_u8_le(tmp.msg, 30, 0); /* utc standard auto */
   pack_u8_le(tmp.msg, 31, 0);
   pack_u8_le(tmp.msg, 32, 0);
@@ -1143,7 +1130,7 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
 
   pack_u8_le(tmp.msg, 0, mode);
   pack_u8_le(tmp.msg, 1, 0);
-  pack_u8_le6_le(tmp.msg, 2, 1);
+  pack_u16_le(tmp.msg, 2, 1);
   pack_u32_le(tmp.msg, 4, lat*1e7); /* for fixed position mode only */
   pack_u32_le(tmp.msg, 8, lon*1e7);
   pack_u32_le(tmp.msg, 12, alt*100);
