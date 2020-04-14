@@ -58,7 +58,7 @@
 #define IRQ_NUM 39
 
 /* maximum length of the buffers */
-#define MAX_UBX_LEN 150u
+#define MAX_UBX_LEN 300u
 
 /* ubx message classes */
 #define UBX_CLASS_NAV 0x01u
@@ -83,7 +83,7 @@
 
 #define RXBUFFER_SIZE 1024u
 
-#define RECEIVE_TIMEOUT 250u /* ms */
+#define RECEIVE_TIMEOUT 150u /* ms */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -167,6 +167,7 @@ static void start_transmit(const ubxbuffer_t* tmp);
 static void ubx_rxhandler(void);
 static void ubx_txhandler(void);
 static void uart_irq_handler(void);
+static bool gps_wait_ack(void);
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
 static void unpack_tp(const uint8_t* rdata, float* ret);
@@ -178,7 +179,7 @@ static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   uint32_t dur);
 
-static void process_messages(void);
+static bool process_messages(void);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -207,25 +208,7 @@ void ublox_init(void)
   GPIOD_BSRR = BIT_26;
 }
 
-bool gps_wait_ack(void)
-{
-  while(true)
-  {
-    process_messages();
-    if(got_ack)
-    {
-      return true;
-    }
-    else if(got_nak)
-    {
-      return false;
-    }
-    else
-    {
-      continue;
-    }
-  }
-}
+
 
 void gps_worker(void)
 {
@@ -314,12 +297,14 @@ void gps_worker(void)
 
     case normal:
     {
-      process_messages();
-      if(info.fixtype == 3)
+      if(process_messages())
       {
-        numvalidfix++;
-        if(numvalidfix == 10)
-          ubx_config_tmode(tmode_svin, 0, 0, 0, 24*3600);
+        if((info.fixtype == 3) && (info.age_msec == 0))
+        {
+          numvalidfix++;
+          if(numvalidfix == 10)
+            ubx_config_tmode(tmode_svin, 0, 0, 0, 600);
+        }
       }
 
       uint64_t msec = currenttime - lasttime;
@@ -334,13 +319,9 @@ void gps_worker(void)
 
 float get_timepulse_error(void)
 {
-#ifdef DEBUG
   float tmp = qerr;
   qerr = 0;
   return tmp;
-#else
-  return qerr;
-#endif
 }
 
 /*******************************************************************************
@@ -470,16 +451,17 @@ static void ubx_rxhandler(void)
 
 
 /*============================================================================*/
-static void process_messages(void)
+static bool process_messages(void)
 /*------------------------------------------------------------------------------
   Function:
-  processes all messages in the receive data buffer and unpacks their data into
-  the different structures.
+  checks whether there are messages to be received. if receive data is pending,
+  a timeout is started and if the data is not complete within the timeout, the
+  data is dropped.
   in:  none
-  out: none
+  out: returns true when one complete message was received
 ==============================================================================*/
 {
-  static irqstatus_t status = ubx_header1;
+  irqstatus_t status = ubx_header1;
   static uint32_t rdpos = 0;
 
   uint32_t wrpos;
@@ -487,18 +469,11 @@ static void process_messages(void)
   uint8_t ckb;
   ubxbuffer_t rxb;
   uint8_t tmpdata;
-  uint64_t timeout = get_uptime_msec() + RECEIVE_TIMEOUT;
 
-  /* this loops until at least one message is fully processed or the timeout
-     expires */
+  uint64_t time = 0;
+
   while(true)
   {
-    /* check if the timeout expired */
-    if(get_uptime_msec() > timeout)
-    {
-      return;
-    }
-
     if(num_rxdata > 0)
     {
       __disable_irq();
@@ -514,7 +489,20 @@ static void process_messages(void)
     }
     else
     {
-      continue;
+      if(time == 0)
+      {
+        /* never actually started receiving something */
+        return false;
+      }
+      if(get_uptime_msec() - time >= RECEIVE_TIMEOUT)
+      {
+        /* started receiving something, but didn't get the data on time */
+        return false;
+      }
+      else
+      {
+        continue;
+      }
     }
 
     switch(status)
@@ -524,6 +512,7 @@ static void process_messages(void)
       {
         if(tmpdata == SYNC1)
         {
+          time = get_uptime_msec();
           status = ubx_header2;
         }
 
@@ -633,10 +622,12 @@ static void process_messages(void)
             if(rxb.msgid == UBX_ID_NAV_SAT)
             {
               unpack_sv(rxb.msg, &svi);
+              return true;
             }
             else if(rxb.msgid == UBX_ID_NAV_PVT)
             {
               unpack_pvt(rxb.msg, &info);
+              return true;
             }
           }
           else if(rxb.msgclass == UBX_CLASS_TIM)
@@ -644,10 +635,12 @@ static void process_messages(void)
             if(rxb.msgid == UBX_ID_TIM_TP)
             {
               unpack_tp(rxb.msg, &qerr);
+              return true;
             }
             else if(rxb.msgid == UBX_ID_TIM_SVIN)
             {
               unpack_svin(rxb.msg, &svinfo);
+              return true;
             }
           }
           else if(rxb.msgclass == UBX_CLASS_ACK)
@@ -660,11 +653,10 @@ static void process_messages(void)
             {
               got_nak = true;
             }
+            return true;
           }
 
-          status = ubx_header1;
         }
-        break;
       }
 
     }
@@ -693,7 +685,7 @@ static void ubx_txhandler(void)
   uint8_t tmpdata;
 
   /* do nothing if the buffer is empty */
-  if(txb.empty == true)
+  if(txb.empty)
   {
     disable_txempty_irq();
     return;
@@ -814,17 +806,8 @@ static void uart_irq_handler(void)
   out: none
 ==============================================================================*/
 {
-    GPIOE_BSRR = BIT_15;
-
   uint32_t status = USART3_SR;
   uint32_t cr = USART3_CR1;
-
-#ifdef DEBUG
-  if(status & BIT_03)
-  {
-    rxover++;
-  }
-#endif
 
   /* rx buffer not empty? */
   if(status & BIT_05)
@@ -837,7 +820,37 @@ static void uart_irq_handler(void)
   {
     ubx_txhandler();
   }
-    GPIOE_BSRR = BIT_31;
+}
+
+
+/*============================================================================*/
+static bool gps_wait_ack(void)
+/*------------------------------------------------------------------------------
+  Function:
+  unpacks the NAV-PVT (position, velocity, time) message
+  in:  rdata -> raw data
+       info -> gpsinfo structure
+  out: info is populated with position, velocity and time
+==============================================================================*/
+{
+  while(true)
+  {
+    if(process_messages())
+    {
+      if(got_ack)
+      {
+        return true;
+      }
+      else if(got_nak)
+      {
+        return false;
+      }
+      else
+      {
+        continue;
+      }
+    }
+  }
 }
 
 
@@ -935,7 +948,11 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
   out: none
 ==============================================================================*/
 {
-  svi->numsv = unpack_u8_le(rdata, 1);
+  svi->numsv = unpack_u8_le(rdata, 5);
+  if(svi->numsv > MAX_SV)
+  {
+    svi->numsv = MAX_SV;
+  }
   for(uint8_t n = 0; n < svi->numsv; n++)
   {
     svi->sats[n].gnssid = unpack_u8_le(rdata, 8 + 12*n);
@@ -1136,7 +1153,7 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
   pack_u32_le(tmp.msg, 12, alt*100);
   pack_u32_le(tmp.msg, 16, 0); /* fixed position accuracy */
   pack_u32_le(tmp.msg, 20, dur);
-  pack_u32_le(tmp.msg, 24, 10000);  /* survey-in accuracy limit */
+  pack_u32_le(tmp.msg, 24, 4000);  /* survey-in accuracy limit */
   start_transmit(&tmp);
 }
 
