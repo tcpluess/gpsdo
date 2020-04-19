@@ -35,15 +35,15 @@
 #include "stm32f407.h"
 #include "misc.h"
 #include "vic.h"
+#include "eeprom.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
 #define TXBUFFERSIZE 512u
-#define BAUD 115200u
-#define BAUD_INT ((uint32_t)(10000000u/(16u*BAUD)))
-#define BAUD_FRAC ((uint32_t)(10000000u/BAUD-16u*BAUD_INT+0.5f))
+#define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
+#define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -70,12 +70,14 @@ static void buffer_insert(char c);
 static char txbuffer[TXBUFFERSIZE];
 static volatile uint32_t txlen;
 
+/* not static because from eeprom */
+extern config_t cfg;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-extern void rs232_init(void)
+void rs232_init(void)
 {
   txlen = 0;
 
@@ -90,7 +92,8 @@ extern void rs232_init(void)
 
   /* enable and configure usart2 */
   RCC_APB1ENR |= BIT_17;
-  USART2_BRR = (BAUD_FRAC << 0) | (BAUD_INT << 4);
+  USART2_BRR = (BAUD_FRAC(cfg.rs232_baudrate) << 0) |
+    (BAUD_INT(cfg.rs232_baudrate) << 4);
   USART2_CR1 = BIT_13 | BIT_03;
 }
 
@@ -159,13 +162,13 @@ static void irq_handler(void)
 
   if((sr & cr) == BIT_07) //TXE?
   {
-  static uint32_t read_ind = 0;
+    static uint32_t read_ind = 0;
 
-  if(txlen == 0)
-  {
-    disable_txempty_irq();
-    return;
-  }
+    if(txlen == 0)
+    {
+      disable_txempty_irq();
+      return;
+    }
 
     txlen--;
 
@@ -178,6 +181,15 @@ static void irq_handler(void)
       read_ind = 0;
     }
   }
+
+  if((sr & cr) == BIT_05)
+  {
+    /* DR must be read anyways to acknowledge the interrupt */
+    uint8_t tmp = USART2_DR;
+    (void)tmp;
+  }
+
+  USART2_SR = 0;
 }
 
 /*============================================================================*/

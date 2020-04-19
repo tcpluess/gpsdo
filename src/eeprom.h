@@ -39,7 +39,7 @@
  ******************************************************************************/
 
 #define EEP_SZ 512u
-#define CFG_VERSION 42u /* yes, 42 */
+#define CFG_VERSION 40u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -53,11 +53,12 @@ typedef union
 {
   struct
   {
-    uint8_t version; /* must be 42 at all times, see above CFG_VERSION */
+    uint8_t version;
     uint16_t last_dacval;
     bool use_gps;
     bool use_glonass;
     bool use_galileo;
+    uint32_t rs232_baudrate;
   };
   uint8_t bytes[EEP_SZ];
 } config_t;
