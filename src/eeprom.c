@@ -219,6 +219,15 @@ void load_config(void)
     cfg.use_galileo = true;
     cfg.rs232_baudrate = 115200u;
 
+    cfg.fixpos_valid = false;
+    cfg.svin_dur = 1800;
+    cfg.lat = 0;
+    cfg.lon = 0;
+    cfg.alt = 0;
+    cfg.accuracy = 0;
+    cfg.accuracy_limit = 6000; /* 6m default accuracy for survey-in */
+
+
     save_config();
   }
 }

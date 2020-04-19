@@ -39,7 +39,7 @@
  ******************************************************************************/
 
 #define EEP_SZ 512u
-#define CFG_VERSION 40u
+#define CFG_VERSION 39u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -59,6 +59,15 @@ typedef union
     bool use_glonass;
     bool use_galileo;
     uint32_t rs232_baudrate;
+
+    /* fixed positon data */
+    bool fixpos_valid;
+    uint32_t svin_dur;
+    int32_t lat;
+    int32_t lon;
+    int32_t alt;
+    uint32_t accuracy;
+    uint32_t accuracy_limit;
   };
   uint8_t bytes[EEP_SZ];
 } config_t;
