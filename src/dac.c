@@ -31,14 +31,13 @@
 #include "dac.h"
 #include "stm32f407.h"
 #include "misc.h"
+#include "eeprom.h"
 
 #include <stdbool.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
-
-#define DAC_INITIAL_VALUE 32767u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -58,6 +57,9 @@ static void spi_transmit(uint8_t data);
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+/* not static because from eeprom */
+extern config_t cfg;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -87,7 +89,7 @@ void dac_setup(void)
 
   /* default state: chip select not active; set dac to initial value */
   spi_ss(false);
-  set_dac(DAC_INITIAL_VALUE);
+  set_dac(cfg.last_dacval);
 }
 
 void set_dac(uint16_t data)
