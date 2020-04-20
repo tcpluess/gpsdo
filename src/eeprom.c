@@ -61,6 +61,8 @@
 
 #define START_BIT BIT_11
 
+#define CHECKSUM_OFFSET (EEP_SZ-2)
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -203,11 +205,11 @@ void load_config(void)
   eep_read_multi(0, EEP_SZ, &cfg);
 
   /* the checksum sits at the last 2 bytes in big endian format */
-  uint16_t rd_cksum = unpack_u16_be(cfg.bytes, EEP_SZ-2);
+  uint16_t rd_cksum = unpack_u16_be(cfg.bytes, CHECKSUM_OFFSET);
 
   /* when the checksum is wrong, generate some meaningful initial data
      and populate the eeprom. also ignore the data if the version is wrong */
-  uint16_t calc_checksum = fletcher16(cfg.bytes, EEP_SZ-2);
+  uint16_t calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
   if((rd_cksum != calc_checksum) || (cfg.version != CFG_VERSION))
   {
     memset(&cfg.bytes, 0, EEP_SZ);
@@ -237,8 +239,8 @@ void load_config(void)
 void save_config(void)
 {
   uint16_t calc_checksum;
-  calc_checksum = fletcher16(cfg.bytes, EEP_SZ-2);
-  pack_u16_be(cfg.bytes, EEP_SZ-2, calc_checksum);
+  calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
+  pack_u16_be(cfg.bytes, CHECKSUM_OFFSET, calc_checksum);
   eep_write_multi(0, EEP_SZ, cfg.bytes);
 }
 
