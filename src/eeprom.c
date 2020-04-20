@@ -31,6 +31,8 @@
 #include "eeprom.h"
 #include "stm32f407.h"
 #include "misc.h"
+#include "convert.h"
+#include "checksum.h"
 #include <string.h>
 
 /*******************************************************************************
@@ -77,7 +79,6 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static uint16_t fletcher16(const uint8_t* data, uint32_t len);
 static void addr_cycle(uint32_t addr, uint32_t opcode);
 static void write_enable(bool enable);
 static bool check_busy(void);
@@ -202,9 +203,7 @@ void load_config(void)
   eep_read_multi(0, EEP_SZ, &cfg);
 
   /* the checksum sits at the last 2 bytes in big endian format */
-  uint16_t rd_cksum = cfg.bytes[EEP_SZ-2];
-  rd_cksum <<= 8;
-  rd_cksum += cfg.bytes[EEP_SZ-1];
+  uint16_t rd_cksum = unpack_u16_be(cfg.bytes, EEP_SZ-2);
 
   /* when the checksum is wrong, generate some meaningful initial data
      and populate the eeprom. also ignore the data if the version is wrong */
@@ -220,12 +219,14 @@ void load_config(void)
     cfg.rs232_baudrate = 115200u;
 
     cfg.fixpos_valid = false;
-    cfg.svin_dur = 1800;
-    cfg.lat = 0;
-    cfg.lon = 0;
-    cfg.alt = 0;
+    cfg.svin_dur = 4*3600;
+    cfg.x = 0;
+    cfg.y = 0;
+    cfg.z = 0;
     cfg.accuracy = 0;
-    cfg.accuracy_limit = 6000; /* 6m default accuracy for survey-in */
+    cfg.accuracy_limit = 10000; /* 10m default accuracy for survey-in */
+
+    cfg.elevation_mask = 5; /* 5 degree elevation mask */
 
 
     save_config();
@@ -237,42 +238,13 @@ void save_config(void)
 {
   uint16_t calc_checksum;
   calc_checksum = fletcher16(cfg.bytes, EEP_SZ-2);
-  cfg.bytes[EEP_SZ-2] = calc_checksum >> 8;
-  cfg.bytes[EEP_SZ-1] = calc_checksum;
-
-  eep_chip_erase();
+  pack_u16_be(cfg.bytes, EEP_SZ-2, calc_checksum);
   eep_write_multi(0, EEP_SZ, cfg.bytes);
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-/*============================================================================*/
-static uint16_t fletcher16(const uint8_t* data, uint32_t len)
-/*------------------------------------------------------------------------------
-  Function:
-  calculate the fletcher16 checksum over the config
-  in:  data -> data of which the checksum is calculated
-       len -> number of bytes
-  out: fletcher16 checksum
-==============================================================================*/
-{
-  uint8_t lo = 0;
-  uint8_t hi = 0;
-
-  for(uint32_t i = 0; i < len; i++)
-  {
-    lo = lo + data[i];
-    hi = hi + lo;
-  }
-
-  uint16_t result = hi;
-  result <<= 8;
-  result += lo;
-  return result;
-}
-
 
 /*============================================================================*/
 static void addr_cycle(uint32_t addr, uint32_t opcode)
@@ -285,14 +257,12 @@ static void addr_cycle(uint32_t addr, uint32_t opcode)
   out: none
 ==============================================================================*/
 {
-  int i;
-
   /* clear the top bits of the address, insert the start bit and the opcode */
   addr &= ADDR_MSK;
   addr |= START_BIT;
   addr |= opcode;
 
-  for(i = 0; i < 12; i++)
+  for(int i = 0; i < 12; i++)
   {
     /* clock one bit out */
     EEP_MOSI(addr & BIT_11);
