@@ -83,12 +83,10 @@ extern void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value);
 extern uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
 /*------------------------------------------------------------------------------
   Function:
-  convert a unsigned 32-bit number to 4 bytes and store it in a buffer
-  (little endian)
-  in:  buffer -> buffer to put the bytes into
+  retrieve a unsigned 32 bit number from raw data (little endian)
+  in:  data -> raw data
        offset -> offset into the buffer
-       value -> value to be packed
-  out: none
+  out: returns the number
 ==============================================================================*/
 
 
@@ -96,7 +94,7 @@ extern uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset);
 extern void pack_u16_le(uint8_t* buffer, uint32_t offset, uint16_t value);
 /*------------------------------------------------------------------------------
   Function:
-  convert a unsigned 32-bit number to 4 bytes and store it in a buffer
+  convert a unsigned 16-bit number to 2 bytes and store it in a buffer
   (little endian)
   in:  buffer -> buffer to put the bytes into
        offset -> offset into the buffer
@@ -109,12 +107,34 @@ extern void pack_u16_le(uint8_t* buffer, uint32_t offset, uint16_t value);
 extern uint16_t unpack_u16_le(const uint8_t* data, uint32_t offset);
 /*------------------------------------------------------------------------------
   Function:
-  convert a unsigned 32-bit number to 4 bytes and store it in a buffer
-  (little endian)
+  retrieve a unsigned 16 bit number from raw data (little endian)
+  in:  data -> raw data
+       offset -> offset into the buffer
+  out: returns the number
+==============================================================================*/
+
+
+/*============================================================================*/
+extern void pack_u16_be(uint8_t* buffer, uint32_t offset, uint16_t value);
+/*------------------------------------------------------------------------------
+  Function:
+  convert a unsigned 16-bit number to 2 bytes and store it in a buffer
+  (big endian)
   in:  buffer -> buffer to put the bytes into
        offset -> offset into the buffer
        value -> value to be packed
   out: none
+==============================================================================*/
+
+
+/*============================================================================*/
+extern uint16_t unpack_u16_be(const uint8_t* data, uint32_t offset);
+/*------------------------------------------------------------------------------
+  Function:
+  retrieve a unsigned 16 bit number from raw data (big endian)
+  in:  data -> raw data
+       offset -> offset into the buffer
+  out: returns the number
 ==============================================================================*/
 
 /*******************************************************************************

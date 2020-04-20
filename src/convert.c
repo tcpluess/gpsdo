@@ -96,6 +96,22 @@ uint16_t unpack_u16_le(const uint8_t* data, uint32_t offset)
 }
 
 
+void pack_u16_be(uint8_t* buffer, uint32_t offset, uint16_t value)
+{
+  buffer[offset] = value >> 8;
+  buffer[offset + 1] = value;
+}
+
+
+uint16_t unpack_u16_be(const uint8_t* data, uint32_t offset)
+{
+  uint16_t ret = data[offset];
+  ret <<= 8;
+  ret += data[offset + 1];
+  return ret;
+}
+
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
