@@ -83,6 +83,7 @@ static void enable_disp(int argc, const char* argv[]);
 static void svin(int argc, const char* argv[]);
 static void sat(int argc, const char* argv[]);
 static void restart(int argc, const char* argv[]);
+static void auto_svin(int argc, const char* argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -102,6 +103,7 @@ static command_t cmds[] =
   {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
   {sat,             "sat",        "display satellite info"},
   {restart,         "restart",    "restart the gps module"},
+  {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
 };
 
 /* not static because it must be globally accessible */
@@ -424,6 +426,7 @@ static void showcfg(int argc, const char* argv[])
     printf("survey-in duration: %lu sec\n", cfg.svin_dur);
     printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
     printf("elevation mask: %d\n", cfg.elevation_mask);
+    printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
   }
   else
   {
@@ -548,6 +551,31 @@ static void restart(int argc, const char* argv[])
   if(argc == 0)
   {
     gps_restart();
+  }
+}
+
+
+/*============================================================================*/
+static void auto_svin(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  configure auto survey-in
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; one required ("on" enables auto-svin, "off"
+       disabels it)
+  out: none
+==============================================================================*/
+{
+  if(argc == 1)
+  {
+    if(!strcmp(argv[0], "on"))
+    {
+      cfg.auto_svin = true;
+    }
+    else if(!strcmp(argv[0], "off"))
+    {
+      cfg.auto_svin = false;
+    }
   }
 }
 
