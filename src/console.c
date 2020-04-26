@@ -116,7 +116,7 @@ bool auto_disp;
 void console_worker(void)
 {
   static consolestatus_t status = startup;
-  int nesbit;
+  int rx;
 
   switch(status)
   {
@@ -132,8 +132,8 @@ void console_worker(void)
     /* prints the console prompt character */
     case prompt:
     {
-      sendchar('#');
-      sendchar(' ');
+      txchar('#');
+      txchar(' ');
       status = input;
       wrpos = 0;
       break;
@@ -142,9 +142,9 @@ void console_worker(void)
     /* processes the received characters and echoes them back accordingly */
     case input:
     {
-      nesbit = gc();
+      rx = kbhit();
 
-      switch(nesbit)
+      switch(rx)
       {
         case -1:
         {
@@ -152,20 +152,23 @@ void console_worker(void)
         }
 
         case '\b':
+        {
           if(wrpos > 0)
           {
-            sendchar('\b');
-            sendchar(' ');
-            sendchar('\b');
+            txchar('\b');
+            txchar(' ');
+            txchar('\b');
             wrpos--;
           }
           break;
+        }
 
         case '\r':
         case '\n':
+        {
           auto_disp = false;
-          sendchar('\r');
-          sendchar('\n');
+          txchar('\r');
+          txchar('\n');
           linebuffer[wrpos] = '\0';
           if(strlen(linebuffer) > 0)
           {
@@ -176,15 +179,18 @@ void console_worker(void)
             status = prompt;
           }
           break;
+        }
 
         default:
+        {
           if(wrpos < MAX_LINELEN-2)
           {
-            sendchar(nesbit);
-            linebuffer[wrpos] = nesbit;
+            txchar(rx);
+            linebuffer[wrpos] = rx;
             wrpos++;
           }
           break;
+        }
       }
       break;
     }

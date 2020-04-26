@@ -45,6 +45,8 @@
 #define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
+#define RXBUFFERSIZE 10u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -58,10 +60,8 @@
  ******************************************************************************/
 
 static void irq_handler(void);
-
 static void enable_txempty_irq(void);
 static void disable_txempty_irq(void);
-static void buffer_insert(char c);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -69,6 +69,9 @@ static void buffer_insert(char c);
 
 static char txbuffer[TXBUFFERSIZE];
 static volatile uint32_t txlen;
+
+static char rxbuffer[RXBUFFERSIZE];
+static volatile uint32_t rxlen;
 
 /* not static because from eeprom */
 extern config_t cfg;
@@ -94,7 +97,7 @@ void rs232_init(void)
   RCC_APB1ENR |= BIT_17;
   USART2_BRR = (BAUD_FRAC(cfg.rs232_baudrate) << 0) |
     (BAUD_INT(cfg.rs232_baudrate) << 4);
-  USART2_CR1 = BIT_13 | BIT_03;
+  USART2_CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
 }
 
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
@@ -104,9 +107,9 @@ _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
   {
     if(*p == '\n')
     {
-      buffer_insert('\r');
+      txchar('\r');
     }
-    buffer_insert(*p++);
+    txchar(*p++);
   }
   return len;
 }
@@ -143,6 +146,57 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 #endif
   return 0;
 }
+
+
+int kbhit(void)
+{
+  static uint32_t rdpos = 0;
+  if(rxlen > 0)
+  {
+    int ret = rxbuffer[rdpos];
+    __disable_irq();
+    rxlen--;
+    __enable_irq();
+    rdpos++;
+    if(rdpos == RXBUFFERSIZE)
+    {
+      rdpos = 0;
+    }
+    return ret;
+  }
+  return -1;
+}
+
+
+void txchar(char c)
+{
+  static int write_ind = 0;
+
+  /* this can only proceed if one of the following conditions is met:
+     a) the buffer is empty - in this case there is nothing in the buffer
+        and it can be used immediately
+     b) read index is not the same as write index - if they are equal it means
+        the buffer is overflowing */
+
+    while(txlen == TXBUFFERSIZE);
+
+  /* put the character into the buffer */
+  txbuffer[write_ind] = c;
+
+  write_ind++;
+  if(write_ind == TXBUFFERSIZE)
+  {
+    write_ind = 0;
+  }
+  __disable_irq();
+  txlen++;
+  __enable_irq();
+
+
+  /* actual transmission is handled only in the interrupt routine */
+  enable_txempty_irq();
+}
+
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
@@ -186,7 +240,15 @@ static void irq_handler(void)
   {
     /* DR must be read anyways to acknowledge the interrupt */
     uint8_t tmp = USART2_DR;
-    (void)tmp;
+
+    static uint32_t wrpos = 0;
+    rxbuffer[wrpos] = tmp;
+    wrpos++;
+    rxlen++;
+    if(wrpos == RXBUFFERSIZE)
+    {
+      wrpos = 0;
+    }
   }
 
   USART2_SR = 0;
@@ -216,42 +278,6 @@ static void disable_txempty_irq(void)
 ==============================================================================*/
 {
   USART2_CR1 &= ~BIT_07;
-}
-
-/*============================================================================*/
-static void buffer_insert(char c)
-/*------------------------------------------------------------------------------
-  Function:
-  insert a character into the tx buffer
-  in:  none
-  out: none
-==============================================================================*/
-{
-static int write_ind = 0;
-
-  /* this can only proceed if one of the following conditions is met:
-     a) the buffer is empty - in this case there is nothing in the buffer
-        and it can be used immediately
-     b) read index is not the same as write index - if they are equal it means
-        the buffer is overflowing */
-
-    while(txlen == TXBUFFERSIZE);
-
-  /* put the character into the buffer */
-  txbuffer[write_ind] = c;
-
-  write_ind++;
-  if(write_ind == TXBUFFERSIZE)
-  {
-    write_ind = 0;
-  }
-  __disable_irq();
-  txlen++;
-  __enable_irq();
-
-
-  /* actual transmission is handled only in the interrupt routine */
-  enable_txempty_irq();
 }
 
 /*******************************************************************************
