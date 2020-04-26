@@ -7,11 +7,11 @@
  *
  * Type:           header file
  *
- * Description:    checksum functions
+ * Description:    simple terminal based console
  *
  * Compiler:       ANSI-C
  *
- * Filename:       checksum.h
+ * Filename:       console.h
  *
  * Version:        1.0
  *
