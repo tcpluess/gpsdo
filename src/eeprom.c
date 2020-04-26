@@ -228,6 +228,8 @@ void load_config(void)
     cfg.accuracy = 0;
     cfg.accuracy_limit = 10000; /* 10m default accuracy for survey-in */
 
+    cfg.auto_svin = false;
+
     cfg.elevation_mask = 5; /* 5 degree elevation mask */
   }
 }

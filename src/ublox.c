@@ -300,12 +300,21 @@ void gps_worker(void)
       {*/
       disable_tmode();
 
+      if(cfg.auto_svin)
+      {
+        status = wait_fix;
+      }
+      else
+      {
+        status = survey_in;
+      }
+
         /*do
         {
           start_svin();
         } while(gps_wait_ack() == false);*/
 
-      status = survey_in;
+
       //}
       break;
     }

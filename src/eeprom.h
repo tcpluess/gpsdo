@@ -69,6 +69,8 @@ typedef union
     uint32_t accuracy;
     uint32_t accuracy_limit;
 
+    bool auto_svin; /* automatically start survey in at boot time */
+
     /* navigation model */
     int8_t elevation_mask;
   };
