@@ -81,7 +81,7 @@ static void savecfg(int argc, const char* argv[]);
 static void showcfg(int argc, const char* argv[]);
 static void enable_disp(int argc, const char* argv[]);
 static void svin(int argc, const char* argv[]);
-static void dispsat(int argc, const char* argv[]);
+static void sat(int argc, const char* argv[]);
 static void restart(int argc, const char* argv[]);
 
 /*******************************************************************************
@@ -100,7 +100,7 @@ static command_t cmds[] =
   {conf_elev_mask,  "elev_mask",  "configures an elevation mask"},
   {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
   {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
-  {dispsat,         "dispsat",    "display satellite info"},
+  {sat,             "sat",        "display satellite info"},
   {restart,         "restart",    "restart the gps module"},
 };
 
@@ -489,7 +489,7 @@ static void svin(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void dispsat(int argc, const char* argv[])
+static void sat(int argc, const char* argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays satellite info
