@@ -38,7 +38,9 @@
 #include "vic.h"
 #include "timebase.h"
 #include "convert.h"
+#include "eeprom.h"
 
+#include <math.h>
 #include <string.h>
 
 /*******************************************************************************
@@ -51,7 +53,7 @@
 #define BAUD_RECONFIGURE 115200u /* baudrate after initialisation */
 
 /* macros to set the integer and fractional part of the baudrate generator */
-#define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
+#define BAUD_INT(x) ((uint32_t)(10000000u/(16u*(x))))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
 /* usart interrupt vector number */
@@ -99,7 +101,9 @@ typedef enum
   wait_ready,
   configure_uart,
   configure_messages,
-  normal
+  wait_fix,
+  fixed_pos,
+  survey_in,
 } workerstatus_t;
 
 typedef enum
@@ -150,14 +154,14 @@ gpsinfo_t info;
 svindata_t svinfo;
 sv_info_t svi;
 
+/* not static because from eeprom */
+extern config_t cfg;
+
+static workerstatus_t status;
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
-
-#ifdef DEBUG
-uint32_t rxover;
-#endif
-
 
 static void init_uart(void);
 static void uart_config_baudrate(uint32_t baud);
@@ -176,9 +180,8 @@ static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
 static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
 static void ubx_config_navmodel(int8_t elev);
-static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
-  uint32_t dur);
-
+static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
+  uint32_t dur, uint32_t acc, uint32_t acc_lim);
 static bool process_messages(void);
 
 /*******************************************************************************
@@ -192,10 +195,7 @@ void ublox_init(void)
   got_ack = false;
   got_nak = false;
   num_rxdata = 0;
-
-#ifdef DEBUG
-  rxover = 0;
-#endif
+  status = reset;
 
   init_uart();
 
@@ -205,20 +205,19 @@ void ublox_init(void)
   /* configure the reset pin */
   GPIOD_MODER |= (1u << 20);
   GPIOD_OTYPER |= (1u << 10);
-  GPIOD_BSRR = BIT_26;
 }
 
 
 
 void gps_worker(void)
 {
-  static workerstatus_t status = reset;
   static uint64_t timestamp = 0;
   static uint32_t numvalidfix = 0;
   static uint32_t lasttime = 0;
   uint64_t currenttime = get_uptime_msec();
 
-  if(timestamp >= currenttime)
+  /* continue only if the timeout expired */
+  if((timestamp != 0) && (timestamp >= currenttime))
   {
     return;
   }
@@ -227,6 +226,8 @@ void gps_worker(void)
   {
     case reset:
     {
+      /* reset pin low */
+      GPIOD_BSRR = BIT_26;
       timestamp = get_uptime_msec() + 1000u;
       status = wait_ready;
       break;
@@ -252,17 +253,14 @@ void gps_worker(void)
 
     case configure_messages:
     {
-      USART3_CR1 |= BIT_05; // enable rx not empty interrupt
-
       do
       {
-        /* disable all gnss except gps */
-        ubx_config_gnss(true, false, false);
+        ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
       } while(gps_wait_ack() == false);
 
       do
       {
-        ubx_config_navmodel(5); //10 degree elevation mask
+        ubx_config_navmodel(cfg.elevation_mask);
       } while(gps_wait_ack() == false);
 
       do
@@ -285,43 +283,109 @@ void gps_worker(void)
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
       } while(gps_wait_ack() == false);
 
-      do
-      {
-        ubx_config_tmode(tmode_disable, 0, 0, 0, 0);
-      } while(gps_wait_ack() == false);
 
-      timestamp = get_uptime_msec() + 1000u;
-      status = normal;
+      /*if(cfg.fixpos_valid)
+      {
+        do
+        {
+          set_fixpos_mode();
+        } while(gps_wait_ack() == false);
+
+        status = fixed_pos;
+      }
+      else
+      {*/
+      disable_tmode();
+
+        /*do
+        {
+          start_svin();
+        } while(gps_wait_ack() == false);*/
+
+      status = survey_in;
+      //}
       break;
     }
 
-    case normal:
+    case wait_fix:
+    {
+      process_messages();
+
+      /* start survey-in as soon as there is a fix */
+      if((info.age_msec == 0) && (info.fixtype == 3))
+      {
+        start_svin();
+        status = survey_in;
+      }
+    }
+
+    case survey_in:
     {
       if(process_messages())
       {
-        if((info.fixtype == 3) && (info.age_msec == 0))
+
+        /* if we got some info about the survey-in AND the survey-in is valid
+           AND the survey-in is not active anymore, we should store the current
+           position in the eeprom and switch to fixed-position mode */
+        if((svinfo.age_msec == 0) && (svinfo.valid == true) && (svinfo.active == false))
         {
-          numvalidfix++;
-          if(numvalidfix == 10)
-            ubx_config_tmode(tmode_svin, 0, 0, 0, 600);
+          cfg.x = svinfo.x;
+          cfg.y = svinfo.y;
+          cfg.z = svinfo.z;
+          cfg.accuracy = sqrt(svinfo.meanv);
+          cfg.fixpos_valid = true;
+
+//          ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+
+          status = fixed_pos;
         }
       }
+      break;
+    }
 
-      uint64_t msec = currenttime - lasttime;
-      lasttime = currenttime;
-      svinfo.age_msec += msec;
-      info.age_msec += msec;
-
-
+    case fixed_pos:
+    {
+      process_messages();
+      break;
     }
   }
+
+  uint64_t msec = currenttime - lasttime;
+  lasttime = currenttime;
+  svinfo.age_msec += msec;
+  info.age_msec += msec;
 }
+
 
 float get_timepulse_error(void)
 {
   float tmp = qerr;
   qerr = 0;
   return tmp;
+}
+
+
+void start_svin(void)
+{
+  ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+}
+
+
+void set_fixpos_mode(void)
+{
+    ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
+}
+
+
+void disable_tmode(void)
+{
+    ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+}
+
+
+void gps_restart(void)
+{
+  status = reset;
 }
 
 /*******************************************************************************
@@ -346,7 +410,8 @@ static void init_uart(void)
   /* enable usart 3 and install the irq handler */
   RCC_APB1ENR |= BIT_18;
   USART3_BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
-  USART3_CR1 = BIT_13 | BIT_03 | BIT_02;
+  USART3_CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
+  //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
 }
 
@@ -827,12 +892,13 @@ static void uart_irq_handler(void)
 static bool gps_wait_ack(void)
 /*------------------------------------------------------------------------------
   Function:
-  unpacks the NAV-PVT (position, velocity, time) message
-  in:  rdata -> raw data
-       info -> gpsinfo structure
-  out: info is populated with position, velocity and time
+  actively wait until an ack or nak message is received
+  in:  none
+  out: returns true if ACK received, false in case of NAK
 ==============================================================================*/
 {
+  got_ack = false;
+  got_nak = false;
   while(true)
   {
     if(process_messages())
@@ -901,7 +967,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   info->x = unpack_i32_le(rdata, 4);
   info->y = unpack_i32_le(rdata, 8);
   info->z = unpack_i32_le(rdata, 12);
-  info->meanv = ((float)unpack_u32_le(rdata, 16))/1e6f;
+  info->meanv = unpack_u32_le(rdata, 16);
   info->obs = unpack_u32_le(rdata, 20);
   if(unpack_u8_le(rdata, 24) > 0)
   {
@@ -1127,16 +1193,16 @@ static void ubx_config_navmodel(int8_t elev)
 
 
 /*============================================================================*/
-static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
-  uint32_t dur)
+static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
+  uint32_t dur, uint32_t acc, uint32_t acc_lim)
 /*------------------------------------------------------------------------------
   Function:
   configure the timing mode
   in:  mode -> disable timing mode, start survey-in or enable fixed pos mode
-       lat -> latitude for fixed position mode
-       lon -> longitude for fixed position mode
-       alt -> altitude for fixed position mode
+       x, y, z -> ecef coordinates
        dur -> duration of survey-in
+       acc -> accuracy of the position data (if fixed position mode)
+       acc_lim -> accuracy limit in mm for survey-in
   out: none
 ==============================================================================*/
 {
@@ -1147,13 +1213,13 @@ static void ubx_config_tmode(tmode_t mode, float lat, float lon, float alt,
 
   pack_u8_le(tmp.msg, 0, mode);
   pack_u8_le(tmp.msg, 1, 0);
-  pack_u16_le(tmp.msg, 2, 1);
-  pack_u32_le(tmp.msg, 4, lat*1e7); /* for fixed position mode only */
-  pack_u32_le(tmp.msg, 8, lon*1e7);
-  pack_u32_le(tmp.msg, 12, alt*100);
-  pack_u32_le(tmp.msg, 16, 0); /* fixed position accuracy */
-  pack_u32_le(tmp.msg, 20, dur);
-  pack_u32_le(tmp.msg, 24, 4000);  /* survey-in accuracy limit */
+  pack_u16_le(tmp.msg, 2, 0); /* use ecef coordinates */
+  pack_i32_le(tmp.msg, 4, x); /* for fixed position mode only */
+  pack_i32_le(tmp.msg, 8, y);
+  pack_i32_le(tmp.msg, 12, z);
+  pack_u32_le(tmp.msg, 16, acc); /* fixed position accuracy */
+  pack_u32_le(tmp.msg, 20, dur); /* survey-in duration */
+  pack_u32_le(tmp.msg, 24, acc_lim);  /* survey-in accuracy limit */
   start_transmit(&tmp);
 }
 
