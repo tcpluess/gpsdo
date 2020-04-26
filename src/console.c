@@ -31,6 +31,7 @@
 #include "console.h"
 #include "rs232.h"
 #include "eeprom.h"
+#include "ublox.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -62,24 +63,26 @@ typedef enum
 
 typedef struct
 {
-  void(*func)(int argc, char* argv[]);
+  void(*func)(int argc, const char* argv[]);
   const char* name;
+  const char* helpstring;
 } command_t;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static uint32_t find_tokens(char* line, char** toks, uint32_t maxtoks);
-
-static void interpreter(int argc, char* argv[]);
-
-static void help(int argc, char* argv[]);
-static void conf_gnss(int argc, char* argv[]);
-static void conf_elev_mask(int argc, char* argv[]);
-static void savecfg(int argc, char* argv[]);
-static void showcfg(int argc, char* argv[]);
-static void enable_disp(int argc, char* argv[]);
+static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks);
+static void interpreter(int argc, const char* argv[]);
+static void help(int argc, const char* argv[]);
+static void conf_gnss(int argc, const char* argv[]);
+static void conf_elev_mask(int argc, const char* argv[]);
+static void savecfg(int argc, const char* argv[]);
+static void showcfg(int argc, const char* argv[]);
+static void enable_disp(int argc, const char* argv[]);
+static void svin(int argc, const char* argv[]);
+static void dispsat(int argc, const char* argv[]);
+static void restart(int argc, const char* argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -87,16 +90,18 @@ static void enable_disp(int argc, char* argv[]);
 
 static char linebuffer[MAX_LINELEN];
 static uint32_t wrpos = 0;
-static consolestatus_t status = startup;
 
 static command_t cmds[] =
 {
-  {help, "help"},
-  {conf_gnss, "gnss"},
-  {savecfg, "save_cfg"},
-  {conf_elev_mask, "elev_mask"},
-  {showcfg, "show_cfg"},
-  {enable_disp, "disp"},
+  {help,            "help",       "display this screen"},
+  {showcfg,         "show_cfg",   "display all configuration items"},
+  {savecfg,         "save_cfg",   "save the configuration to EEPROM"},
+  {conf_gnss,       "gnss",       "[gps|glonass|galileo] - enables the selected GNSS"},
+  {conf_elev_mask,  "elev_mask",  "configures an elevation mask"},
+  {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
+  {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
+  {dispsat,         "dispsat",    "display satellite info"},
+  {restart,         "restart",    "restart the gps module"},
 };
 
 /* not static because it must be globally accessible */
@@ -110,18 +115,21 @@ bool auto_disp;
 
 void console_worker(void)
 {
+  static consolestatus_t status = startup;
   int nesbit;
 
   switch(status)
   {
+    /* clears the terminal and prints the info screen */
     case startup:
     {
-      printf("\033[2J\rHB9FSX GPSDO\n");
-      printf("HW=v2.0, SW=v0.1\n");
+      printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
       printf("use \"help\" to see the available commands\n\n");
       status = prompt;
       auto_disp = false;
     }
+
+    /* prints the console prompt character */
     case prompt:
     {
       sendchar('#');
@@ -131,6 +139,7 @@ void console_worker(void)
       break;
     }
 
+    /* processes the received characters and echoes them back accordingly */
     case input:
     {
       nesbit = gc();
@@ -180,9 +189,10 @@ void console_worker(void)
       break;
     }
 
+    /* if a command line has been entered, it is processed in this state */
     case evaluate:
     {
-      char* toks[MAX_TOKENS];
+      const char* toks[MAX_TOKENS];
       int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
       interpreter(ntoks, toks);
       status = prompt;
@@ -196,7 +206,7 @@ void console_worker(void)
  ******************************************************************************/
 
 /*============================================================================*/
-static uint32_t find_tokens(char* line, char** toks, uint32_t maxtoks)
+static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks)
 /*------------------------------------------------------------------------------
   Function:
   finds all tokens separated by at least one space and returns the pointers to
@@ -224,43 +234,72 @@ static uint32_t find_tokens(char* line, char** toks, uint32_t maxtoks)
   return 0;
 }
 
-static void interpreter(int argc, char* argv[])
+
+/*============================================================================*/
+static void interpreter(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  the interpreter gets the number of arguments and the individual arguments,
+  searches the command to be executed and passes the arguments to it
+  in:  argc -> number of arguments, including the command itself
+       argv -> array of strings
+  out: none
+==============================================================================*/
 {
   if(argc >= 1)
   {
     /* the actual command is always first */
-    char* command = argv[0];
+    const char* command = argv[0];
 
     int numcmds = sizeof(cmds) / sizeof(cmds[0]);
 
     for(int i = 0; i < numcmds; i++)
     {
-      if(!strcasecmp(command, cmds[i].name))
+      if(!strcmp(command, cmds[i].name))
       {
         cmds[i].func(argc-1, &argv[1]);
+        return;
       }
     }
-
   }
-  else
-  {
-    printf("error\n");
-  }
+  printf("error\n");
 }
 
-static void help(int argc, char* argv[])
+
+/*============================================================================*/
+static void help(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  the interpreter gets the number of arguments and the individual arguments,
+  searches the command to be executed and passes the arguments to it
+  in:  argc -> number of arguments, including the command itself
+       argv -> array of strings
+  out: none
+==============================================================================*/
 {
-  printf("gnss [gps|glonass|galileo] - enables the selected GNSS\n");
-  printf("baud <baudrate> - changes the RS-232 baud rate\n");
-  printf("svin_limit <x> - sets the accuracy limit (mm) for survey-in\n");
-  printf("elev_mask <x> - configures an elevation mask\n");
-  printf("save_cfg - save the configuration to EEPROM\n");
-  printf("show_cfg - display all configuration items\n");
-  printf("disp - auto display status (for logging); leave with <enter>\n");
+  int numcmds = sizeof(cmds) / sizeof(cmds[0]);
+  for(int i = 0; i < numcmds; i++)
+  {
+    /* shorthand */
+    command_t* cmd = &cmds[i];
+    if(cmd->helpstring != NULL)
+    {
+      printf("%s : %s\n", cmd->name, cmd->helpstring);
+    }
+  }
 }
 
 
-static void conf_gnss(int argc, char* argv[])
+/*============================================================================*/
+static void conf_gnss(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  configure the gnss systems to be used
+  in:  argc -> number of arguments, see below
+       argv -> array of strings, any combination of "gps", "glonass" and
+       "galileo"
+  out: none
+==============================================================================*/
 {
   bool use_gps = false;
   bool use_glonass = false;
@@ -291,7 +330,16 @@ static void conf_gnss(int argc, char* argv[])
 }
 
 
-static void conf_elev_mask(int argc, char* argv[])
+/*============================================================================*/
+static void conf_elev_mask(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  configure the elevation mask
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; usually only one element which is an integer
+       which is then used as the elevation mask in degrees
+  out: none
+==============================================================================*/
 {
   if(argc != 1)
   {
@@ -312,33 +360,179 @@ static void conf_elev_mask(int argc, char* argv[])
   }
 }
 
-static void savecfg(int argc, char* argv[])
+
+/*============================================================================*/
+static void savecfg(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  save the configuration to the eeprom
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; none required
+  out: none
+==============================================================================*/
 {
-  save_config();
+  if(argc == 0)
+  {
+    save_config();
+  }
+  else
+  {
+    printf("error");
+  }
 }
 
 
-static void showcfg(int argc, char* argv[])
+/*============================================================================*/
+static void showcfg(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  displays the currently used configuration data (not necessarily stored in
+  the eeprom!)
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; none required
+  out: none
+==============================================================================*/
 {
-  printf("last DAC value: %d\n", cfg.last_dacval);
-  printf("use GPS: %s\n", (cfg.use_gps ? "yes" : "no"));
-  printf("use GLONASS: %s\n", (cfg.use_glonass ? "yes" : "no"));
-  printf("use GALILEO: %s\n", (cfg.use_galileo ? "yes" : "no"));
-  printf("RS-232 baudrate: %lu\n", cfg.rs232_baudrate);
-  printf("fixed position valid: %s\n", (cfg.fixpos_valid ? "yes" : "no"));
-  printf("ECEF X position: %ld cm\n", cfg.x);
-  printf("ECEF Y position: %ld cm\n", cfg.y);
-  printf("ECEF Z position: %ld cm\n", cfg.z);
-  printf("position accuracy: %lu mm\n", cfg.accuracy);
-  printf("survey-in duration: %lu sec\n", cfg.svin_dur);
-  printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
+  if(argc == 0)
+  {
+    printf("last DAC value: %d\n", cfg.last_dacval);
+    printf("use GPS: %s\n", (cfg.use_gps ? "yes" : "no"));
+    printf("use GLONASS: %s\n", (cfg.use_glonass ? "yes" : "no"));
+    printf("use GALILEO: %s\n", (cfg.use_galileo ? "yes" : "no"));
+    printf("RS-232 baudrate: %lu\n", cfg.rs232_baudrate);
+    printf("fixed position valid: %s\n", (cfg.fixpos_valid ? "yes" : "no"));
+    printf("ECEF X position: %ld cm\n", cfg.x);
+    printf("ECEF Y position: %ld cm\n", cfg.y);
+    printf("ECEF Z position: %ld cm\n", cfg.z);
+    printf("position accuracy: %lu mm\n", cfg.accuracy);
+    printf("survey-in duration: %lu sec\n", cfg.svin_dur);
+    printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
+    printf("elevation mask: %d\n", cfg.elevation_mask);
+  }
+  else
+  {
+    printf("error");
+  }
 }
 
 
-static void enable_disp(int argc, char* argv[])
+/*============================================================================*/
+static void enable_disp(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  enables the auto-display -- currently implemented as an UGLY HACK
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; none required
+  out: none
+==============================================================================*/
 {
-  auto_disp = true;
+  if(argc == 0)
+  {
+    auto_disp = true;
+  }
 }
+
+
+/*============================================================================*/
+static void svin(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  starts a survey-in usng a given duration and accuracy limit
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; first one is an integer representing the
+       required duration in seconds, second one is an integer representing
+       the accuracy limit in mm
+  out: none
+==============================================================================*/
+{
+  if(argc == 1)
+  {
+    if(!strcasecmp(argv[0], "stop"))
+    {
+      disable_tmode();
+    }
+  }
+  else if(argc == 2)
+  {
+    uint32_t time = atoi(argv[0]);
+    uint32_t accuracy = atoi(argv[1]);
+    if((time != 0) && (accuracy != 0))
+    {
+      disable_tmode();
+      cfg.svin_dur = time;
+      cfg.accuracy_limit = accuracy;
+      start_svin();
+    }
+  }
+  else
+  {
+    printf("unknown syntax\n");
+    return;
+  }
+}
+
+/*============================================================================*/
+static void dispsat(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  displays satellite info
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; none required
+  out: none
+==============================================================================*/
+{
+  extern sv_info_t svi;
+  for(int i = 0; i < svi.numsv; i++)
+  {
+    const char* gnss;
+    switch(svi.sats[i].gnssid)
+    {
+      case 0:
+      {
+        gnss = "GPS    ";
+        break;
+      }
+
+      case 2:
+      {
+        gnss = "GALILEO";
+        break;
+      }
+
+      case 6:
+      {
+        gnss = "GLONASS";
+        break;
+      }
+
+      default:
+      {
+        gnss = "?      ";
+        break;
+      }
+    }
+    printf("%s SV ID: %d; C/N0: %d dB; Azimuth: %d deg; Elevation: %d deg\n", gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
+  }
+  printf("data age: %llu ms\n\n", svi.age_msec);
+}
+
+
+/*============================================================================*/
+static void restart(int argc, const char* argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  displays satellite info
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; none required
+  out: none
+==============================================================================*/
+{
+  if(argc == 0)
+  {
+    gps_restart();
+  }
+}
+
 
 /*******************************************************************************
  * END OF CODE
