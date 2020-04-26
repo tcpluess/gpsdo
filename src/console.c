@@ -528,9 +528,10 @@ static void sat(int argc, const char* argv[])
         break;
       }
     }
-    printf("%s SV ID: %d; C/N0: %d dB; Azimuth: %d deg; Elevation: %d deg\n", gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
+    printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
+      gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
   }
-  printf("data age: %llu ms\n\n", svi.age_msec);
+  printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, svi.age_msec);
 }
 
 
