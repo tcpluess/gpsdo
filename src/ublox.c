@@ -226,7 +226,10 @@ void gps_worker(void)
   {
     case reset:
     {
-      /* reset pin low */
+      /* the uart must use the initial baud rate after reset */
+      uart_config_baudrate(BAUD_INITIAL);
+
+      /* reset pin low, continue after 1 sec */
       GPIOD_BSRR = BIT_26;
       timestamp = get_uptime_msec() + 1000u;
       status = wait_ready;
@@ -235,7 +238,7 @@ void gps_worker(void)
 
     case wait_ready:
     {
-      /* reset pin high */
+      /* reset pin high, allow the module 1 sec for startup  */
       GPIOD_BSRR = BIT_10;
       timestamp = get_uptime_msec() + 1000u;
       status = configure_uart;
