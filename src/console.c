@@ -146,11 +146,16 @@ void console_worker(void)
 
       switch(rx)
       {
+        /* no character received, nothing to do */
         case -1:
         {
           return;
         }
 
+        /* backspace entered: only need to do something if the line buffer is not
+           empty; erase the last character in the terminal by going back one,
+           sending a space and again going back one; also decrease the
+           writing pos into the line buffer */
         case '\b':
         {
           if(wrpos > 0)
@@ -163,6 +168,8 @@ void console_worker(void)
           break;
         }
 
+        /* enter is pressed, terminate the line buffer and evaluate it
+           or do nothing if the line buffer is empty */
         case '\r':
         case '\n':
         {
@@ -181,8 +188,11 @@ void console_worker(void)
           break;
         }
 
+        /* a normal character is received, so echo back and add it into
+           the line buffer */
         default:
         {
+          /* FIXME: need to check this condition */
           if(wrpos < MAX_LINELEN-2)
           {
             txchar(rx);
@@ -476,6 +486,7 @@ static void svin(int argc, const char* argv[])
     return;
   }
 }
+
 
 /*============================================================================*/
 static void dispsat(int argc, const char* argv[])
