@@ -42,6 +42,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -102,7 +103,8 @@ typedef enum
   configure_uart,
   configure_messages,
   wait_fix,
-  fixed_pos,
+  normal,
+  fixpos_mode,
   survey_in,
 } workerstatus_t;
 
@@ -212,7 +214,6 @@ void ublox_init(void)
 void gps_worker(void)
 {
   static uint64_t timestamp = 0;
-  static uint32_t numvalidfix = 0;
   static uint32_t lasttime = 0;
   uint64_t currenttime = get_uptime_msec();
 
@@ -245,6 +246,9 @@ void gps_worker(void)
       break;
     }
 
+    /* after the module has started up, the uart is reconfigured:
+       - high baud rate
+       - disable nmea messages */
     case configure_uart:
     {
       ubx_config_baudrate(BAUD_RECONFIGURE);
@@ -254,6 +258,11 @@ void gps_worker(void)
       break;
     }
 
+    /* the gps module is configured:
+       - gnss system to use
+       - dynamic model and elevation mask
+       - periodic reporting of certain messages
+       - survey-in, fixed-position or normal mode */
     case configure_messages:
     {
       do
@@ -286,39 +295,32 @@ void gps_worker(void)
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
       } while(gps_wait_ack() == false);
 
-
-      /*if(cfg.fixpos_valid)
-      {
-        do
-        {
-          set_fixpos_mode();
-        } while(gps_wait_ack() == false);
-
-        status = fixed_pos;
-      }
-      else
-      {*/
+      /* timing mode must be disabled before survey-in can be started again */
       disable_tmode();
 
+      /* auto survey in? then start it */
       if(cfg.auto_svin)
       {
         status = wait_fix;
       }
       else
       {
-        status = survey_in;
+        /* if the fixed position from the eeprom is valid, then use it */
+        if(cfg.fixpos_valid)
+        {
+          do
+          {
+            set_fixpos_mode();
+          } while(gps_wait_ack() == false);
+
+          status = fixpos_mode;
+        }
       }
 
-        /*do
-        {
-          start_svin();
-        } while(gps_wait_ack() == false);*/
-
-
-      //}
       break;
     }
 
+    /* wait until there is a valid 3d fix available and then start the survey-in */
     case wait_fix:
     {
       process_messages();
@@ -331,6 +333,7 @@ void gps_worker(void)
       }
     }
 
+    /* wait until the survey-in process is finished */
     case survey_in:
     {
       if(process_messages())
@@ -346,16 +349,15 @@ void gps_worker(void)
           cfg.z = svinfo.z;
           cfg.accuracy = sqrt(svinfo.meanv);
           cfg.fixpos_valid = true;
-
-//          ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
-
-          status = fixed_pos;
+          status = normal;
         }
       }
       break;
     }
 
-    case fixed_pos:
+    /* normal mode does nothing special */
+    case fixpos_mode:
+    case normal:
     {
       process_messages();
       break;
