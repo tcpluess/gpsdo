@@ -32,6 +32,7 @@
 #include "rs232.h"
 #include "eeprom.h"
 #include "ublox.h"
+#include "timebase.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -534,7 +535,8 @@ static void sat(int argc, const char* argv[])
     printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
       gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
   }
-  printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, svi.age_msec);
+  uint64_t age = get_uptime_msec() - svi.time;
+  printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, age);
 }
 
 
