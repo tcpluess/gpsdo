@@ -42,7 +42,7 @@
  * CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define MAX_SV 20u
+#define MAX_SV 30u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -73,7 +73,7 @@ typedef struct
   uint32_t hacc;
   uint32_t vacc;
   uint16_t pdop;
-  uint64_t age_msec;
+  uint64_t time;
 } gpsinfo_t;
 
 typedef struct
@@ -84,7 +84,7 @@ typedef struct
   uint32_t obs;
   bool valid;
   bool active;
-  uint64_t age_msec;
+  uint64_t time;
 } svindata_t;
 
 
@@ -99,7 +99,7 @@ typedef struct
     int8_t elev;
     int16_t azim;
   } sats[MAX_SV];
-  uint64_t age_msec;
+  uint64_t time;
 } sv_info_t;
 
 /*******************************************************************************

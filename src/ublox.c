@@ -61,7 +61,7 @@
 #define IRQ_NUM 39
 
 /* maximum length of the buffers */
-#define MAX_UBX_LEN 350u
+#define MAX_UBX_LEN 400u
 
 /* ubx message classes */
 #define UBX_CLASS_NAV 0x01u
@@ -185,6 +185,7 @@ static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
   uint32_t dur, uint32_t acc, uint32_t acc_lim);
 static bool process_messages(void);
+static void wait_tx_done(void);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -214,7 +215,6 @@ void ublox_init(void)
 void gps_worker(void)
 {
   static uint64_t timestamp = 0;
-  static uint32_t lasttime = 0;
   uint64_t currenttime = get_uptime_msec();
 
   /* continue only if the timeout expired */
@@ -222,6 +222,8 @@ void gps_worker(void)
   {
     return;
   }
+
+  process_messages();
 
   switch(status)
   {
@@ -252,7 +254,6 @@ void gps_worker(void)
     case configure_uart:
     {
       ubx_config_baudrate(BAUD_RECONFIGURE);
-      uart_config_baudrate(BAUD_RECONFIGURE);
       timestamp = get_uptime_msec() + 100u;
       status = configure_messages;
       break;
@@ -265,35 +266,12 @@ void gps_worker(void)
        - survey-in, fixed-position or normal mode */
     case configure_messages:
     {
-      do
-      {
-        ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
-      } while(gps_wait_ack() == false);
-
-      do
-      {
-        ubx_config_navmodel(cfg.elevation_mask);
-      } while(gps_wait_ack() == false);
-
-      do
-      {
-        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
-      } while(gps_wait_ack() == false);
-
-      do
-      {
-        ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
-      } while(gps_wait_ack() == false);
-
-      do
-      {
-        ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
-      } while(gps_wait_ack() == false);
-
-      do
-      {
-        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
-      } while(gps_wait_ack() == false);
+      ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
+      ubx_config_navmodel(cfg.elevation_mask);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
+      ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
+      ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
 
       /* timing mode must be disabled before survey-in can be started again */
       disable_tmode();
@@ -308,11 +286,7 @@ void gps_worker(void)
         /* if the fixed position from the eeprom is valid, then use it */
         if(cfg.fixpos_valid)
         {
-          do
-          {
-            set_fixpos_mode();
-          } while(gps_wait_ack() == false);
-
+          set_fixpos_mode();
           status = fixpos_mode;
         }
       }
@@ -323,10 +297,9 @@ void gps_worker(void)
     /* wait until there is a valid 3d fix available and then start the survey-in */
     case wait_fix:
     {
-      process_messages();
-
-      /* start survey-in as soon as there is a fix */
-      if((info.age_msec == 0) && (info.fixtype == 3))
+      /* start survey-in as soon as there is a fix and the position
+         data is not older than 1sec */
+      if((currenttime - info.time <= 1000u) && (info.fixtype == 3))
       {
         start_svin();
         status = survey_in;
@@ -336,22 +309,20 @@ void gps_worker(void)
     /* wait until the survey-in process is finished */
     case survey_in:
     {
-      if(process_messages())
-      {
 
         /* if we got some info about the survey-in AND the survey-in is valid
            AND the survey-in is not active anymore, we should store the current
            position in the eeprom and switch to fixed-position mode */
-        if((svinfo.age_msec == 0) && (svinfo.valid == true) && (svinfo.active == false))
+        if((currenttime - svinfo.time <= 1000u) &&
+           (svinfo.valid == true) && (svinfo.active == false))
         {
           cfg.x = svinfo.x;
           cfg.y = svinfo.y;
           cfg.z = svinfo.z;
           cfg.accuracy = sqrt(svinfo.meanv);
           cfg.fixpos_valid = true;
-          status = normal;
+          status = fixpos_mode;
         }
-      }
       break;
     }
 
@@ -359,15 +330,10 @@ void gps_worker(void)
     case fixpos_mode:
     case normal:
     {
-      process_messages();
+
       break;
     }
   }
-
-  uint64_t msec = currenttime - lasttime;
-  lasttime = currenttime;
-  svinfo.age_msec += msec;
-  info.age_msec += msec;
 }
 
 
@@ -382,18 +348,21 @@ float get_timepulse_error(void)
 void start_svin(void)
 {
   ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+  status = survey_in;
 }
 
 
 void set_fixpos_mode(void)
 {
     ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
+    status = fixpos_mode;
 }
 
 
 void disable_tmode(void)
 {
     ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+    status = normal;
 }
 
 
@@ -963,7 +932,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->hacc = unpack_u32_le(rdata, 40);
   info->vacc = unpack_u32_le(rdata, 44);
   info->pdop = unpack_u16_le(rdata, 76);
-  info->age_msec = 0;
+  info->time = get_uptime_msec();
 }
 
 
@@ -999,7 +968,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   {
     info->active = false;
   }
-  info->age_msec = 0;
+  info->time = get_uptime_msec();
 }
 
 
@@ -1031,7 +1000,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
   svi->numsv = unpack_u8_le(rdata, 5);
   if(svi->numsv > MAX_SV)
   {
-    svi->numsv = MAX_SV;
+    return;
   }
   for(uint8_t n = 0; n < svi->numsv; n++)
   {
@@ -1041,7 +1010,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
     svi->sats[n].elev = unpack_i8_le(rdata, 11 + 12*n);
     svi->sats[n].azim = unpack_i16_le(rdata, 12 + 12*n);
   }
-  svi->age_msec = 0;
+  svi->time = get_uptime_msec();
 }
 
 
@@ -1054,21 +1023,33 @@ static void ubx_config_baudrate(uint32_t baudrate)
   out: none
 ==============================================================================*/
 {
-  ubxbuffer_t tmp;
-  tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = UBX_ID_CFG_PORT;
-  tmp.len = 20u;
+  do
+  {
+    /* if the configuration of the baudrate fails, the module is still using
+       the default (initial) baudrate */
+    uart_config_baudrate(BAUD_INITIAL);
 
-  pack_u8_le(tmp.msg, 0, 1); /* 1 = UART */
-  pack_u8_le(tmp.msg, 1, 0);
-  pack_u16_le(tmp.msg, 2, 0);
-  pack_u32_le(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
-  pack_u32_le(tmp.msg, 8, baudrate);
-  pack_u16_le(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
-  pack_u16_le(tmp.msg, 14, BIT_00);
-  pack_u16_le(tmp.msg, 16, 0);
-  pack_u16_le(tmp.msg, 18, 0);
-  start_transmit(&tmp);
+    ubxbuffer_t tmp;
+    tmp.msgclass = UBX_CLASS_CFG;
+    tmp.msgid = UBX_ID_CFG_PORT;
+    tmp.len = 20u;
+
+    pack_u8_le(tmp.msg, 0, 1); /* 1 = UART */
+    pack_u8_le(tmp.msg, 1, 0);
+    pack_u16_le(tmp.msg, 2, 0);
+    pack_u32_le(tmp.msg, 4, BIT_06 | BIT_07 | BIT_11); /* 8N1 */
+    pack_u32_le(tmp.msg, 8, baudrate);
+    pack_u16_le(tmp.msg, 12, BIT_00); /* allow only ubx protocol */
+    pack_u16_le(tmp.msg, 14, BIT_00);
+    pack_u16_le(tmp.msg, 16, 0);
+    pack_u16_le(tmp.msg, 18, 0);
+    start_transmit(&tmp);
+
+    /* wait until the whole telegram is transmitted, before
+       configuring the uart */
+    wait_tx_done();
+    uart_config_baudrate(baudrate);
+  } while(gps_wait_ack() == false);
 }
 
 
@@ -1083,59 +1064,62 @@ static void ubx_config_gnss(bool gps, bool glonass, bool galileo)
   out: none
 ==============================================================================*/
 {
-  ubxbuffer_t tmp;
-  tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = UBX_ID_CFG_GNSS;
-  tmp.len = 60;
+  do
+  {
+    ubxbuffer_t tmp;
+    tmp.msgclass = UBX_CLASS_CFG;
+    tmp.msgid = UBX_ID_CFG_GNSS;
+    tmp.len = 60;
 
-  pack_u8_le(tmp.msg, 0, 0); /* version 0 */
-  pack_u8_le(tmp.msg, 1, 0); /* read only */
-  pack_u8_le(tmp.msg, 2, 0xff); /* use max. # of tracking channels */
-  pack_u8_le(tmp.msg, 3, 7); /* use 7 config blocks */
+    pack_u8_le(tmp.msg, 0, 0); /* version 0 */
+    pack_u8_le(tmp.msg, 1, 0); /* read only */
+    pack_u8_le(tmp.msg, 2, 0xff); /* use max. # of tracking channels */
+    pack_u8_le(tmp.msg, 3, 7); /* use 7 config blocks */
 
-  pack_u8_le(tmp.msg, 4, 0); /* gps */
-  pack_u8_le(tmp.msg, 5, 8); /* use minimum 8 tracking channels */
-  pack_u8_le(tmp.msg, 6, 16); /* use at most 16 tracking channels */
-  pack_u8_le(tmp.msg, 7, 0); /* reserved */
-  pack_u32_le(tmp.msg, 8, 0x01010000 | (gps ? BIT_00 : 0));
+    pack_u8_le(tmp.msg, 4, 0); /* gps */
+    pack_u8_le(tmp.msg, 5, 8); /* use minimum 8 tracking channels */
+    pack_u8_le(tmp.msg, 6, 16); /* use at most 16 tracking channels */
+    pack_u8_le(tmp.msg, 7, 0); /* reserved */
+    pack_u32_le(tmp.msg, 8, 0x01010000 | (gps ? BIT_00 : 0));
 
-  pack_u8_le(tmp.msg, 12, 1); /* sbas - should be disabled for timing */
-  pack_u8_le(tmp.msg, 13, 1);
-  pack_u8_le(tmp.msg, 14, 3);
-  pack_u8_le(tmp.msg, 15, 0);
-  pack_u32_le(tmp.msg, 16, 0x01010000);
+    pack_u8_le(tmp.msg, 12, 1); /* sbas - should be disabled for timing */
+    pack_u8_le(tmp.msg, 13, 1);
+    pack_u8_le(tmp.msg, 14, 3);
+    pack_u8_le(tmp.msg, 15, 0);
+    pack_u32_le(tmp.msg, 16, 0x01010000);
 
-  pack_u8_le(tmp.msg, 20, 2); /* galileo */
-  pack_u8_le(tmp.msg, 21, 4);
-  pack_u8_le(tmp.msg, 22, 8);
-  pack_u8_le(tmp.msg, 23, 0);
-  pack_u32_le(tmp.msg, 24, 0x01010000 | (galileo ? BIT_00 : 0));
+    pack_u8_le(tmp.msg, 20, 2); /* galileo */
+    pack_u8_le(tmp.msg, 21, 4);
+    pack_u8_le(tmp.msg, 22, 8);
+    pack_u8_le(tmp.msg, 23, 0);
+    pack_u32_le(tmp.msg, 24, 0x01010000 | (galileo ? BIT_00 : 0));
 
-  pack_u8_le(tmp.msg, 28, 3); /* beidou */
-  pack_u8_le(tmp.msg, 29, 8);
-  pack_u8_le(tmp.msg, 30, 16);
-  pack_u8_le(tmp.msg, 31, 0);
-  pack_u32_le(tmp.msg, 32, 0x01010000);
+    pack_u8_le(tmp.msg, 28, 3); /* beidou */
+    pack_u8_le(tmp.msg, 29, 8);
+    pack_u8_le(tmp.msg, 30, 16);
+    pack_u8_le(tmp.msg, 31, 0);
+    pack_u32_le(tmp.msg, 32, 0x01010000);
 
-  pack_u8_le(tmp.msg, 36, 4); /* imes */
-  pack_u8_le(tmp.msg, 37, 0);
-  pack_u8_le(tmp.msg, 38, 8);
-  pack_u8_le(tmp.msg, 39, 0);
-  pack_u32_le(tmp.msg, 40, 0x03010000);
+    pack_u8_le(tmp.msg, 36, 4); /* imes */
+    pack_u8_le(tmp.msg, 37, 0);
+    pack_u8_le(tmp.msg, 38, 8);
+    pack_u8_le(tmp.msg, 39, 0);
+    pack_u32_le(tmp.msg, 40, 0x03010000);
 
-  pack_u8_le(tmp.msg, 44, 5); /* qzss - should be enabled together with gps */
-  pack_u8_le(tmp.msg, 45, 0);
-  pack_u8_le(tmp.msg, 46, 3);
-  pack_u8_le(tmp.msg, 47, 0);
-  pack_u32_le(tmp.msg, 48, 0x05010000 | (gps ? BIT_00 : 0));
+    pack_u8_le(tmp.msg, 44, 5); /* qzss - should be enabled together with gps */
+    pack_u8_le(tmp.msg, 45, 0);
+    pack_u8_le(tmp.msg, 46, 3);
+    pack_u8_le(tmp.msg, 47, 0);
+    pack_u32_le(tmp.msg, 48, 0x05010000 | (gps ? BIT_00 : 0));
 
-  pack_u8_le(tmp.msg, 52, 6); /* glonass */
-  pack_u8_le(tmp.msg, 53, 8);
-  pack_u8_le(tmp.msg, 54, 14);
-  pack_u8_le(tmp.msg, 55, 0);
-  pack_u32_le(tmp.msg, 56, 0x01010000 | (glonass ? BIT_00 : 0));
+    pack_u8_le(tmp.msg, 52, 6); /* glonass */
+    pack_u8_le(tmp.msg, 53, 8);
+    pack_u8_le(tmp.msg, 54, 14);
+    pack_u8_le(tmp.msg, 55, 0);
+    pack_u32_le(tmp.msg, 56, 0x01010000 | (glonass ? BIT_00 : 0));
 
-  start_transmit(&tmp);
+    start_transmit(&tmp);
+  } while(gps_wait_ack() == false);
 }
 
 
@@ -1151,14 +1135,17 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
   out: none
 ==============================================================================*/
 {
-  ubxbuffer_t tmp;
-  tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = UBX_ID_CFG_RATE;
-  tmp.len = 3;
-  pack_u8_le(tmp.msg, 0, msgclass);
-  pack_u8_le(tmp.msg, 1, msgid);
-  pack_u8_le(tmp.msg, 2, rate);
-  start_transmit(&tmp);
+  do
+  {
+    ubxbuffer_t tmp;
+    tmp.msgclass = UBX_CLASS_CFG;
+    tmp.msgid = UBX_ID_CFG_RATE;
+    tmp.len = 3;
+    pack_u8_le(tmp.msg, 0, msgclass);
+    pack_u8_le(tmp.msg, 1, msgid);
+    pack_u8_le(tmp.msg, 2, rate);
+    start_transmit(&tmp);
+  } while(gps_wait_ack() == false);
 }
 
 
@@ -1174,35 +1161,38 @@ static void ubx_config_navmodel(int8_t elev)
   out: none
 ==============================================================================*/
 {
-  ubxbuffer_t tmp;
-  tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = UBX_ID_CFG_NAVMODEL;
-  tmp.len = 36;
+  do
+  {
+    ubxbuffer_t tmp;
+    tmp.msgclass = UBX_CLASS_CFG;
+    tmp.msgid = UBX_ID_CFG_NAVMODEL;
+    tmp.len = 36;
 
-  pack_u16_le(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
-  pack_u8_le(tmp.msg, 2, 2); /* dynamic model: stationary */
-  pack_u8_le(tmp.msg, 3, 0);
-  pack_u32_le(tmp.msg, 4, 0);
-  pack_u32_le(tmp.msg, 8, 0);
-  pack_u8_le(tmp.msg, 12, elev); /* elevation mask */
-  pack_u8_le(tmp.msg, 13, 0);
-  pack_u16_le(tmp.msg, 14, 0);
-  pack_u16_le(tmp.msg, 16, 0);
-  pack_u16_le(tmp.msg, 18, 0);
-  pack_u16_le(tmp.msg, 20, 0);
-  pack_u8_le(tmp.msg, 22, 0);
-  pack_u8_le(tmp.msg, 23, 0);
-  pack_u8_le(tmp.msg, 24, 0);
-  pack_u8_le(tmp.msg, 25, 0);
-  pack_u16_le(tmp.msg, 26, 0);
-  pack_u16_le(tmp.msg, 28, 0);
-  pack_u8_le(tmp.msg, 30, 0); /* utc standard auto */
-  pack_u8_le(tmp.msg, 31, 0);
-  pack_u8_le(tmp.msg, 32, 0);
-  pack_u8_le(tmp.msg, 33, 0);
-  pack_u8_le(tmp.msg, 34, 0);
-  pack_u8_le(tmp.msg, 35, 0);
-  start_transmit(&tmp);
+    pack_u16_le(tmp.msg, 0, BIT_00 | BIT_01 | BIT_10);
+    pack_u8_le(tmp.msg, 2, 2); /* dynamic model: stationary */
+    pack_u8_le(tmp.msg, 3, 0);
+    pack_u32_le(tmp.msg, 4, 0);
+    pack_u32_le(tmp.msg, 8, 0);
+    pack_u8_le(tmp.msg, 12, elev); /* elevation mask */
+    pack_u8_le(tmp.msg, 13, 0);
+    pack_u16_le(tmp.msg, 14, 0);
+    pack_u16_le(tmp.msg, 16, 0);
+    pack_u16_le(tmp.msg, 18, 0);
+    pack_u16_le(tmp.msg, 20, 0);
+    pack_u8_le(tmp.msg, 22, 0);
+    pack_u8_le(tmp.msg, 23, 0);
+    pack_u8_le(tmp.msg, 24, 0);
+    pack_u8_le(tmp.msg, 25, 0);
+    pack_u16_le(tmp.msg, 26, 0);
+    pack_u16_le(tmp.msg, 28, 0);
+    pack_u8_le(tmp.msg, 30, 0); /* utc standard auto */
+    pack_u8_le(tmp.msg, 31, 0);
+    pack_u8_le(tmp.msg, 32, 0);
+    pack_u8_le(tmp.msg, 33, 0);
+    pack_u8_le(tmp.msg, 34, 0);
+    pack_u8_le(tmp.msg, 35, 0);
+    start_transmit(&tmp);
+  } while(gps_wait_ack() == false);
 }
 
 
@@ -1220,21 +1210,37 @@ static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
   out: none
 ==============================================================================*/
 {
-  ubxbuffer_t tmp;
-  tmp.msgclass = UBX_CLASS_CFG;
-  tmp.msgid = UBX_ID_CFG_TMODE2;
-  tmp.len = 28;
+  do
+  {
+    ubxbuffer_t tmp;
+    tmp.msgclass = UBX_CLASS_CFG;
+    tmp.msgid = UBX_ID_CFG_TMODE2;
+    tmp.len = 28;
 
-  pack_u8_le(tmp.msg, 0, mode);
-  pack_u8_le(tmp.msg, 1, 0);
-  pack_u16_le(tmp.msg, 2, 0); /* use ecef coordinates */
-  pack_i32_le(tmp.msg, 4, x); /* for fixed position mode only */
-  pack_i32_le(tmp.msg, 8, y);
-  pack_i32_le(tmp.msg, 12, z);
-  pack_u32_le(tmp.msg, 16, acc); /* fixed position accuracy */
-  pack_u32_le(tmp.msg, 20, dur); /* survey-in duration */
-  pack_u32_le(tmp.msg, 24, acc_lim);  /* survey-in accuracy limit */
-  start_transmit(&tmp);
+    pack_u8_le(tmp.msg, 0, mode);
+    pack_u8_le(tmp.msg, 1, 0);
+    pack_u16_le(tmp.msg, 2, 0); /* use ecef coordinates */
+    pack_i32_le(tmp.msg, 4, x); /* for fixed position mode only */
+    pack_i32_le(tmp.msg, 8, y);
+    pack_i32_le(tmp.msg, 12, z);
+    pack_u32_le(tmp.msg, 16, acc); /* fixed position accuracy */
+    pack_u32_le(tmp.msg, 20, dur); /* survey-in duration */
+    pack_u32_le(tmp.msg, 24, acc_lim);  /* survey-in accuracy limit */
+    start_transmit(&tmp);
+  } while(gps_wait_ack() == false);
+}
+
+
+/*============================================================================*/
+static void wait_tx_done(void)
+/*------------------------------------------------------------------------------
+  Function:
+  active wait until an ongoing transmission of a telegram is finished
+  in:  none
+  out: none
+==============================================================================*/
+{
+  while(txb.empty == false);
 }
 
 /*******************************************************************************
