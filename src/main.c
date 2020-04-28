@@ -95,6 +95,8 @@ int main(void)
     cntl_worker();
     console_worker();
   }
+
+  /*lint -unreachable */
   return 0;
 }
 

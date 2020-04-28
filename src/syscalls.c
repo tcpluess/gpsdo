@@ -34,6 +34,7 @@
 
 #include "stm32f407.h"
 #include "misc.h"
+#include "rs232.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -82,7 +83,52 @@ caddr_t _sbrk_r(struct _reent *r, int incr)
   return (caddr_t)prev_heap_top;
 }
 
+_ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
+{
+  const unsigned char *p = (const unsigned char*)ptr;
+  for(int i = 0; i < len; i++)
+  {
+    if(*p == '\n')
+    {
+      txchar('\r');
+    }
+    txchar(*p++);
+  }
+  return len;
+}
 
+int _isatty(int file)
+{
+  return 1;
+}
+
+_ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
+{
+#if 0
+  char c;
+  int  i;
+  unsigned char *p;
+
+  p = (unsigned char*)ptr;
+
+  for (i = 0; i < len; i++)
+  {
+    //c = uart0GetchW();
+
+    *p++ = c;
+    //uart0Putch(c);
+
+    if (c == 0x0D && i <= (len - 2))
+    {
+      *p = 0x0A;
+      //uart0Putch(0x0A);
+      return i + 2;
+    }
+  }
+  return i;
+#endif
+  return 0;
+}
 
 int _close_r(
     struct _reent *r,

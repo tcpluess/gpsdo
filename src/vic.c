@@ -174,7 +174,7 @@ void vic_enableirq(int32_t intnum, funcptr_t func)
     }
     else if(intnum < 64)
     {
-      intnum -= 32u;
+      intnum -= 32;
       NVIC_ISER1 = (1u << intnum);
     }
     else if(intnum < 96)
