@@ -102,7 +102,7 @@ ULIBS =
 
 # Define optimisation level here
 OPT = -O0 -g3
-# OPT = -O2 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+#OPT = -O0 -g3 -falign-functions=16 -fno-inline -fomit-frame-pointer
 
 #
 # End of user defines
