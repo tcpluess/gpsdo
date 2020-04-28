@@ -69,7 +69,7 @@ static void led_setup(void);
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void main(void)
+int main(void)
 {
   vic_init();
   led_setup();
@@ -95,6 +95,7 @@ void main(void)
     cntl_worker();
     console_worker();
   }
+  return 0;
 }
 
 /*******************************************************************************
