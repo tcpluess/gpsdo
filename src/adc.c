@@ -111,7 +111,7 @@ float get_iocxo(void)
   /* these are the internal reference voltage and the ocxo current */
   float ichan = ADC1_JDR1;
   float ref = ADC1_JDR2;
-  return VREF/(GAIN*RSHUNT) * ichan / ref;
+  return ((VREF/(GAIN*RSHUNT)) * ichan) / ref;
 }
 
 /*******************************************************************************

@@ -49,8 +49,8 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static inline uint16_t calc_crc16(uint32_t crc, char data, uint16_t poly);
-static inline uint32_t calc_crc32(uint32_t crc, char data, uint32_t poly);
+static inline uint16_t calc_crc16(uint32_t crc, uint8_t data, uint16_t poly);
+static inline uint32_t calc_crc32(uint32_t crc, uint8_t data, uint32_t poly);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -110,7 +110,7 @@ uint32_t crc32(const void* data, uint32_t len)
  ******************************************************************************/
 
 /*============================================================================*/
-static inline uint16_t calc_crc16(uint32_t crc, char data, uint16_t poly)
+static inline uint16_t calc_crc16(uint32_t crc, uint8_t data, uint16_t poly)
 /*------------------------------------------------------------------------------
   Function:
   calculate the crc16 of one byte
@@ -120,7 +120,7 @@ static inline uint16_t calc_crc16(uint32_t crc, char data, uint16_t poly)
   out: new crc value
 ==============================================================================*/
 {
-  for(int i = 0; i < 8u; i++)
+  for(int i = 0; i < 8; i++)
   {
     if((crc ^ data) & 1)
     {
@@ -133,11 +133,11 @@ static inline uint16_t calc_crc16(uint32_t crc, char data, uint16_t poly)
 
     data = data >> 1;
   }
-  return crc;
+  return (uint16_t)crc;
 }
 
 /*============================================================================*/
-static inline uint32_t calc_crc32(uint32_t crc, char data, uint32_t poly)
+static inline uint32_t calc_crc32(uint32_t crc, uint8_t data, uint32_t poly)
 /*------------------------------------------------------------------------------
   Function:
   calculate the crc32 of one byte
@@ -147,7 +147,7 @@ static inline uint32_t calc_crc32(uint32_t crc, char data, uint32_t poly)
   out: new crc value
 ==============================================================================*/
 {
-  for(int i = 0; i < 8u; i++)
+  for(int i = 0; i < 8; i++)
   {
     if((crc ^ data) & 1)
     {

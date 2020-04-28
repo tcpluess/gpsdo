@@ -126,10 +126,11 @@ void console_worker(void)
     /* clears the terminal and prints the info screen */
     case startup:
     {
-      printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-      printf("use \"help\" to see the available commands\n\n");
+      (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
+      (void)printf("use \"help\" to see the available commands\n\n");
       status = prompt;
       auto_disp = false;
+      break;
     }
 
     /* prints the console prompt character */
@@ -198,8 +199,8 @@ void console_worker(void)
           /* FIXME: need to check this condition */
           if(wrpos < MAX_LINELEN-2)
           {
-            txchar(rx);
-            linebuffer[wrpos] = rx;
+            txchar((char)rx);
+            linebuffer[wrpos] = (char)rx;
             wrpos++;
           }
           break;
@@ -238,7 +239,7 @@ static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks)
 {
   char* ptr = strtok(line, " ");
 
-  for(int toknum = 0; toknum < maxtoks; toknum++)
+  for(uint32_t toknum = 0; toknum < maxtoks; toknum++)
   {
     if(ptr != NULL)
     {
@@ -281,7 +282,7 @@ static void interpreter(int argc, const char* argv[])
       }
     }
   }
-  printf("error\n");
+  (void)printf("error\n");
 }
 
 
@@ -296,6 +297,10 @@ static void help(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argc;
+  (void)argv;
+
   int numcmds = sizeof(cmds) / sizeof(cmds[0]);
   for(int i = 0; i < numcmds; i++)
   {
@@ -303,7 +308,7 @@ static void help(int argc, const char* argv[])
     command_t* cmd = &cmds[i];
     if(cmd->helpstring != NULL)
     {
-      printf("%s : %s\n", cmd->name, cmd->helpstring);
+      (void)printf("%s : %s\n", cmd->name, cmd->helpstring);
     }
   }
 }
@@ -325,21 +330,21 @@ static void conf_gnss(int argc, const char* argv[])
   bool use_galileo = false;
   for(int i = 0; i < argc; i++)
   {
-    if(!strcasecmp(argv[i], "gps"))
+    if(!strcmp(argv[i], "gps"))
     {
       use_gps = true;
     }
-    else if(!strcasecmp(argv[i], "galileo"))
+    else if(!strcmp(argv[i], "galileo"))
     {
       use_galileo = true;
     }
-    else if(!strcasecmp(argv[i], "glonass"))
+    else if(!strcmp(argv[i], "glonass"))
     {
       use_glonass = true;
     }
     else
     {
-      printf("unknown GNSS <%s> - skipped\n", argv[i]);
+      (void)printf("unknown GNSS <%s> - skipped\n", argv[i]);
     }
   }
 
@@ -362,19 +367,19 @@ static void conf_elev_mask(int argc, const char* argv[])
 {
   if(argc != 1)
   {
-    printf("unknown syntax\n");
+    (void)printf("unknown syntax\n");
   }
   else
   {
-    int8_t elevmask = atoi(argv[0]);
+    int8_t elevmask = (int8_t)atoi(argv[0]);
     if((elevmask < 0) || (elevmask > 90))
     {
-      printf("elevation mask %d deg out of range!\n", elevmask);
+      (void)printf("elevation mask %d deg out of range!\n", elevmask);
     }
     else
     {
       cfg.elevation_mask = elevmask;
-      printf("set the elevation mask to %d deg\n", elevmask);
+      (void)printf("set the elevation mask to %d deg\n", elevmask);
     }
   }
 }
@@ -390,13 +395,16 @@ static void savecfg(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argv;
+
   if(argc == 0)
   {
     save_config();
   }
   else
   {
-    printf("error");
+    (void)printf("error");
   }
 }
 
@@ -412,26 +420,29 @@ static void showcfg(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argv;
+
   if(argc == 0)
   {
-    printf("last DAC value: %d\n", cfg.last_dacval);
-    printf("use GPS: %s\n", (cfg.use_gps ? "yes" : "no"));
-    printf("use GLONASS: %s\n", (cfg.use_glonass ? "yes" : "no"));
-    printf("use GALILEO: %s\n", (cfg.use_galileo ? "yes" : "no"));
-    printf("RS-232 baudrate: %lu\n", cfg.rs232_baudrate);
-    printf("fixed position valid: %s\n", (cfg.fixpos_valid ? "yes" : "no"));
-    printf("ECEF X position: %ld cm\n", cfg.x);
-    printf("ECEF Y position: %ld cm\n", cfg.y);
-    printf("ECEF Z position: %ld cm\n", cfg.z);
-    printf("position accuracy: %lu mm\n", cfg.accuracy);
-    printf("survey-in duration: %lu sec\n", cfg.svin_dur);
-    printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
-    printf("elevation mask: %d\n", cfg.elevation_mask);
-    printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
+    (void)printf("last DAC value: %d\n", cfg.last_dacval);
+    (void)printf("use GPS: %s\n", (cfg.use_gps ? "yes" : "no"));
+    (void)printf("use GLONASS: %s\n", (cfg.use_glonass ? "yes" : "no"));
+    (void)printf("use GALILEO: %s\n", (cfg.use_galileo ? "yes" : "no"));
+    (void)printf("RS-232 baudrate: %lu\n", cfg.rs232_baudrate);
+    (void)printf("fixed position valid: %s\n", (cfg.fixpos_valid ? "yes" : "no"));
+    (void)printf("ECEF X position: %ld cm\n", cfg.x);
+    (void)printf("ECEF Y position: %ld cm\n", cfg.y);
+    (void)printf("ECEF Z position: %ld cm\n", cfg.z);
+    (void)printf("position accuracy: %lu mm\n", cfg.accuracy);
+    (void)printf("survey-in duration: %lu sec\n", cfg.svin_dur);
+    (void)printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
+    (void)printf("elevation mask: %d\n", cfg.elevation_mask);
+    (void)printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
   }
   else
   {
-    printf("error");
+    (void)printf("error");
   }
 }
 
@@ -446,6 +457,9 @@ static void enable_disp(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argv;
+
   if(argc == 0)
   {
     auto_disp = true;
@@ -465,17 +479,20 @@ static void svin(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argv;
+
   if(argc == 1)
   {
-    if(!strcasecmp(argv[0], "stop"))
+    if(!strcmp(argv[0], "stop"))
     {
       disable_tmode();
     }
   }
   else if(argc == 2)
   {
-    uint32_t time = atoi(argv[0]);
-    uint32_t accuracy = atoi(argv[1]);
+    uint32_t time = (uint32_t)atoi(argv[0]);
+    uint32_t accuracy = (uint32_t)atoi(argv[1]);
     if((time != 0) && (accuracy != 0))
     {
       disable_tmode();
@@ -486,7 +503,7 @@ static void svin(int argc, const char* argv[])
   }
   else
   {
-    printf("unknown syntax\n");
+    (void)printf("unknown syntax\n");
     return;
   }
 }
@@ -502,41 +519,47 @@ static void sat(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
-  extern sv_info_t svi;
-  for(int i = 0; i < svi.numsv; i++)
+  /* unused */
+  (void)argv;
+
+  if(argc == 0)
   {
-    const char* gnss;
-    switch(svi.sats[i].gnssid)
+    extern sv_info_t svi;
+    for(int i = 0; i < svi.numsv; i++)
     {
-      case 0:
+      const char* gnss;
+      switch(svi.sats[i].gnssid)
       {
-        gnss = "GPS    ";
-        break;
-      }
+        case 0:
+        {
+          gnss = "GPS    ";
+          break;
+        }
 
-      case 2:
-      {
-        gnss = "GALILEO";
-        break;
-      }
+        case 2:
+        {
+          gnss = "GALILEO";
+          break;
+        }
 
-      case 6:
-      {
-        gnss = "GLONASS";
-        break;
-      }
+        case 6:
+        {
+          gnss = "GLONASS";
+          break;
+        }
 
-      default:
-      {
-        gnss = "?      ";
-        break;
+        default:
+        {
+          gnss = "?      ";
+          break;
+        }
       }
+      (void)printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
+        gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
     }
-    printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
-      gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
+    uint64_t age = get_uptime_msec() - svi.time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, age);
   }
-  uint64_t age = get_uptime_msec() - svi.time;
-  printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, age);
 }
 
 
@@ -550,6 +573,9 @@ static void restart(int argc, const char* argv[])
   out: none
 ==============================================================================*/
 {
+  /* unused */
+  (void)argv;
+
   if(argc == 0)
   {
     gps_restart();

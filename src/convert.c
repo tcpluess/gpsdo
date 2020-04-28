@@ -56,13 +56,13 @@
 
 void pack_u32_le(uint8_t* buffer, uint32_t offset, uint32_t value)
 {
-  buffer[offset] = value;
+  buffer[offset] = (uint8_t)value;
   value >>= 8;
-  buffer[offset + 1] = value;
+  buffer[offset + 1] = (uint8_t)value;
   value >>= 8;
-  buffer[offset + 2] = value;
+  buffer[offset + 2] = (uint8_t)value;
   value >>= 8;
-  buffer[offset + 3] = value;
+  buffer[offset + 3] = (uint8_t)value;
 }
 
 
@@ -81,9 +81,9 @@ uint32_t unpack_u32_le(const uint8_t* data, uint32_t offset)
 
 void pack_u16_le(uint8_t* buffer, uint32_t offset, uint16_t value)
 {
-  buffer[offset] = value;
+  buffer[offset] = (uint8_t)value;
   value >>= 8;
-  buffer[offset + 1] = value;
+  buffer[offset + 1] = (uint8_t)value;
 }
 
 
@@ -99,7 +99,7 @@ uint16_t unpack_u16_le(const uint8_t* data, uint32_t offset)
 void pack_u16_be(uint8_t* buffer, uint32_t offset, uint16_t value)
 {
   buffer[offset] = value >> 8;
-  buffer[offset + 1] = value;
+  buffer[offset + 1] = (uint8_t)value;
 }
 
 

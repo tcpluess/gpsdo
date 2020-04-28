@@ -43,8 +43,6 @@
 #include "console.h"
 #include "cntl.h"
 
-#include <math.h>
-
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -71,7 +69,7 @@ static void led_setup(void);
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-int main(void)
+void main(void)
 {
   vic_init();
   led_setup();
@@ -91,13 +89,12 @@ int main(void)
   timebase_reset();
   enable_tdc();
 
-  while(1)
+  for(;;)
   {
     gps_worker();
     cntl_worker();
     console_worker();
   }
-  return 0;
 }
 
 /*******************************************************************************

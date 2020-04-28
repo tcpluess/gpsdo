@@ -216,7 +216,7 @@ static uint32_t tdc_read24(uint8_t addr)
 ==============================================================================*/
 {
   uint32_t ret;
-  uint32_t tmp = addr;
+  uint16_t tmp = addr;
   tmp <<= 8;
   tdc_ss(true);
   ret = spi_trans16(tmp);
@@ -241,7 +241,7 @@ static void tdc_write(uint8_t addr, uint8_t data)
   tmp <<= 8;
   tmp |= data;
   tdc_ss(true);
-  spi_trans16(tmp);
+  (void)spi_trans16(tmp);
   tdc_ss(false);
 }
 
@@ -315,7 +315,7 @@ static uint16_t spi_trans16(uint16_t txdata)
     }
   } while(true);
 
-  return SPI1_DR;
+  return (uint16_t)SPI1_DR;
 }
 
 /*******************************************************************************

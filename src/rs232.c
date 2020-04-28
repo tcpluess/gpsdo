@@ -41,7 +41,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define TXBUFFERSIZE 512u
+#define TXBUFFERSIZE 512
 #define BAUD_INT(x) ((uint32_t)(10000000u/(16u*x)))
 #define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
 
@@ -83,6 +83,7 @@ extern config_t cfg;
 void rs232_init(void)
 {
   txlen = 0;
+  rxlen = 0;
 
   vic_enableirq(38, irq_handler);
 

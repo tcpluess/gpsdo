@@ -68,9 +68,9 @@
  ******************************************************************************/
 
 /* macros for easy access to the e2prom */
-#define EEP_SS(x) GPIOD_BSRR = ((x) ? BIT_14 : BIT_30)
-#define EEP_MOSI(x) GPIOD_BSRR = ((x) ? BIT_12 : BIT_28)
-#define EEP_SCK(x) GPIOD_BSRR = ((x) ? BIT_13 : BIT_29)
+#define EEP_SS(x) { GPIOD_BSRR = ((x) ? BIT_14 : BIT_30); }
+#define EEP_MOSI(x) { GPIOD_BSRR = ((x) ? BIT_12 : BIT_28); }
+#define EEP_SCK(x) { GPIOD_BSRR = ((x) ? BIT_13 : BIT_29); }
 #define EEP_MISO() ((GPIOD_IDR & BIT_11) != 0 ? 1u : 0u)
 
 /*******************************************************************************
@@ -201,7 +201,7 @@ void eep_write_multi(uint32_t addr, uint32_t len, void* buf)
 
 void load_config(void)
 {
-  memset(&cfg.bytes, 0, EEP_SZ);
+  (void)memset(cfg.bytes, 0, EEP_SZ);
   eep_read_multi(0, EEP_SZ, &cfg);
 
   /* the checksum sits at the last 2 bytes in big endian format */
@@ -212,7 +212,7 @@ void load_config(void)
   uint16_t calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
   if((rd_cksum != calc_checksum) || (cfg.version != CFG_VERSION))
   {
-    memset(&cfg.bytes, 0, EEP_SZ);
+    (void)memset(cfg.bytes, 0, EEP_SZ);
     cfg.version = CFG_VERSION;
     cfg.last_dacval = 32768u;
     cfg.use_gps = true;
