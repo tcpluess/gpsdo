@@ -103,6 +103,7 @@ void timebase_init(void)
 {
   pps = false;
   res = false;
+  tic_capture = 0;
 
   configure_systick();
 
@@ -364,8 +365,8 @@ static void capture_irq(void)
   {
     /* then this is no valid capture event */
     res = false;
-    TIM2_CNT = 0;
-    tic_capture = 0;
+    TIM2_CNT = 60;
+    tic_capture = 60;
   }
   else
   {
