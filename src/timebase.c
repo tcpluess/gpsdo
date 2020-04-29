@@ -357,19 +357,19 @@ static void capture_irq(void)
   out: none
 ==============================================================================*/
 {
-  /* setting the pps flag lets the main program do its job */
-  pps = true;
-
   /* timebase reset requested? */
   if(res)
   {
     /* then this is no valid capture event */
     res = false;
-    TIM2_CNT = 60;
-    tic_capture = 60;
+    TIM2_CNT = 55;
+    tic_capture = 0;
   }
   else
   {
+    /* setting the pps flag lets the main program do its job */
+    pps = true;
+
     /* read out the captured value */
     tic_capture = TIM2_CCR3;
     tim = tic_capture;

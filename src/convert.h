@@ -44,10 +44,10 @@
 /* pseudo functions for unpack and pack: */
 /* unsigned 8-bit - works directly on the buffer, but is nicer to have the same
    interface as for the other data types */
-#define pack_u8_le(x, y, z) x[y] = z
+#define pack_u8_le(x, y, z) { x[y] = z; }
 #define unpack_u8_le(x, y) ((uint8_t)x[y])
 
-#define pack_i8_le(x, y, z) x[y] = z
+#define pack_i8_le(x, y, z) { x[y] = (uint8_t)z; }
 #define unpack_i8_le(x, y) ((int8_t)x[y])
 
 /* signed 16-bit - works the same as for unsigned, but has an embedded cast */

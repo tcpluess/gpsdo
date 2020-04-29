@@ -42,7 +42,6 @@
 
 #include <math.h>
 #include <string.h>
-#include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -54,8 +53,8 @@
 #define BAUD_RECONFIGURE 115200u /* baudrate after initialisation */
 
 /* macros to set the integer and fractional part of the baudrate generator */
-#define BAUD_INT(x) ((uint32_t)(10000000u/(16u*(x))))
-#define BAUD_FRAC(x) ((uint32_t)(10000000u/x-16u*BAUD_INT(x)+0.5f))
+#define BAUD_INT(x) ((uint32_t)(10000000.0/(16.0*(x))))
+#define BAUD_FRAC(x) ((uint32_t)((10000000.0/x-16.0*BAUD_INT(x))+0.5))
 
 /* usart interrupt vector number */
 #define IRQ_NUM 39
@@ -180,11 +179,11 @@ static void unpack_tp(const uint8_t* rdata, float* ret);
 static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
-static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate);
+static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint8_t rate);
 static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
   uint32_t dur, uint32_t acc, uint32_t acc_lim);
-static bool process_messages(void);
+static void process_messages(void);
 static void wait_tx_done(void);
 
 /*******************************************************************************
@@ -304,6 +303,7 @@ void gps_worker(void)
         start_svin();
         status = survey_in;
       }
+      break;
     }
 
     /* wait until the survey-in process is finished */
@@ -319,7 +319,7 @@ void gps_worker(void)
           cfg.x = svinfo.x;
           cfg.y = svinfo.y;
           cfg.z = svinfo.z;
-          cfg.accuracy = sqrt(svinfo.meanv);
+          cfg.accuracy = (uint32_t)sqrt((double)svinfo.meanv);
           cfg.fixpos_valid = true;
           status = fixpos_mode;
         }
@@ -461,7 +461,7 @@ static void start_transmit(const ubxbuffer_t* tmp)
   while(!txb.empty);
   disable_txempty_irq();
   txb.empty = false;
-  memcpy(txb.msg, tmp->msg, tmp->len);
+  (void)memcpy(txb.msg, tmp->msg, tmp->len);
   txb.len = tmp->len;
   txb.msgclass = tmp->msgclass;
   txb.msgid = tmp->msgid;
@@ -480,10 +480,10 @@ static void ubx_rxhandler(void)
 ==============================================================================*/
 {
   /* wrpos always points to a writable position */
-  static int wrpos = 0;
+  static uint32_t wrpos = 0;
 
   /* read the received data and put it into the circular buffer */
-  uint8_t tmp = USART3_DR;
+  uint8_t tmp = (uint8_t)USART3_DR;
   rxdata_raw[wrpos] = tmp;
   num_rxdata++;
 
@@ -499,7 +499,7 @@ static void ubx_rxhandler(void)
 
 
 /*============================================================================*/
-static bool process_messages(void)
+static void process_messages(void)
 /*------------------------------------------------------------------------------
   Function:
   checks whether there are messages to be received. if receive data is pending,
@@ -520,7 +520,7 @@ static bool process_messages(void)
 
   uint64_t time = 0;
 
-  while(true)
+  for(;;)
   {
     if(num_rxdata > 0)
     {
@@ -540,12 +540,12 @@ static bool process_messages(void)
       if(time == 0)
       {
         /* never actually started receiving something */
-        return false;
+        return;
       }
       if(get_uptime_msec() - time >= RECEIVE_TIMEOUT)
       {
         /* started receiving something, but didn't get the data on time */
-        return false;
+        return;
       }
       else
       {
@@ -670,12 +670,12 @@ static bool process_messages(void)
             if(rxb.msgid == UBX_ID_NAV_SAT)
             {
               unpack_sv(rxb.msg, &svi);
-              return true;
+              return;
             }
             else if(rxb.msgid == UBX_ID_NAV_PVT)
             {
               unpack_pvt(rxb.msg, &info);
-              return true;
+              return;
             }
           }
           else if(rxb.msgclass == UBX_CLASS_TIM)
@@ -683,12 +683,12 @@ static bool process_messages(void)
             if(rxb.msgid == UBX_ID_TIM_TP)
             {
               unpack_tp(rxb.msg, &qerr);
-              return true;
+              return;
             }
             else if(rxb.msgid == UBX_ID_TIM_SVIN)
             {
               unpack_svin(rxb.msg, &svinfo);
-              return true;
+              return;
             }
           }
           else if(rxb.msgclass == UBX_CLASS_ACK)
@@ -701,7 +701,7 @@ static bool process_messages(void)
             {
               got_nak = true;
             }
-            return true;
+            return;
           }
 
         }
@@ -783,7 +783,7 @@ static void ubx_txhandler(void)
 
     case ubx_len_lsb:
     {
-      tmpdata = txb.len;
+      tmpdata = (uint8_t)txb.len;
       USART3_DR = tmpdata;
       status = ubx_len_msb;
       break;
@@ -882,22 +882,20 @@ static bool gps_wait_ack(void)
 {
   got_ack = false;
   got_nak = false;
-  while(true)
+  for(;;)
   {
-    if(process_messages())
+    process_messages();
+    if(got_ack)
     {
-      if(got_ack)
-      {
-        return true;
-      }
-      else if(got_nak)
-      {
-        return false;
-      }
-      else
-      {
-        continue;
-      }
+      return true;
+    }
+    else if(got_nak)
+    {
+      return false;
+    }
+    else
+    {
+      continue;
     }
   }
 }
@@ -1124,7 +1122,7 @@ static void ubx_config_gnss(bool gps, bool glonass, bool galileo)
 
 
 /*============================================================================*/
-static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint32_t rate)
+static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint8_t rate)
 /*------------------------------------------------------------------------------
   Function:
   configure messages to be periodically sent. the messages of (msgclass, msgid)
@@ -1173,7 +1171,7 @@ static void ubx_config_navmodel(int8_t elev)
     pack_u8_le(tmp.msg, 3, 0);
     pack_u32_le(tmp.msg, 4, 0);
     pack_u32_le(tmp.msg, 8, 0);
-    pack_u8_le(tmp.msg, 12, elev); /* elevation mask */
+    pack_i8_le(tmp.msg, 12, elev); /* elevation mask */
     pack_u8_le(tmp.msg, 13, 0);
     pack_u16_le(tmp.msg, 14, 0);
     pack_u16_le(tmp.msg, 16, 0);
@@ -1217,7 +1215,7 @@ static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
     tmp.msgid = UBX_ID_CFG_TMODE2;
     tmp.len = 28;
 
-    pack_u8_le(tmp.msg, 0, mode);
+    pack_u8_le(tmp.msg, 0, (uint8_t)mode);
     pack_u8_le(tmp.msg, 1, 0);
     pack_u16_le(tmp.msg, 2, 0); /* use ecef coordinates */
     pack_i32_le(tmp.msg, 4, x); /* for fixed position mode only */
