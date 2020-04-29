@@ -1,0 +1,32 @@
+ /* include directories: */
+ -i"d:\bin\Lint\include\"
+
+ -d__attribute__(x)
+
+
+-e506 /* constant value boolean my arse */
+-e722 /* semicolon next to while() is deliberate */
+-e835 /* shift count of zero is deliberate */
+-e537 /* repeated include file is no problem */
++fsu /* strings are arrays of unsigned char */
++fan /* allow anonymous unions */
++fas /* allow anonymous unions */
+
+-t25 /* TABs are not allowed in source code. by setting the TAB size to a weird
+large value, we have a chance that lint will complain of misaligned indentations.
+in case of this, append a text to the message that clarifies this a bit. */
+-append(539,- maybe TABs are used instead of spaces?)
+-append(525,- maybe TABs are used there?)
+-append(725,- maybe TABs are used there?)
+
+/* clarify some Lint diagnostics */
+-append(716, - better use for(;;) if you intend to define an endless loop. See Lint manual.)
+-append(19, - mostly due to an extraneous semicolon (probably in macro definition?))
+/*+e900  always produce at least one line of output */
+/*--ffn  use full path names in output, otherwise Ultraedit can't find files */
+-width(180,4) /* break exceedingly long lines */
+-hF1 /* always supply a file */
+-"format=%f:%l:%c: %t %n: %m" /* msg format in Ultraedit output window */
+-zero
+
+-esym(522,__disable_irq,__enable_irq)
