@@ -195,7 +195,7 @@ static void irq_handler(void)
   if((sr & cr) == BIT_05)
   {
     /* DR must be read anyways to acknowledge the interrupt */
-    uint8_t tmp = USART2_DR;
+    uint8_t tmp = (uint8_t)USART2_DR;
 
     static uint32_t wrpos = 0;
     rxbuffer[wrpos] = tmp;

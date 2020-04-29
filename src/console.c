@@ -59,12 +59,12 @@ typedef enum
   startup,
   prompt,
   input,
-  evaluate,
+  evaluate
 } consolestatus_t;
 
 typedef struct
 {
-  void(*func)(int argc, const char* argv[]);
+  void(*func)(int argc, const char* const argv[]);
   const char* name;
   const char* helpstring;
 } command_t;
@@ -73,18 +73,18 @@ typedef struct
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks);
-static void interpreter(int argc, const char* argv[]);
-static void help(int argc, const char* argv[]);
-static void conf_gnss(int argc, const char* argv[]);
-static void conf_elev_mask(int argc, const char* argv[]);
-static void savecfg(int argc, const char* argv[]);
-static void showcfg(int argc, const char* argv[]);
-static void enable_disp(int argc, const char* argv[]);
-static void svin(int argc, const char* argv[]);
-static void sat(int argc, const char* argv[]);
-static void restart(int argc, const char* argv[]);
-static void auto_svin(int argc, const char* argv[]);
+static int find_tokens(char* line, const char** toks, int maxtoks);
+static void interpreter(int argc, const char* const argv[]);
+static void help(int argc, const char* const argv[]);
+static void conf_gnss(int argc, const char* const argv[]);
+static void conf_elev_mask(int argc, const char* const argv[]);
+static void savecfg(int argc, const char* const argv[]);
+static void showcfg(int argc, const char* const argv[]);
+static void enable_disp(int argc, const char* const argv[]);
+static void svin(int argc, const char* const argv[]);
+static void sat(int argc, const char* const argv[]);
+static void restart(int argc, const char* const argv[]);
+static void auto_svin(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -226,7 +226,7 @@ void console_worker(void)
  ******************************************************************************/
 
 /*============================================================================*/
-static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks)
+static int find_tokens(char* line, const char** toks, int maxtoks)
 /*------------------------------------------------------------------------------
   Function:
   finds all tokens separated by at least one space and returns the pointers to
@@ -239,7 +239,7 @@ static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks)
 {
   char* ptr = strtok(line, " ");
 
-  for(uint32_t toknum = 0; toknum < maxtoks; toknum++)
+  for(int toknum = 0; toknum < maxtoks; toknum++)
   {
     if(ptr != NULL)
     {
@@ -256,7 +256,7 @@ static uint32_t find_tokens(char* line, const char** toks, uint32_t maxtoks)
 
 
 /*============================================================================*/
-static void interpreter(int argc, const char* argv[])
+static void interpreter(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   the interpreter gets the number of arguments and the individual arguments,
@@ -287,7 +287,7 @@ static void interpreter(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void help(int argc, const char* argv[])
+static void help(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   the interpreter gets the number of arguments and the individual arguments,
@@ -315,7 +315,7 @@ static void help(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void conf_gnss(int argc, const char* argv[])
+static void conf_gnss(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the gnss systems to be used
@@ -355,7 +355,7 @@ static void conf_gnss(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void conf_elev_mask(int argc, const char* argv[])
+static void conf_elev_mask(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the elevation mask
@@ -371,14 +371,14 @@ static void conf_elev_mask(int argc, const char* argv[])
   }
   else
   {
-    int8_t elevmask = (int8_t)atoi(argv[0]);
+    int elevmask = atoi(argv[0]);
     if((elevmask < 0) || (elevmask > 90))
     {
       (void)printf("elevation mask %d deg out of range!\n", elevmask);
     }
     else
     {
-      cfg.elevation_mask = elevmask;
+      cfg.elevation_mask = (int8_t)elevmask;
       (void)printf("set the elevation mask to %d deg\n", elevmask);
     }
   }
@@ -386,7 +386,7 @@ static void conf_elev_mask(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void savecfg(int argc, const char* argv[])
+static void savecfg(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   save the configuration to the eeprom
@@ -410,7 +410,7 @@ static void savecfg(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void showcfg(int argc, const char* argv[])
+static void showcfg(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays the currently used configuration data (not necessarily stored in
@@ -448,7 +448,7 @@ static void showcfg(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void enable_disp(int argc, const char* argv[])
+static void enable_disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enables the auto-display -- currently implemented as an UGLY HACK
@@ -468,7 +468,7 @@ static void enable_disp(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void svin(int argc, const char* argv[])
+static void svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   starts a survey-in usng a given duration and accuracy limit
@@ -510,7 +510,7 @@ static void svin(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void sat(int argc, const char* argv[])
+static void sat(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays satellite info
@@ -524,11 +524,11 @@ static void sat(int argc, const char* argv[])
 
   if(argc == 0)
   {
-    extern sv_info_t svi;
-    for(int i = 0; i < svi.numsv; i++)
+    extern sv_info_t svin_info;
+    for(int i = 0; i < svin_info.numsv; i++)
     {
       const char* gnss;
-      switch(svi.sats[i].gnssid)
+      switch(svin_info.sats[i].gnssid)
       {
         case 0:
         {
@@ -555,16 +555,17 @@ static void sat(int argc, const char* argv[])
         }
       }
       (void)printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
-        gnss, svi.sats[i].svid, svi.sats[i].cno, svi.sats[i].azim, svi.sats[i].elev);
+        gnss, svin_info.sats[i].svid, svin_info.sats[i].cno,
+        svin_info.sats[i].azim, svin_info.sats[i].elev);
     }
-    uint64_t age = get_uptime_msec() - svi.time;
-    (void)printf("%d sats; last update: %llu ms ago\n\n", svi.numsv, age);
+    uint64_t age = get_uptime_msec() - svin_info.time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", svin_info.numsv, age);
   }
 }
 
 
 /*============================================================================*/
-static void restart(int argc, const char* argv[])
+static void restart(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays satellite info
@@ -584,7 +585,7 @@ static void restart(int argc, const char* argv[])
 
 
 /*============================================================================*/
-static void auto_svin(int argc, const char* argv[])
+static void auto_svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure auto survey-in

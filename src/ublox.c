@@ -104,7 +104,7 @@ typedef enum
   wait_fix,
   normal,
   fixpos_mode,
-  survey_in,
+  survey_in
 } workerstatus_t;
 
 typedef enum
@@ -117,7 +117,7 @@ typedef enum
   ubx_len_msb,
   ubx_data,
   ubx_cka,
-  ubx_ckb,
+  ubx_ckb
 } irqstatus_t;
 
 typedef struct
@@ -151,9 +151,9 @@ static uint8_t rxdata_raw[RXBUFFER_SIZE];
 static volatile uint32_t num_rxdata;
 
 static float qerr;
-gpsinfo_t info;
-svindata_t svinfo;
-sv_info_t svi;
+gpsinfo_t pvt_info;
+svindata_t svin_info;
+sv_info_t sat_info;
 
 /* not static because from eeprom */
 extern config_t cfg;
@@ -298,7 +298,7 @@ void gps_worker(void)
     {
       /* start survey-in as soon as there is a fix and the position
          data is not older than 1sec */
-      if((currenttime - info.time <= 1000u) && (info.fixtype == 3))
+      if((currenttime - pvt_info.time <= 1000u) && (pvt_info.fixtype == 3))
       {
         start_svin();
         status = survey_in;
@@ -313,13 +313,13 @@ void gps_worker(void)
         /* if we got some info about the survey-in AND the survey-in is valid
            AND the survey-in is not active anymore, we should store the current
            position in the eeprom and switch to fixed-position mode */
-        if((currenttime - svinfo.time <= 1000u) &&
-           (svinfo.valid == true) && (svinfo.active == false))
+        if((currenttime - svin_info.time <= 1000u) &&
+           (svin_info.valid == true) && (svin_info.active == false))
         {
-          cfg.x = svinfo.x;
-          cfg.y = svinfo.y;
-          cfg.z = svinfo.z;
-          cfg.accuracy = (uint32_t)sqrt((double)svinfo.meanv);
+          cfg.x = svin_info.x;
+          cfg.y = svin_info.y;
+          cfg.z = svin_info.z;
+          cfg.accuracy = (uint32_t)sqrt((double)svin_info.meanv);
           cfg.fixpos_valid = true;
           status = fixpos_mode;
         }
@@ -509,7 +509,7 @@ static void process_messages(void)
   out: returns true when one complete message was received
 ==============================================================================*/
 {
-  irqstatus_t status = ubx_header1;
+  irqstatus_t rxstatus = ubx_header1;
   static uint32_t rdpos = 0;
 
   uint32_t wrpos;
@@ -553,7 +553,7 @@ static void process_messages(void)
       }
     }
 
-    switch(status)
+    switch(rxstatus)
     {
       /* can only proceed if the sync1 and sync2 bytes are received */
       case ubx_header1:
@@ -561,7 +561,7 @@ static void process_messages(void)
         if(tmpdata == SYNC1)
         {
           time = get_uptime_msec();
-          status = ubx_header2;
+          rxstatus = ubx_header2;
         }
 
         continue;
@@ -571,11 +571,11 @@ static void process_messages(void)
       {
         if(tmpdata == SYNC2)
         {
-          status = ubx_class;
+          rxstatus = ubx_class;
         }
         else
         {
-          status = ubx_header1;
+          rxstatus = ubx_header1;
         }
 
         continue;
@@ -588,21 +588,21 @@ static void process_messages(void)
         cka = 0;
         ckb = 0;
         rxb.msgclass = tmpdata;
-        status = ubx_id;
+        rxstatus = ubx_id;
         break;
       }
 
       case ubx_id:
       {
         rxb.msgid = tmpdata;
-        status = ubx_len_lsb;
+        rxstatus = ubx_len_lsb;
         break;
       }
 
       case ubx_len_lsb:
       {
         rxb.len = tmpdata;
-        status = ubx_len_msb;
+        rxstatus = ubx_len_msb;
         break;
       }
 
@@ -616,13 +616,13 @@ static void process_messages(void)
         /* if the length received will not fit into the receive buffer, then abort */
         if(rxb.len > MAX_UBX_LEN)
         {
-          status = ubx_header1;
+          rxstatus = ubx_header1;
         }
         else
         {
           /* reset the writing position in the receive buffer */
           wrpos = 0;
-          status = ubx_data;
+          rxstatus = ubx_data;
         }
         break;
       }
@@ -634,7 +634,7 @@ static void process_messages(void)
 
         if(wrpos == rxb.len)
         {
-          status = ubx_cka;
+          rxstatus = ubx_cka;
         }
 
         break;
@@ -646,11 +646,11 @@ static void process_messages(void)
            if it doesn't match, abort */
         if(tmpdata == cka)
         {
-          status = ubx_ckb;
+          rxstatus = ubx_ckb;
         }
         else
         {
-          status = ubx_header1;
+          rxstatus = ubx_header1;
         }
 
         continue;
@@ -669,12 +669,12 @@ static void process_messages(void)
           {
             if(rxb.msgid == UBX_ID_NAV_SAT)
             {
-              unpack_sv(rxb.msg, &svi);
+              unpack_sv(rxb.msg, &sat_info);
               return;
             }
             else if(rxb.msgid == UBX_ID_NAV_PVT)
             {
-              unpack_pvt(rxb.msg, &info);
+              unpack_pvt(rxb.msg, &pvt_info);
               return;
             }
           }
@@ -687,7 +687,7 @@ static void process_messages(void)
             }
             else if(rxb.msgid == UBX_ID_TIM_SVIN)
             {
-              unpack_svin(rxb.msg, &svinfo);
+              unpack_svin(rxb.msg, &svin_info);
               return;
             }
           }
@@ -726,7 +726,7 @@ static void ubx_txhandler(void)
   out: none
 ==============================================================================*/
 {
-  static irqstatus_t status = ubx_header1;
+  static irqstatus_t txstatus = ubx_header1;
   static uint8_t cka;
   static uint8_t ckb;
   static uint32_t read_pos;
@@ -739,13 +739,13 @@ static void ubx_txhandler(void)
     return;
   }
 
-  switch(status)
+  switch(txstatus)
   {
     /* send sync1 then sync2; from here on, all the data to be sent is in the tx buffer */
     case ubx_header1:
     {
       USART3_DR = SYNC1;
-      status = ubx_header2;
+      txstatus = ubx_header2;
 
       /* return instead of break skips the checksum calcualtion */
       return;
@@ -754,7 +754,7 @@ static void ubx_txhandler(void)
     case ubx_header2:
     {
       USART3_DR = SYNC2;
-      status = ubx_class;
+      txstatus = ubx_class;
 
       /* reset the checksum computation and start reading ad position */
       cka = 0;
@@ -769,7 +769,7 @@ static void ubx_txhandler(void)
     {
       tmpdata = txb.msgclass;
       USART3_DR = tmpdata;
-      status = ubx_id;
+      txstatus = ubx_id;
       break;
     }
 
@@ -777,7 +777,7 @@ static void ubx_txhandler(void)
     {
       tmpdata = txb.msgid;
       USART3_DR = tmpdata;
-      status = ubx_len_lsb;
+      txstatus = ubx_len_lsb;
       break;
     }
 
@@ -785,7 +785,7 @@ static void ubx_txhandler(void)
     {
       tmpdata = (uint8_t)txb.len;
       USART3_DR = tmpdata;
-      status = ubx_len_msb;
+      txstatus = ubx_len_msb;
       break;
     }
 
@@ -793,7 +793,7 @@ static void ubx_txhandler(void)
     {
       tmpdata = txb.len >> 8;
       USART3_DR = tmpdata;
-      status = ubx_data;
+      txstatus = ubx_data;
       break;
     }
 
@@ -804,7 +804,7 @@ static void ubx_txhandler(void)
       read_pos++;
       if(read_pos == txb.len)
       {
-        status = ubx_cka;
+        txstatus = ubx_cka;
       }
       break;
     }
@@ -812,7 +812,7 @@ static void ubx_txhandler(void)
     case ubx_cka:
     {
       USART3_DR = cka;
-      status = ubx_ckb;
+      txstatus = ubx_ckb;
 
       /* return instead of break skips the checksum calcualtion */
       return;
@@ -822,7 +822,7 @@ static void ubx_txhandler(void)
     {
       disable_txempty_irq();
       USART3_DR = ckb;
-      status = ubx_header1;
+      txstatus = ubx_header1;
       txb.empty = true;
 
       /* return instead of break skips the checksum calcualtion */
@@ -832,7 +832,7 @@ static void ubx_txhandler(void)
     default:
     {
       disable_txempty_irq();
-      status = ubx_header1;
+      txstatus = ubx_header1;
 
       /* return instead of break skips the checksum calcualtion */
       return;
@@ -854,17 +854,17 @@ static void uart_irq_handler(void)
   out: none
 ==============================================================================*/
 {
-  uint32_t status = USART3_SR;
+  uint32_t sr = USART3_SR;
   uint32_t cr = USART3_CR1;
 
   /* rx buffer not empty? */
-  if(status & BIT_05)
+  if(sr & BIT_05)
   {
     ubx_rxhandler();
   }
 
   /* tx buffer empty? */
-  if((status & BIT_07) && (cr & BIT_07))
+  if((sr & BIT_07) && (cr & BIT_07))
   {
     ubx_txhandler();
   }
