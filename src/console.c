@@ -524,11 +524,11 @@ static void sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    extern sv_info_t svin_info;
-    for(int i = 0; i < svin_info.numsv; i++)
+    extern sv_info_t sat_info;
+    for(int i = 0; i < sat_info.numsv; i++)
     {
       const char* gnss;
-      switch(svin_info.sats[i].gnssid)
+      switch(sat_info.sats[i].gnssid)
       {
         case 0:
         {
@@ -555,11 +555,11 @@ static void sat(int argc, const char* const argv[])
         }
       }
       (void)printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
-        gnss, svin_info.sats[i].svid, svin_info.sats[i].cno,
-        svin_info.sats[i].azim, svin_info.sats[i].elev);
+        gnss, sat_info.sats[i].svid, sat_info.sats[i].cno,
+        sat_info.sats[i].azim, sat_info.sats[i].elev);
     }
-    uint64_t age = get_uptime_msec() - svin_info.time;
-    (void)printf("%d sats; last update: %llu ms ago\n\n", svin_info.numsv, age);
+    uint64_t age = get_uptime_msec() - sat_info.time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", sat_info.numsv, age);
   }
 }
 
