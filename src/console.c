@@ -525,6 +525,8 @@ static void sat(int argc, const char* const argv[])
   if(argc == 0)
   {
     extern sv_info_t sat_info;
+    extern gpsinfo_t pvt_info;
+
     for(int i = 0; i < sat_info.numsv; i++)
     {
       const char* gnss;
@@ -558,6 +560,30 @@ static void sat(int argc, const char* const argv[])
         gnss, sat_info.sats[i].svid, sat_info.sats[i].cno,
         sat_info.sats[i].azim, sat_info.sats[i].elev);
     }
+
+    const char* fixtype;
+    switch(pvt_info.fixtype)
+    {
+      case 3:
+      {
+        fixtype = "3D fix";
+        break;
+      }
+
+      case 5:
+      {
+        fixtype = "timing";
+        break;
+      }
+
+      default:
+      {
+        fixtype = "none";
+        break;
+      }
+    }
+    (void)printf("fix status: %s\n", fixtype);
+
     uint64_t age = get_uptime_msec() - sat_info.time;
     (void)printf("%d sats; last update: %llu ms ago\n\n", sat_info.numsv, age);
   }
