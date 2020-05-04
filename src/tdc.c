@@ -180,6 +180,19 @@ void tdc_int_ack(void)
   } while(true);
 }
 
+
+void tdc_waitready(void)
+{
+  for(;;)
+  {
+    if(tdc_check_irq())
+    {
+      tdc_int_ack();
+      return;
+    }
+  }
+}
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
