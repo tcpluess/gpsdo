@@ -60,7 +60,7 @@
 #define IRQ_NUM 39
 
 /* maximum length of the buffers */
-#define MAX_UBX_LEN 400u
+#define MAX_UBX_LEN 500u
 
 /* ubx message classes */
 #define UBX_CLASS_NAV 0x01u
