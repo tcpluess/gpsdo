@@ -357,13 +357,11 @@ static void capture_irq(void)
   out: none
 ==============================================================================*/
 {
-  /* timebase reset requested? */
   if(res)
   {
-    /* then this is no valid capture event */
+    /* timebase reset requested */
+    TIM2_CNT = 0;
     res = false;
-    TIM2_CNT = 55;
-    tic_capture = 0;
   }
   else
   {
