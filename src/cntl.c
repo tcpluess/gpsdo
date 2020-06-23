@@ -50,7 +50,7 @@
 #define OSCGAIN 120.0/32768.0
 
 /* ocxo current limit when warmed up */
-#define OCXO_CURRENT_LIM 250.0f
+#define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -64,7 +64,7 @@ typedef enum
 {
   warmup,
   holdover,
-  normal
+  track_lock
 } status_t;
 
 
@@ -137,14 +137,17 @@ static bool check_fix(void)
 
   /* position, velocity and time info */
   extern gpsinfo_t pvt_info;
-  uint8_t fix = pvt_info.fixtype;
+  uint8_t fixtype = pvt_info.fixtype;
+  uint64_t age = ms - pvt_info.time;
 
-  /* fix is only valid if it is a timing or 3d fix */
-  if((fix == 3) || (fix == 5))
+  /* fix is only valid if it is a timing or 3d fix; ignore old data */
+  if(age < 1000)
   {
-    return true;
+    if((fixtype == 3) || (fixtype == 5))
+    {
+      return true;
+    }
   }
-
   return false;
 }
 
@@ -301,7 +304,8 @@ static void cntl(void)
 
 
 
-#if 0
+#if 1
+
 void cntl_worker(void)
 {
   switch(gpsdostatus)
@@ -317,7 +321,16 @@ void cntl_worker(void)
       if(iocxo < OCXO_CURRENT_LIM)
       {
         ppsenable(true);
-        gpsdostatus = holdover;
+
+        /* if gnss is available, go to track/lock mode, otherwise holdover */
+        if(check_fix())
+        {
+          gpsdostatus = track_lock;
+        }
+        else
+        {
+          gpsdostatus = holdover;
+        }
       }
       break;
     }
@@ -329,17 +342,18 @@ void cntl_worker(void)
 
       if(check_fix())
       {
-        gpsdostatus = normal;
+        gpsdostatus = track_lock;
       }
       break;
     }
 
-    /* normal mode: control loop is active */
-    case normal:
+    /* track/lock mode: control loop is active */
+    case track_lock:
     {
       blink_slow(false);
 
-      /* only look at the 1pps signal if the fix is valid */
+      /* only look at the 1pps signal if the fix is valid; if fix is invalid,
+         go to holdover mode */
       if(check_fix())
       {
         /* is it time to run the control loop? */
@@ -356,7 +370,9 @@ void cntl_worker(void)
     }
   }
 }
+
 #endif
+#if 0
 
 
 void cntl_worker(void)
@@ -550,6 +566,8 @@ void cntl_worker(void)
       GPIOE_BSRR = BIT_30;
     }*/
 }
+
+#endif
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
