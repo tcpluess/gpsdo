@@ -47,7 +47,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define OSCGAIN 120.0/32768.0
+#define OSCGAIN (120.0/32768.0)
 
 /* ocxo current limit when warmed up */
 #define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
@@ -74,15 +74,17 @@ typedef enum
   locked,
   stable,
 
-  init,
+  /*init,
   lock1,
   lock2,
-  lock3
+  lock3*/
 } controlstatus_t;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
+
+static float read_tic(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -107,7 +109,7 @@ float ticfilt = 0.0f;
 float ticfiltlast = 0.0f;
 
 
-controlstatus_t mstatus = init;
+//controlstatus_t mstatus = init;
 int loopcount = 0;
 uint16_t dacval = 32768;
 
@@ -131,25 +133,7 @@ static controlstatus_t stat = fast_track;
  ******************************************************************************/
 
 
-static bool check_fix(void)
-{
-  uint64_t ms = get_uptime_msec();
 
-  /* position, velocity and time info */
-  extern gpsinfo_t pvt_info;
-  uint8_t fixtype = pvt_info.fixtype;
-  uint64_t age = ms - pvt_info.time;
-
-  /* fix is only valid if it is a timing or 3d fix; ignore old data */
-  if(age < 1000)
-  {
-    if((fixtype == 3) || (fixtype == 5))
-    {
-      return true;
-    }
-  }
-  return false;
-}
 
 
 static void blink(uint32_t ontime, uint32_t offtime)
@@ -204,36 +188,69 @@ static void blink_slow(bool on)
   }
 }
 
-static float mtic(void)
-{
-  tdc_waitready();
-  float tic = get_tic();
-  float qerr = get_timepulse_error();
-  enable_tdc();
-  return tic - qerr;
-}
 
+static uint16_t pi_control(double KP, double KI, float e)
+{
+  static double esum = 32768.0;
+  double P = e*KP;
+  double I = P/KI;
+  esum = esum + I;
+  if(esum > 65535)
+  {
+    esum = 65535.0;
+  }
+  else if(esum < 0)
+  {
+    esum = 0.0;
+  }
+  efc = P + esum;
+  if(efc > 65535)
+  {
+    return 65535;
+  }
+  else if(efc < 0)
+  {
+    return 0;
+  }
+  else
+  {
+    return (uint16_t)efc;
+  }
+}
 
 static void cntl(void)
 {
-
   static uint32_t statuscount = 0;
 
-
-  float tic = mtic();
+  /* determine the time interval (phase) error */
+  float tic = read_tic();
   float e = tic + 300 - soll;
-  double KP;
-  double KI;
+  double abs_err = fabs(e);
 
+  double kp, ki;
+  uint16_t dacval;
+  const char* status;
+
+  /* if the phase error is too large it takes too much time until
+     the controller would settle, so we reset the timers. however
+     this will give a sharp 'bump' in the frequency and phase. */
+  if(abs_err > 10000)
+  {
+    timebase_reset();
+  }
 
   switch(stat)
   {
+    /* fast track: is normally used shortly after the ocxo has just
+       warmed up. use small time constant such that the phase settles
+       more quickly */
     case fast_track:
     {
-      KP  = 1.0/(OSCGAIN * 10);
-      KI = 10;
+      kp  = 1.0/(OSCGAIN * 10);
+      ki = 10;
 
-      if(fabs(e) < 100.0f)
+      /* count for how many seconds the error stays small */
+      if(abs_err < 100.0f)
       {
         statuscount++;
       }
@@ -242,20 +259,25 @@ static void cntl(void)
         statuscount = 0;
       }
 
+      /* if the error says small for the time specified, the
+         controller time constants can be increased */
       if(statuscount >= 600)
       {
         statuscount = 0;
         stat = locked;
       }
+      status = "fasttrack";
       break;
     }
 
+    /* locked: use an intermediate time constant after the ocxo has
+       settled for a while. */
     case locked:
     {
-      KP  = 1.0/(OSCGAIN * 100);
-      KI = 100;
+      kp  = 1.0/(OSCGAIN * 100);
+      ki = 100;
 
-      if(fabs(e) < 20.0f)
+      if(abs_err < 100.0f)
       {
         statuscount++;
       }
@@ -270,36 +292,39 @@ static void cntl(void)
         statuscount = 0;
         stat = stable;
       }
+      status = "locked";
       break;
     }
 
+    /* this should be the normal operating state. */
     case stable:
     {
-      KP  = 1.0/(OSCGAIN * 200);
-      KI = 200;
+      /* TODO: read these constants from the eeprom */
+      kp  = 1.0/(OSCGAIN * 400);
+      ki = 400;
 
-      if(fabs(e) > 10.0f)
+      if(abs_err > 100.0f)
       {
         statuscount = 0;
         stat = locked;
       }
+      status = "stable";
       break;
     }
   }
 
-  double P = e*KP;
-  double I = P/KI;
-  esum = esum + I;
-  if(esum > 65535)
-    esum = 65535;
-  else if(esum < 0)
-    esum = 0;
-  efc = P + esum;
-  if(efc > 65535)
-    efc=65535;
-  else if(efc < 0)
-    efc = 0;
-  set_dac(efc);
+  /* calculate the control value and set the dac accordingly */
+  dacval = pi_control(kp, ki, e);
+  set_dac(dacval);
+
+  /* if auto display is enabled, print the status information */
+  extern bool auto_disp;
+  if(auto_disp)
+  {
+    float i = get_iocxo();
+    float t = get_temperature();
+    (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
+  }
 }
 
 
@@ -371,8 +396,7 @@ void cntl_worker(void)
   }
 }
 
-#endif
-#if 0
+#else
 
 
 void cntl_worker(void)
@@ -572,6 +596,15 @@ void cntl_worker(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+static float read_tic(void)
+{
+  tdc_waitready();
+  float tic = get_tic();
+  float qerr = get_timepulse_error();
+  enable_tdc();
+  return tic - qerr;
+}
 
 /*******************************************************************************
  * END OF CODE

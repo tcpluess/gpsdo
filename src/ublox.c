@@ -371,6 +371,28 @@ void gps_restart(void)
   status = reset;
 }
 
+
+bool check_fix(void)
+{
+  uint64_t ms = get_uptime_msec();
+
+  /* position, velocity and time info */
+  extern gpsinfo_t pvt_info;
+  uint8_t fixtype = pvt_info.fixtype;
+  uint64_t age = ms - pvt_info.time;
+
+  /* fix is only valid if not too old */
+  if(age < 1000)
+  {
+    /* 3d fix = 3, timing fix = 5 */
+    if((fixtype == 3) || (fixtype == 5))
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
