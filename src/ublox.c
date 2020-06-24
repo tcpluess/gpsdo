@@ -42,6 +42,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -213,6 +214,7 @@ void ublox_init(void)
 
 void gps_worker(void)
 {
+  extern bool auto_disp;
   static uint64_t timestamp = 0;
   uint64_t currenttime = get_uptime_msec();
 
@@ -309,6 +311,10 @@ void gps_worker(void)
     /* wait until the survey-in process is finished */
     case survey_in:
     {
+      if(auto_disp)
+      {
+        (void)printf("SVIN: obs=%lu mv=%f", svin_info.obs, sqrt(svin_info.meanv)/1000.0);
+      }
 
         /* if we got some info about the survey-in AND the survey-in is valid
            AND the survey-in is not active anymore, we should store the current
@@ -333,6 +339,11 @@ void gps_worker(void)
 
       break;
     }
+  }
+
+  if(auto_disp)
+  {
+    (void)printf("GNSS: #sat=%d lat=%f lon=%f alt=%ld pdop=%d tacc=%lu", sat_info.numsv, pvt_info.lat, pvt_info.lon, pvt_info.height, pvt_info.pdop, pvt_info.tacc);
   }
 }
 

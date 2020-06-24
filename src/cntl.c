@@ -52,6 +52,19 @@
 /* ocxo current limit when warmed up */
 #define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
 
+/* define the time limits after which the control loop constants are switched */
+#define FASTTRACK_TIME_LIMIT 5u /* min */
+#define LOCKED_TIME_LIMIT 30u /* min */
+
+/* allowed phase error to change the control loop constants */
+#define MAX_PHASE_ERR 100.0f /* ns */
+
+/* the tic actually has an offset of 300ns because of the synchronisation
+   logic internal to the stm32. this offset was determined empirically and
+   is chosten such that at a tic value of 0, the 1PPS output and the tic input
+   occur at the same time. */
+#define TIC_OFFSET 300u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -85,6 +98,8 @@ typedef enum
  ******************************************************************************/
 
 static float read_tic(void);
+static uint16_t pi_control(double KP, double KI, double damp, float e);
+static void cntl(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -94,9 +109,6 @@ static float read_tic(void);
 uint64_t last_pps = 0;
 uint32_t numpps = 0;
 uint64_t ms;
-double KP;
-double KI;
-float AVG;
 
 double esum = 32768.0;
 float e=0;
@@ -189,148 +201,6 @@ static void blink_slow(bool on)
 }
 
 
-static uint16_t pi_control(double KP, double KI, float e)
-{
-  static double esum = 32768.0;
-  double P = e*KP;
-  double I = P/KI;
-  esum = esum + I;
-  if(esum > 65535)
-  {
-    esum = 65535.0;
-  }
-  else if(esum < 0)
-  {
-    esum = 0.0;
-  }
-  efc = P + esum;
-  if(efc > 65535)
-  {
-    return 65535;
-  }
-  else if(efc < 0)
-  {
-    return 0;
-  }
-  else
-  {
-    return (uint16_t)efc;
-  }
-}
-
-static void cntl(void)
-{
-  static uint32_t statuscount = 0;
-
-  /* determine the time interval (phase) error */
-  float tic = read_tic();
-  float e = tic + 300 - soll;
-  double abs_err = fabs(e);
-
-  double kp, ki;
-  uint16_t dacval;
-  const char* status;
-
-  /* if the phase error is too large it takes too much time until
-     the controller would settle, so we reset the timers. however
-     this will give a sharp 'bump' in the frequency and phase. */
-  if(abs_err > 10000)
-  {
-    timebase_reset();
-  }
-
-  switch(stat)
-  {
-    /* fast track: is normally used shortly after the ocxo has just
-       warmed up. use small time constant such that the phase settles
-       more quickly */
-    case fast_track:
-    {
-      kp  = 1.0/(OSCGAIN * 10);
-      ki = 10;
-
-      /* count for how many seconds the error stays small */
-      if(abs_err < 100.0f)
-      {
-        statuscount++;
-      }
-      else
-      {
-        statuscount = 0;
-      }
-
-      /* if the error says small for the time specified, the
-         controller time constants can be increased */
-      if(statuscount >= 600)
-      {
-        statuscount = 0;
-        stat = locked;
-      }
-      status = "fasttrack";
-      break;
-    }
-
-    /* locked: use an intermediate time constant after the ocxo has
-       settled for a while. */
-    case locked:
-    {
-      kp  = 1.0/(OSCGAIN * 100);
-      ki = 100;
-
-      if(abs_err < 100.0f)
-      {
-        statuscount++;
-      }
-      else
-      {
-        statuscount = 0;
-      }
-
-      if(statuscount >= 1800)
-      {
-        cfg.last_dacval = dacval;
-        statuscount = 0;
-        stat = stable;
-      }
-      status = "locked";
-      break;
-    }
-
-    /* this should be the normal operating state. */
-    case stable:
-    {
-      /* TODO: read these constants from the eeprom */
-      kp  = 1.0/(OSCGAIN * 400);
-      ki = 400;
-
-      if(abs_err > 100.0f)
-      {
-        statuscount = 0;
-        stat = locked;
-      }
-      status = "stable";
-      break;
-    }
-  }
-
-  /* calculate the control value and set the dac accordingly */
-  dacval = pi_control(kp, ki, e);
-  set_dac(dacval);
-
-  /* if auto display is enabled, print the status information */
-  extern bool auto_disp;
-  if(auto_disp)
-  {
-    float i = get_iocxo();
-    float t = get_temperature();
-    (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
-  }
-}
-
-
-
-#if 1
-
 void cntl_worker(void)
 {
   switch(gpsdostatus)
@@ -396,203 +266,6 @@ void cntl_worker(void)
   }
 }
 
-#else
-
-
-void cntl_worker(void)
-{
-  extern gpsinfo_t pvt_info;
-
-
-
-  ms = get_uptime_msec();
-
-    if(ms > event)
-    {
-      GPIOE_BSRR = BIT_31;
-    }
-
-    /* do nothing until a 1pps pulse has been registered */
-    if(pps_elapsed())
-    {
-      last_pps = get_uptime_msec();
-      GPIOE_BSRR = BIT_15;
-      if((ms - event > 1200u) && (event != 0))
-      {
-        //printf("missed pps");
-      }
-      event = ms + 100u;
-      start_conversion();
-
-
-      loopcount++;
-
-
-
-        switch(mstatus)
-        {
-          case init:
-          {
-            KP = 1.0/(OSCGAIN * 10);
-            KI = 10;
-            AVG = 1.0f;
-            if(fabs(e) > 100.0)
-            {
-              loopcount=0;
-            }
-            else if(loopcount > 600)
-            {
-              cfg.last_dacval = dacval;
-              mstatus = lock1;
-              loopcount = 0;
-            }
-          }
-          break;
-
-          case lock1:
-          {
-            KP = 1.0/(OSCGAIN * 100);
-            KI = 100;
-            AVG = 1.0f;
-
-            if(fabs(e) > 30.0)
-            {
-              loopcount = 0;
-            }
-            else if(loopcount > 3600)
-            {
-              cfg.last_dacval = dacval;
-              mstatus = lock2;
-              loopcount = 0;
-
-             /* cfg.last_dacval = esum;
-              save_config();*/
-            }
-          }
-          break;
-
-          case lock2:
-          {
-            KP = 1.0/(OSCGAIN*200);
-            KI = 200;
-            AVG = 1.0f;
-            if(fabs(e)>10)
-            {
-              cfg.last_dacval = dacval;
-              loopcount=0;
-            }
-            /*else if(loopcount > 1800)
-            {
-              mstatus = lock3;
-              loopcount = 0;
-            }*/
-          }
-
-          case lock3:
-          {
-            KP = 1.0/(OSCGAIN*2000);
-            KI = 2000;
-            AVG = 0.02f;
-          }
-          break;
-        }
-
-
-
-
-
-
-
-      /* obtain the phase error measured */
-      float tic = mtic();
-
-
-
-      /*if(fabs(tic - ticfilt) < 10.0f)
-      {*/
-       // ticfilt += (tic - ticfilt) * AVG;
-      ticfilt = tic;
-     // ticfilt = tic;
-      //}
-
-      /* enable the interpolator for the next measurement */
-
-
-    if(fabs(tic) > 20000)
-      {
-        timebase_reset();
-        return;
-      }
-
-      // THIS WOULD BE A QUICK AND DIRTY PI-CONTROLLER
-      // 300 ns offset due to input synchronization logic!!!
-      e = ticfilt + 300 - soll; //+ (ticfilt-ticfiltlast);
-      ticfiltlast = ticfilt;
-
-      double P = e*KP;
-      double I = P/KI;
-      esum = esum + I;
-      if(esum > 65535)
-        esum = 65535;
-      else if(esum < 0)
-        esum = 0;
-      efc = P + esum;
-      /*if(efcfilt > 65535)
-        efcfilt = 65535;
-      else if(efcfilt < 0)
-        efcfilt = 0;*/
-      if(efc > 65535)
-        efc=65535;
-      else if(efc < 0)
-        efc = 0;
-      //efcfilt = AVG*efc + (1.0f-AVG)*efcfilt;
-      dacval = efc;
-      set_dac(dacval);
-
-
-      // do nothing but print the phase
-      float i = get_iocxo();
-      float tmp = get_temperature();
-
-      if(fabs(e) < 20)
-      {
-        GPIOE_BSRR = BIT_14;
-      }
-      else
-      {
-        GPIOE_BSRR = BIT_30;
-      }
-
-      extern bool auto_disp;
-      extern uint32_t tim;
-      if(auto_disp)
-      {
-        //printf("%f %f %f\n", soll, ticfilt+300, e);
-        printf("%-12.3f %-7d %-d %-d %d tic=%-f tdc=%-f iocxo=%f lat=%f lon=%f %f numsv=%d svinobs=%lu, act=%d mv=%lf valid=%d pdop=%d tacc=%lu\n", e, dacval,  mstatus, loopcount,tim,tic,tdc,i,pvt_info.lat,pvt_info.lon, tmp, pvt_info.numsv, svin_info.obs, svin_info.active, sqrt(svin_info.meanv)/1000, svin_info.valid, pvt_info.pdop, pvt_info.tacc);
-      }
-      //printf("%f %f %d %d %f\n", ticfilt+300, soll, loopcount, dacval, f);
-      //printf("%f %f %f %f\n",mytdc,mtic,mret, e);
-
-      //ubx_pvt(&info);
-
-
-
-
-    }
-
-
-
-   /* if((get_elapsed_ms() > 20) && qry)
-    {
-      GPIOE_BSRR = BIT_14;
-      qry = false;
-
-      GPIOE_BSRR = BIT_30;
-    }*/
-}
-
-#endif
-
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
@@ -603,7 +276,179 @@ static float read_tic(void)
   float tic = get_tic();
   float qerr = get_timepulse_error();
   enable_tdc();
-  return tic - qerr;
+  return tic - qerr + TIC_OFFSET;
+}
+
+
+static uint16_t pi_control(double KP, double KI, double damp, float e)
+{
+  static double esum = 32768.0;
+  double P = e*KP;
+  double I = P/(KI * damp);
+  esum = esum + I;
+  if(esum > 65535)
+  {
+    esum = 65535.0;
+  }
+  else if(esum < 0)
+  {
+    esum = 0.0;
+  }
+  efc = P + esum;
+  if(efc > 65535)
+  {
+    return 65535;
+  }
+  else if(efc < 0)
+  {
+    return 0;
+  }
+  else
+  {
+    return (uint16_t)efc;
+  }
+}
+
+
+static void cntl(void)
+{
+  static uint32_t statuscount = 0;
+
+  /* determine the time interval (phase) error */
+  float tic = read_tic();
+
+  /* TODO: read these values from the eeprom */
+  float e = tic - soll;
+
+  /* this is somewhat hack-ish, but avoids using fabs() */
+  float abs_err = e > 0 ? e : -e;
+
+  uint16_t dacval;
+  const char* status;
+
+  /* this is required if the ocxo current consumption is to be measured */
+  start_conversion();
+
+  /* if the phase error is less than one period, assume the pll is locked and
+     switch on the green lock led */
+  if(abs_err < MAX_PHASE_ERR)
+  {
+    GPIOE_BSRR = BIT_14;
+  }
+  else
+  {
+    GPIOE_BSRR = BIT_30;
+    if(abs_err > 10000)
+    {
+        /* if the phase error is too large it takes too much time until the
+           controller would settle, so we reset the timers. however this will
+           give a sharp 'bump' in the frequency and phase. */
+      timebase_reset();
+      return;
+    }
+  }
+
+  switch(stat)
+  {
+    /* fast track: is normally used shortly after the ocxo has just
+       warmed up. use small time constant such that the phase settles
+       more quickly */
+    case fast_track:
+    {
+      status = "fasttrack";
+      double kp = 1.0/(OSCGAIN * 10);
+      double ki = 10;
+      double damp = 1.0;
+      dacval = pi_control(kp, ki, damp, e);
+
+      /* if the phase error stays below MAX_PHASE_ERR for the time
+         FASTTRACK_TIME_LIMIT, the control loop constants can be changed
+         because we assume that the ocxo is now locked */
+      if(abs_err < MAX_PHASE_ERR)
+      {
+        statuscount++;
+      }
+      else
+      {
+        statuscount = 0;
+      }
+
+      if(statuscount >= (FASTTRACK_TIME_LIMIT * 60u))
+      {
+        cfg.last_dacval = dacval;
+        statuscount = 0;
+        stat = locked;
+      }
+
+      break;
+    }
+
+    /* locked: use an intermediate time constant after the ocxo has
+       settled for a while. */
+    case locked:
+    {
+      status = "locked";
+      double kp = 1.0/(OSCGAIN * 100);
+      double ki = 100;
+      double damp = 1.0;
+      dacval = pi_control(kp, ki, damp, e);
+
+      /* if the phase error stays below MAX_PHASE_ERR for the time
+         LOCKED_TIME_LIMIT, the control loop constants are changed again,
+         because the ocxo is stable enough */
+      if(abs_err < MAX_PHASE_ERR)
+      {
+        statuscount++;
+      }
+      else
+      {
+        statuscount = 0;
+      }
+
+      if(statuscount >= (LOCKED_TIME_LIMIT * 60u))
+      {
+        cfg.last_dacval = dacval;
+        statuscount = 0;
+        stat = stable;
+      }
+
+      break;
+    }
+
+    /* this should be the normal operating state. */
+    case stable:
+    {
+      status = "stable";
+
+      /* TODO: read these constants from the eeprom */
+      double kp  = 1.0/(OSCGAIN * 250);
+      double ki = 250;
+      double damp = 2.0;
+      dacval = pi_control(kp, ki, damp, e);
+
+      /* if the phase error increases above the threshold MAX_PHASE_ERR, then
+         the ocxo is perhaps not stable enough and the control loop switches
+         its constants such that it becomes faster */
+      if(abs_err > MAX_PHASE_ERR)
+      {
+        statuscount = 0;
+        stat = locked;
+      }
+
+      break;
+    }
+  }
+
+  set_dac(dacval);
+
+  /* if auto display is enabled, print the status information */
+  extern bool auto_disp;
+  if(auto_disp)
+  {
+    float i = get_iocxo();
+    float t = get_temperature();
+    (void)printf("CNTL: e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
+  }
 }
 
 /*******************************************************************************
