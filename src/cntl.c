@@ -447,7 +447,7 @@ static void cntl(void)
   {
     float i = get_iocxo();
     float t = get_temperature();
-    (void)printf("CNTL: e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
+    (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
   }
 }
 

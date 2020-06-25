@@ -482,30 +482,47 @@ static void svin(int argc, const char* const argv[])
   /* unused */
   (void)argv;
 
-  if(argc == 1)
+  switch(argc)
   {
-    if(!strcmp(argv[0], "stop"))
+    /* no arguments: display info only */
+    case 0:
     {
-      disable_tmode();
+      disp_svin_status();
+      break;
+    }
+
+    /* svin stop */
+    case 1:
+    {
+      if(!strcmp(argv[0], "stop"))
+      {
+        disable_tmode();
+      }
+      break;
+    }
+
+    /* svin <duration> <accuracy> */
+    case 2:
+    {
+      uint32_t time = (uint32_t)atoi(argv[0]);
+      uint32_t accuracy = (uint32_t)atoi(argv[1]);
+      if((time != 0) && (accuracy != 0))
+      {
+        disable_tmode();
+        cfg.svin_dur = time;
+        cfg.accuracy_limit = accuracy;
+        start_svin();
+      }
+      break;
+    }
+
+    default:
+    {
+      (void)printf("unknown syntax\n");
+
     }
   }
-  else if(argc == 2)
-  {
-    uint32_t time = (uint32_t)atoi(argv[0]);
-    uint32_t accuracy = (uint32_t)atoi(argv[1]);
-    if((time != 0) && (accuracy != 0))
-    {
-      disable_tmode();
-      cfg.svin_dur = time;
-      cfg.accuracy_limit = accuracy;
-      start_svin();
-    }
-  }
-  else
-  {
-    (void)printf("unknown syntax\n");
-    return;
-  }
+  return;
 }
 
 
