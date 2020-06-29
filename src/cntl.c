@@ -53,8 +53,8 @@
 #define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
 
 /* define the time limits after which the control loop constants are switched */
-#define FASTTRACK_TIME_LIMIT 1u /* min */
-#define LOCKED_TIME_LIMIT 1u /* min */
+#define FASTTRACK_TIME_LIMIT 5u /* min */
+#define LOCKED_TIME_LIMIT 15u /* min */
 
 /* allowed phase error to change the control loop constants */
 #define MAX_PHASE_ERR 100.0f /* ns */
