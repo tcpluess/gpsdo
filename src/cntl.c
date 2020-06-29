@@ -36,7 +36,7 @@
 #include "adc.h"
 #include "tdc.h"
 #include "dac.h"
-#include "adt7301.h"
+
 
 #include "stm32f407.h"
 
@@ -105,48 +105,19 @@ static void cntl(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-
-uint64_t last_pps = 0;
-uint32_t numpps = 0;
-uint64_t ms;
-
-double esum = 32768.0;
-float e=0;
-float efc;
-float efcfilt = 32768.0f;
-
-float f = 0.0f;
-
-float ticfilt = 0.0f;
-float ticfiltlast = 0.0f;
-
-
-//controlstatus_t mstatus = init;
-int loopcount = 0;
-uint16_t dacval = 32768;
-
 float soll = 0.0f;
-uint64_t event = 0;
 
-
-
-float tdc;
-uint32_t tim;
+float e = 0.0f;
+uint16_t dacval = 0u;
 
 extern svindata_t svin_info;
-
 extern config_t cfg;
-
 static status_t gpsdostatus = warmup;
 static controlstatus_t stat = fast_track;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
-
-
-
-
 
 static void blink(uint32_t ontime, uint32_t offtime)
 {
@@ -266,6 +237,11 @@ void cntl_worker(void)
   }
 }
 
+void cntl_restart(void)
+{
+  stat = fast_track;
+}
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
@@ -294,7 +270,7 @@ static uint16_t pi_control(double KP, double KI, double damp, float e)
   {
     esum = 0.0;
   }
-  efc = P + esum;
+  float efc = P + esum;
   if(efc > 65535)
   {
     return 65535;
@@ -318,13 +294,10 @@ static void cntl(void)
   float tic = read_tic();
 
   /* TODO: read these values from the eeprom */
-  float e = tic - soll;
+  e = tic - soll;
 
   /* this is somewhat hack-ish, but avoids using fabs() */
   float abs_err = e > 0 ? e : -e;
-
-  uint16_t dacval;
-  const char* status;
 
   /* this is required if the ocxo current consumption is to be measured */
   start_conversion();
@@ -355,7 +328,6 @@ static void cntl(void)
        more quickly */
     case fast_track:
     {
-      status = "fasttrack";
       double kp = 1.0/(OSCGAIN * 10);
       double ki = 10;
       double damp = 1.0;
@@ -387,7 +359,6 @@ static void cntl(void)
        settled for a while. */
     case locked:
     {
-      status = "locked";
       double kp = 1.0/(OSCGAIN * 100);
       double ki = 100;
       double damp = 1.0;
@@ -418,8 +389,6 @@ static void cntl(void)
     /* this should be the normal operating state. */
     case stable:
     {
-      status = "stable";
-
       /* TODO: read these constants from the eeprom */
       double kp  = 1.0/(OSCGAIN * 250);
       double ki = 250;
@@ -440,15 +409,6 @@ static void cntl(void)
   }
 
   set_dac(dacval);
-
-  /* if auto display is enabled, print the status information */
-  extern bool auto_disp;
-  if(auto_disp)
-  {
-    float i = get_iocxo();
-    float t = get_temperature();
-    (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f status=%s\n", e, dacval, i, t, status);
-  }
 }
 
 /*******************************************************************************
