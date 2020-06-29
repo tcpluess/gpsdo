@@ -33,11 +33,15 @@
 #include "eeprom.h"
 #include "ublox.h"
 #include "timebase.h"
+#include "adt7301.h"
+#include "adc.h"
+#include "cntl.h"
 
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <math.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -110,7 +114,7 @@ static command_t cmds[] =
 /* not static because it must be globally accessible */
 extern config_t cfg;
 
-bool auto_disp;
+static bool auto_disp = false;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -153,7 +157,7 @@ void console_worker(void)
         /* no character received, nothing to do */
         case -1:
         {
-          return;
+          break;
         }
 
         /* backspace entered: only need to do something if the line buffer is not
@@ -217,6 +221,28 @@ void console_worker(void)
       interpreter(ntoks, toks);
       status = prompt;
       break;
+    }
+  }
+
+  if(auto_disp)
+  {
+    static uint64_t last = 0;
+    uint64_t now = get_uptime_msec();
+    if(now - last >= 1000ull)
+    {
+      last = now;
+
+      float i = get_iocxo();
+      float t = get_temperature();
+      extern float e;
+      extern uint16_t dacval;
+      extern gpsinfo_t pvt_info;
+      extern svindata_t svin_info;
+      extern sv_info_t sat_info;
+      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+
+      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu\n",
+        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc);
     }
   }
 }
@@ -484,13 +510,6 @@ static void svin(int argc, const char* const argv[])
 
   switch(argc)
   {
-    /* no arguments: display info only */
-    case 0:
-    {
-      disp_svin_status();
-      break;
-    }
-
     /* svin stop */
     case 1:
     {
@@ -519,7 +538,6 @@ static void svin(int argc, const char* const argv[])
     default:
     {
       (void)printf("unknown syntax\n");
-
     }
   }
   return;
@@ -623,6 +641,7 @@ static void restart(int argc, const char* const argv[])
   if(argc == 0)
   {
     gps_restart();
+    cntl_restart();
   }
 }
 
