@@ -98,7 +98,7 @@ typedef enum
  ******************************************************************************/
 
 static float read_tic(void);
-static uint16_t pi_control(double KP, double KI, double damp, float e);
+static uint16_t pi_control(double KP, double TI, double e);
 static void cntl(void);
 
 /*******************************************************************************
@@ -280,28 +280,35 @@ static float read_tic(void)
 }
 
 
-static uint16_t pi_control(double KP, double KI, double damp, float e)
+static double prefilter(double e, double filt)
+{
+  static double eold = 0.0;
+  double result = ((100.0-filt)*e + filt*eold)/100.0;
+}
+
+
+static uint16_t pi_control(double KP, double TI, double e)
 {
   static double esum = 32768.0;
-  double P = e*KP;
-  double I = P/(KI * damp);
-  esum = esum + I;
-  if(esum > 65535)
+  static double eold = 0.0f;
+  esum = esum + 0.5*KP/TI*(e + eold);
+  eold = e;
+  if(esum > 65535.0)
   {
     esum = 65535.0;
   }
-  else if(esum < 0)
+  else if(esum < 0.0)
   {
     esum = 0.0;
   }
-  efc = P + esum;
-  if(efc > 65535)
+  efc = (float)(KP*e + esum);
+  if(efc > 65535.0f)
   {
-    return 65535;
+    return 65535u;
   }
-  else if(efc < 0)
+  else if(efc < 0.0f)
   {
-    return 0;
+    return 0u;
   }
   else
   {
@@ -358,8 +365,7 @@ static void cntl(void)
       status = "fasttrack";
       double kp = 1.0/(OSCGAIN * 10);
       double ki = 10;
-      double damp = 1.0;
-      dacval = pi_control(kp, ki, damp, e);
+      dacval = pi_control(kp, ki, e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          FASTTRACK_TIME_LIMIT, the control loop constants can be changed
@@ -390,8 +396,7 @@ static void cntl(void)
       status = "locked";
       double kp = 1.0/(OSCGAIN * 100);
       double ki = 100;
-      double damp = 1.0;
-      dacval = pi_control(kp, ki, damp, e);
+      dacval = pi_control(kp, ki, e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          LOCKED_TIME_LIMIT, the control loop constants are changed again,
@@ -423,8 +428,8 @@ static void cntl(void)
       /* TODO: read these constants from the eeprom */
       double kp  = 1.0/(OSCGAIN * 250);
       double ki = 250;
-      double damp = 2.0;
-      dacval = pi_control(kp, ki, damp, e);
+      double filt = 50.0;
+      dacval = pi_control(kp, ki, prefilter(e, filt));
 
       /* if the phase error increases above the threshold MAX_PHASE_ERR, then
          the ocxo is perhaps not stable enough and the control loop switches
