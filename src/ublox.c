@@ -361,8 +361,16 @@ void set_fixpos_mode(void)
 
 void disable_tmode(void)
 {
-    ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+  if(cfg.fixpos_valid)
+  {
+    set_fixpos_mode();
+    status = fixpos_mode;
+  }
+  else
+  {
     status = normal;
+  }
 }
 
 
@@ -391,14 +399,6 @@ bool check_fix(void)
     }
   }
   return false;
-}
-
-
-void disp_svin_status(void)
-{
-  (void)printf("Survey-in status:\n");
-  (void)printf("#of observations: %lu\nCurrent mean variance: %f\n\n",
-    svin_info.obs, sqrt(svin_info.meanv)/1000.0);
 }
 
 /*******************************************************************************
