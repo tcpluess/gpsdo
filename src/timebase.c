@@ -370,7 +370,6 @@ static void capture_irq(void)
 
     /* read out the captured value */
     tic_capture = TIM2_CCR3;
-    tim = tic_capture;
   }
 
   /* acknowledge */
