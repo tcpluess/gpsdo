@@ -30,7 +30,7 @@
 
 #include "stm32f407.h"
 #include "misc.h"
-#include "adt7301.h"
+#include "temperature.h"
 
 #include "rs232.h"
 #include "dac.h"

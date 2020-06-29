@@ -28,7 +28,7 @@
  * INCLUDE FILES
  ******************************************************************************/
 
-#include "adt7301.h"
+#include "temperature.h"
 #include "stm32f407.h"
 #include "misc.h"
 

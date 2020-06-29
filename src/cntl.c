@@ -36,7 +36,7 @@
 #include "adc.h"
 #include "tdc.h"
 #include "dac.h"
-#include "adt7301.h"
+#include "temperature.h"
 
 #include "stm32f407.h"
 
