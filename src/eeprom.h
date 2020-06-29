@@ -73,6 +73,10 @@ typedef union
 
     /* navigation model */
     int8_t elevation_mask;
+
+    /* control loop time constants */
+    uint16_t tau;
+    uint8_t filt;
   };
   uint8_t bytes[EEP_SZ];
 } config_t;

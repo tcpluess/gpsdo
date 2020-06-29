@@ -33,7 +33,7 @@
 #include "eeprom.h"
 #include "ublox.h"
 #include "timebase.h"
-#include "adt7301.h"
+#include "temperature.h"
 #include "adc.h"
 #include "cntl.h"
 
@@ -89,6 +89,7 @@ static void svin(int argc, const char* const argv[]);
 static void sat(int argc, const char* const argv[]);
 static void restart(int argc, const char* const argv[]);
 static void auto_svin(int argc, const char* const argv[]);
+static void conf_timeconst(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -109,6 +110,7 @@ static command_t cmds[] =
   {sat,             "sat",        "display satellite info"},
   {restart,         "restart",    "restart the gps module"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
+  {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"}
 };
 
 /* not static because it must be globally accessible */
@@ -239,10 +241,11 @@ void console_worker(void)
       extern gpsinfo_t pvt_info;
       extern svindata_t svin_info;
       extern sv_info_t sat_info;
+      extern double esum;
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
-      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu\n",
-        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc);
+      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu esum=%f\n",
+        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum);
     }
   }
 }
@@ -465,6 +468,8 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
     (void)printf("elevation mask: %d\n", cfg.elevation_mask);
     (void)printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
+    (void)printf("tau: %d sec\n", cfg.tau);
+    (void)printf("prefilter: %d%%\n", cfg.filt);
   }
   else
   {
@@ -670,6 +675,41 @@ static void auto_svin(int argc, const char* const argv[])
   }
 }
 
+
+/*============================================================================*/
+static void conf_timeconst(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  configure time constant and prefilter
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; two required
+  out: none
+==============================================================================*/
+{
+  if(argc == 2)
+  {
+    uint16_t tau = atoi(argv[0]);
+    uint8_t filt = atoi(argv[1]);
+
+    if((tau > 10) && (tau < 3600))
+    {
+      cfg.tau = tau;
+    }
+    else
+    {
+      (void)printf("value for tau out of range: 10 < tau < 3600\n");
+    }
+
+    if((filt >= 0) && (filt < 100))
+    {
+      cfg.filt = filt;
+    }
+    else
+    {
+      (void)printf("value for the prefilter out of range: prefilter must be less than 100%%\n");
+    }
+  }
+}
 
 /*******************************************************************************
  * END OF CODE

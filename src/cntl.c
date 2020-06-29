@@ -36,7 +36,7 @@
 #include "adc.h"
 #include "tdc.h"
 #include "dac.h"
-
+#include "temperature.h"
 
 #include "stm32f407.h"
 
@@ -53,8 +53,8 @@
 #define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
 
 /* define the time limits after which the control loop constants are switched */
-#define FASTTRACK_TIME_LIMIT 5u /* min */
-#define LOCKED_TIME_LIMIT 30u /* min */
+#define FASTTRACK_TIME_LIMIT 1u /* min */
+#define LOCKED_TIME_LIMIT 1u /* min */
 
 /* allowed phase error to change the control loop constants */
 #define MAX_PHASE_ERR 100.0f /* ns */
@@ -64,6 +64,9 @@
    is chosten such that at a tic value of 0, the 1PPS output and the tic input
    occur at the same time. */
 #define TIC_OFFSET 300u
+
+#define TAU_FASTTRACK 10.0
+#define TAU_LOCKED 100.0
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -98,7 +101,7 @@ typedef enum
  ******************************************************************************/
 
 static float read_tic(void);
-static uint16_t pi_control(double KP, double KI, double damp, float e);
+static uint16_t pi_control(double KP, double TI, double e);
 static void cntl(void);
 
 /*******************************************************************************
@@ -109,7 +112,7 @@ float soll = 0.0f;
 
 float e = 0.0f;
 uint16_t dacval = 0u;
-
+double esum = 32768.0;
 extern svindata_t svin_info;
 extern config_t cfg;
 static status_t gpsdostatus = warmup;
@@ -256,28 +259,37 @@ static float read_tic(void)
 }
 
 
-static uint16_t pi_control(double KP, double KI, double damp, float e)
+static double prefilter(double e, double filt)
 {
-  static double esum = 32768.0;
-  double P = e*KP;
-  double I = P/(KI * damp);
-  esum = esum + I;
-  if(esum > 65535)
+  static double eold = 0.0;
+  double result = ((100.0-filt)*e + filt*eold)/100.0;
+  eold = e;
+  return result;
+}
+
+
+static uint16_t pi_control(double KP, double TI, double e)
+{
+
+  static double eold = 0.0f;
+  esum = esum + 0.5*KP/TI*(e + eold);
+  eold = e;
+  if(esum > 65535.0)
   {
     esum = 65535.0;
   }
-  else if(esum < 0)
+  else if(esum < 0.0)
   {
     esum = 0.0;
   }
-  float efc = P + esum;
-  if(efc > 65535)
+  float efc = (float)(KP*e + esum);
+  if(efc > 65535.0f)
   {
-    return 65535;
+    return 65535u;
   }
-  else if(efc < 0)
+  else if(efc < 0.0f)
   {
-    return 0;
+    return 0u;
   }
   else
   {
@@ -328,10 +340,9 @@ static void cntl(void)
        more quickly */
     case fast_track:
     {
-      double kp = 1.0/(OSCGAIN * 10);
-      double ki = 10;
-      double damp = 1.0;
-      dacval = pi_control(kp, ki, damp, e);
+      double kp = 1.0/(OSCGAIN * TAU_FASTTRACK);
+      double ki = TAU_FASTTRACK;
+      dacval = pi_control(kp, ki, e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          FASTTRACK_TIME_LIMIT, the control loop constants can be changed
@@ -359,10 +370,9 @@ static void cntl(void)
        settled for a while. */
     case locked:
     {
-      double kp = 1.0/(OSCGAIN * 100);
-      double ki = 100;
-      double damp = 1.0;
-      dacval = pi_control(kp, ki, damp, e);
+      double kp = 1.0/(OSCGAIN * TAU_LOCKED);
+      double ki = TAU_LOCKED;
+      dacval = pi_control(kp, ki, e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          LOCKED_TIME_LIMIT, the control loop constants are changed again,
@@ -390,10 +400,10 @@ static void cntl(void)
     case stable:
     {
       /* TODO: read these constants from the eeprom */
-      double kp  = 1.0/(OSCGAIN * 250);
-      double ki = 250;
-      double damp = 2.0;
-      dacval = pi_control(kp, ki, damp, e);
+      double kp  = 1.0/(OSCGAIN * cfg.tau);
+      double ki = cfg.tau;
+      double filt = cfg.filt;
+      dacval = pi_control(kp, ki, prefilter(e, filt));
 
       /* if the phase error increases above the threshold MAX_PHASE_ERR, then
          the ocxo is perhaps not stable enough and the control loop switches
