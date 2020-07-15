@@ -343,8 +343,6 @@ static void enable_timer(void)
 
   TIM2_CR1 = BIT_00;
 }
-extern uint32_t tim;
-
 
 /*============================================================================*/
 static void capture_irq(void)

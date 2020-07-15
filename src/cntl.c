@@ -40,9 +40,6 @@
 
 #include "stm32f407.h"
 
-#include <stdio.h>
-#include <math.h>
-
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -113,7 +110,7 @@ float soll = 0.0f;
 float e = 0.0f;
 uint16_t dacval = 0u;
 double esum = 32768.0;
-extern svindata_t svin_info;
+
 extern config_t cfg;
 static status_t gpsdostatus = warmup;
 static controlstatus_t stat = fast_track;
@@ -255,25 +252,25 @@ static float read_tic(void)
   float tic = get_tic();
   float qerr = get_timepulse_error();
   enable_tdc();
-  return tic - qerr + TIC_OFFSET;
+  return (tic - qerr) + TIC_OFFSET;
 }
 
 
-static double prefilter(double e, double filt)
+static double prefilter(double ee, double filt)
 {
   static double eold = 0.0;
-  double result = ((100.0-filt)*e + filt*eold)/100.0;
-  eold = e;
+  double result = ((100.0-filt)*ee + filt*eold)/100.0;
+  eold = ee;
   return result;
 }
 
 
-static uint16_t pi_control(double KP, double TI, double e)
+static uint16_t pi_control(double KP, double TI, double ee)
 {
 
   static double eold = 0.0f;
-  esum = esum + 0.5*KP/TI*(e + eold);
-  eold = e;
+  esum = esum + 0.5*KP*(ee + eold)/TI;
+  eold = ee;
   if(esum > 65535.0)
   {
     esum = 65535.0;
@@ -282,7 +279,7 @@ static uint16_t pi_control(double KP, double TI, double e)
   {
     esum = 0.0;
   }
-  float efc = (float)(KP*e + esum);
+  float efc = (float)(KP*ee + esum);
   if(efc > 65535.0f)
   {
     return 65535u;

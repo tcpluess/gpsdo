@@ -138,7 +138,6 @@ void enable_tdc(void)
   tdc_write(ADDR_CONFIG1, BIT_00);
 }
 
-extern float tdc;
 float get_tdc(void)
 {
   float calib1 = tdc_read24(ADDR_CALIB1);
