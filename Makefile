@@ -49,11 +49,11 @@ DINCDIR =
 DLIBDIR =
 
 # List all default libraries here
-DLIBS =
+DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
 PROJECT        = test
-RUN_FROM_FLASH = 0
+RUN_FROM_FLASH = 1
 USE_HARD_FPU   = 1
 HEAP_SIZE      = 0
 STACK_SIZE     = 8k
@@ -101,8 +101,8 @@ ULIBDIR =
 ULIBS =
 
 # Define optimisation level here
-OPT = -O0 -g3
-#OPT = -O0 -g3 -falign-functions=16 -fno-inline -fomit-frame-pointer
+#OPT = -O0 -g3
+OPT = -O0 -falign-functions=16 -fno-inline -fomit-frame-pointer
 
 #
 # End of user defines
