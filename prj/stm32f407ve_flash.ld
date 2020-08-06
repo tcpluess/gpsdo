@@ -55,7 +55,7 @@ SECTIONS
 
   . = ALIGN(8);
   heapstart = .;
-  . = . + LENGTH(ram) - heapstart + ORIGIN(ram) - __STACK_SIZE;
+  . = . + LENGTH(RAM) - heapstart + ORIGIN(RAM) - __STACK_SIZE;
   heapend = .;
   heapsz = heapend - heapstart;
 
