@@ -11,3 +11,4 @@ lst/*
 *s.d
 
 prj/*.sublime-workspace
+prj/*.jdebug.user
