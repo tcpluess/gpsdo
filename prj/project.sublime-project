@@ -5,5 +5,14 @@
       "path": "..",
       "file_exclude_patterns": ["*.bin", "*.elf", ".keep", "*.d"]
     }
+  ],
+  "build_systems":
+  [
+    {
+      "name": "Lint",
+      "shell_cmd": "lint-nt -u -v \"${project_path}/settings.lnt\" \"${file_name}\"",
+      "working_dir": "${project_path}/../src",
+      "file_regex": "^(.*):(\\d+):(\\d+):\\s(.*)"
+    }
   ]
 }
