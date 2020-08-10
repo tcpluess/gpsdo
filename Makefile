@@ -124,11 +124,11 @@ OBJS    = $(addsuffix .o, $(ASRC) $(SRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
-ASFLAGS  = $(MCFLAGS) $(OPT) -Wa,-amhls=$(addsuffix .lst, $<) $(ADEFS)
+ASFLAGS  = $(MCFLAGS) $(OPT) $(ADEFS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) -Wall -Wstrict-prototypes -fverbose-asm
 CPFLAGS += -ffunction-sections -fdata-sections
-CPFLAGS += -Wa,-ahlms=$(addsuffix .lst, $<) $(DEFS)
+CPFLAGS += $(DEFS)
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
 LDFLAGS  = $(MCFLAGS) -nostartfiles -T$(LDSCRIPT) -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE) -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
@@ -136,16 +136,18 @@ LDFLAGS += -Wl,-Map=lst/$(FULL_PRJ).map,--cref,--gc-sections,--no-warn-mismatch 
 
 .PHONY: all
 all: $(OBJS) bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).s19 \
-bin/$(FULL_PRJ).bin lst/disassembly.lst
+bin/$(FULL_PRJ).bin lst/disassembly.lss
 	@$(SZ) -d bin/$(FULL_PRJ).elf
 
 %.c.o : %.c
 	@echo "CC      $<"
 	@$(CC) -c $(CPFLAGS) $(INCDIR) $< -o $@
+	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 %.s.o : %.s
 	@echo "AS      $<"
 	@$(AS) -c $(ASFLAGS) $< -o $@
+	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 bin/$(FULL_PRJ).elf: $(OBJS)
 	@echo "LD      $@"
@@ -163,7 +165,7 @@ bin/$(FULL_PRJ).bin:  bin/$(FULL_PRJ).elf
 	@echo "OBJCOPY $@"
 	@$(CP) -O binary $< $@
 
-lst/disassembly.lst: bin/$(FULL_PRJ).elf
+lst/disassembly.lss: bin/$(FULL_PRJ).elf
 	@echo "OBJDUMP $(FULL_PRJ).elf"
 	@$(DUMP) -S -d bin/$(FULL_PRJ).elf > $@
 
@@ -174,10 +176,8 @@ doc:
 
 .PHONY: clean
 clean:
-	@-rm -rf $(OBJS)
-	@-rm -rf lst/*.lst lst/*.map
+	@-rm -rf src/*.o src/*.d src/*.lss
+	@-rm -rf lst/*.lss lst/*.map
 	@-rm -rf bin/*.elf bin/*.hex bin/*.bin bin/*.s19
-	@-rm -rf $(addsuffix .lst, $(ASRC) $(SRC))
-	@-rm -rf $(addsuffix .d, $(SRC))
 
 -include $(wildcard src/*.d)

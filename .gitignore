@@ -5,10 +5,10 @@ lst/*
 !lst/.keep
 
 *.map
-*.lst
+*.lss
 *.o
-*c.d
-*s.d
+*.c.d
+*.s.d
 
 prj/*.sublime-workspace
 prj/*.jdebug.user
