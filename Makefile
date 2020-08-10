@@ -52,7 +52,7 @@ DLIBDIR =
 DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
-PROJECT        = test
+PROJECT        = gnssdo
 RUN_FROM_FLASH = 1
 USE_HARD_FPU   = 1
 HEAP_SIZE      = 0
@@ -63,10 +63,10 @@ STACK_SIZE     = 8k
 #
 ifeq ($(RUN_FROM_FLASH), 0)
 LDSCRIPT = ./prj/stm32f407ve_ram.ld
-FULL_PRJ = $(PROJECT)_ram
+FULL_PRJ = $(PROJECT)
 else
 LDSCRIPT = ./prj/stm32f407ve_flash.ld
-FULL_PRJ = $(PROJECT)_rom
+FULL_PRJ = $(PROJECT)
 endif
 
 #
