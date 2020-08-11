@@ -101,8 +101,11 @@ ULIBDIR =
 ULIBS =
 
 # Define optimisation level here
-#OPT = -O0 -g3
+ifeq ($(RUN_FROM_FLASH), 0)
+OPT = -O0 -g3
+else
 OPT = -O0 -falign-functions=16 -fno-inline -fomit-frame-pointer
+endif
 
 #
 # End of user defines
