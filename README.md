@@ -19,7 +19,7 @@ Highly recommended:
 * `EditorConfig` to ensure that line endings, tabs and so on are unified
 
 Fancy:
-* `Generic GNU GAS` for syntax highlighting of the listing file
+* `GCC Assembly Listing` for syntax highlighting of the listing file
 * `Linker Script Syntax` for syntax highlighting of linker scripts
 * `Intel HEX` for nicer display of the `.hex` file
 * `SREC` for nicer display of the `.s19` file
