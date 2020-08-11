@@ -7,10 +7,18 @@ Required software
 Build: `make` generates the output files in the `bin` directory, in the
 `elf`, `bin`, `hex` and `s19` formats.
 
+Change `RUN_FROM_FLASH` in the makefile to switch between a ROM and a RAM
+build. This also automatically changes the optimisation level. Note that
+a `make clean`/`make` sequence is required if any changes have been
+made to the makefile.
+
 Recommended packages for Sublime Text
 =====================================
 
+Highly recommended:
 * `EditorConfig` to ensure that line endings, tabs and so on are unified
+
+Fancy:
 * `Generic GNU GAS` for syntax highlighting of the listing file
 * `Linker Script Syntax` for syntax highlighting of linker scripts
 * `Intel HEX` for nicer display of the `.hex` file
