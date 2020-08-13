@@ -61,6 +61,8 @@ static void spi_transmit(uint8_t data);
 /* not static because from eeprom */
 extern config_t cfg;
 
+bool dac_hold;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -87,7 +89,9 @@ void dac_setup(void)
   /* enable spi2 */
   SPI2_CR1 |= BIT_06;
 
-  /* default state: chip select not active; set dac to initial value */
+  /* default state: chip select not active; set dac to initial value; dac hold
+     is disabled */
+  dac_hold = false;
   spi_ss(false);
   set_dac(cfg.last_dacval);
 }
@@ -95,9 +99,10 @@ void dac_setup(void)
 void set_dac(uint16_t data)
 {
   /* check if this data has already been loaded into the dac
-     and bail out if so to keep the dac as quiet as possible */
+     and bail out if so to keep the dac as quiet as possible;
+     also bail out if dac hold is enabled */
   static uint16_t previousdata = 0u;
-  if(data == previousdata)
+  if((data == previousdata) && (dac_hold == true))
   {
     return;
   }

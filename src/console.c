@@ -90,6 +90,7 @@ static void sat(int argc, const char* const argv[]);
 static void restart(int argc, const char* const argv[]);
 static void auto_svin(int argc, const char* const argv[]);
 static void conf_timeconst(int argc, const char* const argv[]);
+static void man_hold(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -110,7 +111,8 @@ static command_t cmds[] =
   {sat,             "sat",        "display satellite info"},
   {restart,         "restart",    "restart the gps module"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
-  {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"}
+  {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
+  {man_hold,        "hold",       "on|off - holds the DAC value"}
 };
 
 /* not static because it must be globally accessible */
@@ -710,6 +712,32 @@ static void conf_timeconst(int argc, const char* const argv[])
     }
   }
 }
+
+
+/*============================================================================*/
+static void man_hold(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  enable/disable DAC hold
+  in:  argc -> number of arguments, see below
+       argv -> array of strings; one required ("on" or "off")
+  out: none
+==============================================================================*/
+{
+  extern bool dac_hold;
+  if(argc == 1)
+  {
+    if(!strcmp(argv[0], "on"))
+    {
+      dac_hold = true;
+    }
+    else if(!strcmp(argv[0], "off"))
+    {
+      dac_hold = false;
+    }
+  }
+}
+
 
 /*******************************************************************************
  * END OF CODE
