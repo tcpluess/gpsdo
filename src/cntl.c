@@ -86,11 +86,6 @@ typedef enum
   fast_track,
   locked,
   stable,
-
-  /*init,
-  lock1,
-  lock2,
-  lock3*/
 } controlstatus_t;
 
 /*******************************************************************************
@@ -110,6 +105,7 @@ float soll = 0.0f;
 float e = 0.0f;
 uint16_t dacval = 0u;
 double esum = 32768.0;
+const char* cntl_status = "";
 
 extern config_t cfg;
 static status_t gpsdostatus = warmup;
@@ -360,6 +356,8 @@ static void cntl(void)
         stat = locked;
       }
 
+      cntl_status = "fast_track";
+
       break;
     }
 
@@ -390,13 +388,15 @@ static void cntl(void)
         stat = stable;
       }
 
+      cntl_status = "locked";
+
       break;
     }
 
     /* this should be the normal operating state. */
     case stable:
     {
-      /* TODO: read these constants from the eeprom */
+      /* kp, ki and prefilter are stored in the eeprom */
       double kp  = 1.0/(OSCGAIN * cfg.tau);
       double ki = cfg.tau;
       double filt = cfg.filt;
@@ -410,6 +410,8 @@ static void cntl(void)
         statuscount = 0;
         stat = locked;
       }
+
+      cntl_status = "stable";
 
       break;
     }

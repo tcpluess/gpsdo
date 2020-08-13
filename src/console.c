@@ -244,10 +244,11 @@ void console_worker(void)
       extern svindata_t svin_info;
       extern sv_info_t sat_info;
       extern double esum;
+      extern const char* cntl_status;
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
-      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu esum=%f\n",
-        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum);
+      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu esum=%f status=%s\n",
+        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
     }
   }
 }
