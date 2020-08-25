@@ -102,7 +102,7 @@ void set_dac(uint16_t data)
      and bail out if so to keep the dac as quiet as possible;
      also bail out if dac hold is enabled */
   static uint16_t previousdata = 0u;
-  if((data == previousdata) && (dac_hold == true))
+  if((data == previousdata) || (dac_hold == true))
   {
     return;
   }
