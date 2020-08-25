@@ -91,6 +91,7 @@ static void restart(int argc, const char* const argv[]);
 static void auto_svin(int argc, const char* const argv[]);
 static void conf_timeconst(int argc, const char* const argv[]);
 static void man_hold(int argc, const char* const argv[]);
+static void uptime(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -112,7 +113,8 @@ static command_t cmds[] =
   {restart,         "restart",    "restart the gps module"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
   {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
-  {man_hold,        "hold",       "on|off - holds the DAC value"}
+  {man_hold,        "hold",       "on|off - holds the DAC value"},
+  {uptime,          "uptime",     "shows the current uptime"}
 };
 
 /* not static because it must be globally accessible */
@@ -739,6 +741,30 @@ static void man_hold(int argc, const char* const argv[])
   }
 }
 
+
+/*============================================================================*/
+static void uptime(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  shows the uptime. does not need arguments
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(argc == 0)
+  {
+    uint64_t tm = get_uptime_msec();
+    tm = tm / 1000;
+    uint32_t sec = tm % 60;
+    tm = tm / 60;
+    uint32_t min = tm % 60;
+    tm = tm / 60;
+    uint32_t hour = tm % 24;
+    uint32_t day = tm / 24;
+
+    printf("uptime: %lu days, %lu hours, %lu min, %lu sec", day, hour, min, sec);
+  }
+}
 
 /*******************************************************************************
  * END OF CODE
