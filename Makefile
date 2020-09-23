@@ -24,6 +24,9 @@
 # - created
 ################################################################################
 
+MAKEFLAGS := --jobs=8
+MAKEFLAGS += --output-sync=target
+
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 TRGT = arm-none-eabi-
