@@ -56,6 +56,9 @@
 /* allowed phase error to change the control loop constants */
 #define MAX_PHASE_ERR 100.0f /* ns */
 
+/* allowed maximum number of outliers. */
+#define MAX_ALLOWED_OUTLIERS 5u
+
 /* the tic actually has an offset of 300ns because of the synchronisation
    logic internal to the stm32. this offset was determined empirically and
    is chosten such that at a tic value of 0, the 1PPS output and the tic input
@@ -294,6 +297,7 @@ static uint16_t pi_control(double KP, double TI, double ee)
 static void cntl(void)
 {
   static uint32_t statuscount = 0;
+  static uint32_t outlier_count = 0;
 
   /* determine the time interval (phase) error */
   float tic = read_tic();
@@ -335,7 +339,7 @@ static void cntl(void)
     {
       double kp = 1.0/(OSCGAIN * TAU_FASTTRACK);
       double ki = TAU_FASTTRACK;
-      dacval = pi_control(kp, ki, e);
+      dacval = pi_control(kp, ki, (double)e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          FASTTRACK_TIME_LIMIT, the control loop constants can be changed
@@ -367,7 +371,7 @@ static void cntl(void)
     {
       double kp = 1.0/(OSCGAIN * TAU_LOCKED);
       double ki = TAU_LOCKED;
-      dacval = pi_control(kp, ki, e);
+      dacval = pi_control(kp, ki, (double)e);
 
       /* if the phase error stays below MAX_PHASE_ERR for the time
          LOCKED_TIME_LIMIT, the control loop constants are changed again,
@@ -396,19 +400,27 @@ static void cntl(void)
     /* this should be the normal operating state. */
     case stable:
     {
-      /* kp, ki and prefilter are stored in the eeprom */
-      double kp  = 1.0/(OSCGAIN * cfg.tau);
-      double ki = cfg.tau;
-      double filt = cfg.filt;
-      dacval = pi_control(kp, ki, prefilter(e, filt));
-
       /* if the phase error increases above the threshold MAX_PHASE_ERR, then
          the ocxo is perhaps not stable enough and the control loop switches
          its constants such that it becomes faster */
       if(abs_err > MAX_PHASE_ERR)
       {
-        statuscount = 0;
-        stat = locked;
+        outlier_count++;
+
+        if(outlier_count > MAX_ALLOWED_OUTLIERS)
+        {
+          outlier_count = 0u;
+          statuscount = 0u;
+          stat = locked;
+        }
+      }
+      else
+      {
+        /* kp, ki and prefilter are stored in the eeprom */
+        double kp  = 1.0/(OSCGAIN * cfg.tau);
+        double ki = cfg.tau;
+        double filt = cfg.filt;
+        dacval = pi_control(kp, ki, prefilter((double)e, filt));
       }
 
       cntl_status = "stable";
