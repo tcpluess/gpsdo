@@ -137,7 +137,8 @@ void console_worker(void)
     case startup:
     {
       (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-      (void)printf("use \"help\" to see the available commands\n\n");
+      (void)printf("use \"help\" to see the available commands\n");
+      (void)printf("version 2020-11-27\n\n");
       status = prompt;
       auto_disp = false;
       break;
