@@ -766,7 +766,7 @@ static void uptime(int argc, const char* const argv[])
     uint32_t hour = tm % 24;
     uint32_t day = tm / 24;
 
-    printf("uptime: %lu days, %lu hours, %lu min, %lu sec", day, hour, min, sec);
+    printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
   }
 }
 
