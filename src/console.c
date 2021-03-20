@@ -92,6 +92,7 @@ static void auto_svin(int argc, const char* const argv[]);
 static void conf_timeconst(int argc, const char* const argv[]);
 static void man_hold(int argc, const char* const argv[]);
 static void uptime(int argc, const char* const argv[]);
+static void offset(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -114,7 +115,8 @@ static command_t cmds[] =
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
   {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
   {man_hold,        "hold",       "on|off - holds the DAC value"},
-  {uptime,          "uptime",     "shows the current uptime"}
+  {uptime,          "uptime",     "shows the current uptime"},
+  {offset,          "offset",     "sets the offset of the pps output"},
 };
 
 /* not static because it must be globally accessible */
@@ -138,7 +140,7 @@ void console_worker(void)
     {
       (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
       (void)printf("use \"help\" to see the available commands\n");
-      (void)printf("version 2020-11-27\n\n");
+      (void)printf("version 2021-03-20\n\n");
       status = prompt;
       auto_disp = false;
       break;
@@ -476,6 +478,7 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
     (void)printf("tau: %d sec\n", cfg.tau);
     (void)printf("prefilter: %d%%\n", cfg.filt);
+    (void)printf("time offset: %ld ns\n", cfg.timeoffset);
   }
   else
   {
@@ -764,6 +767,24 @@ static void uptime(int argc, const char* const argv[])
     uint32_t day = tm / 24;
 
     printf("uptime: %lu days, %lu hours, %lu min, %lu sec", day, hour, min, sec);
+  }
+}
+
+
+/*============================================================================*/
+static void offset(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  sets the offset of the pps output
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(argc == 1)
+  {
+    cfg.timeoffset = atoi(argv[0]);
+    extern float setpoint;
+    setpoint = (float)cfg.timeoffset;
   }
 }
 

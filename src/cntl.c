@@ -103,7 +103,7 @@ static void cntl(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-float soll = 0.0f;
+float setpoint = 0.0f;
 
 float e = 0.0f;
 uint16_t dacval = 0u;
@@ -303,7 +303,7 @@ static void cntl(void)
   float tic = read_tic();
 
   /* TODO: read these values from the eeprom */
-  e = tic - soll;
+  e = tic - setpoint;
 
   /* this is somewhat hack-ish, but avoids using fabs() */
   float abs_err = e > 0 ? e : -e;

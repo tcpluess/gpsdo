@@ -39,7 +39,7 @@
  ******************************************************************************/
 
 #define EEP_SZ 512u
-#define CFG_VERSION 33u
+#define CFG_VERSION 34u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -77,6 +77,9 @@ typedef union
     /* control loop time constants */
     uint16_t tau;
     uint8_t filt;
+
+    /* time offset to pps */
+    int32_t timeoffset;
   };
   uint8_t bytes[EEP_SZ];
 } config_t;

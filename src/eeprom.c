@@ -234,6 +234,8 @@ void load_config(void)
     cfg.filt = 50u;
 
     cfg.elevation_mask = 5; /* 5 degree elevation mask */
+
+    cfg.timeoffset = 0;
   }
 }
 
