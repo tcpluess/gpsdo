@@ -57,7 +57,11 @@
 #define MAX_PHASE_ERR 100.0f /* ns */
 
 /* allowed maximum number of outliers. */
-#define MAX_ALLOWED_OUTLIERS 5u
+#define MAX_ALLOWED_OUTLIERS 10u
+
+/* if no outliers are detected within this time, the outlier counter is
+   reset */
+#define OUTLIER_DURATION 5u * (60u * 1000u) /* 5 min in msec */
 
 /* the tic actually has an offset of 300ns because of the synchronisation
    logic internal to the stm32. this offset was determined empirically and
@@ -298,6 +302,7 @@ static void cntl(void)
 {
   static uint32_t statuscount = 0;
   static uint32_t outlier_count = 0;
+  static uint64_t last_outlier_time = 0;
 
   /* determine the time interval (phase) error */
   float tic = read_tic();
@@ -406,6 +411,7 @@ static void cntl(void)
       if(abs_err > MAX_PHASE_ERR)
       {
         outlier_count++;
+        last_outlier_time = get_uptime_msec();
 
         if(outlier_count > MAX_ALLOWED_OUTLIERS)
         {
@@ -416,6 +422,12 @@ static void cntl(void)
       }
       else
       {
+        uint64_t now = get_uptime_msec();
+        if(now - last_outlier_time >= OUTLIER_DURATION)
+        {
+          outlier_count = 0;
+        }
+
         /* kp, ki and prefilter are stored in the eeprom */
         double kp  = 1.0/(OSCGAIN * cfg.tau);
         double ki = cfg.tau;
