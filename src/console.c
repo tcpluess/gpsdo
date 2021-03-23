@@ -782,9 +782,12 @@ static void offset(int argc, const char* const argv[])
 {
   if(argc == 1)
   {
+    /* when the setpoint is changed, then restart the control loop.
+       otherwise, it takes too long until the pll locks with the new phase. */
     cfg.timeoffset = atoi(argv[0]);
     extern float setpoint;
     setpoint = (float)cfg.timeoffset;
+    cntl_restart();
   }
 }
 
