@@ -244,7 +244,7 @@ void console_worker(void)
       float i = get_iocxo();
       float t = get_temperature();
       extern float e;
-      extern uint16_t dacval;
+      extern uint16_t dac_value;
       extern gpsinfo_t pvt_info;
       extern svindata_t svin_info;
       extern sv_info_t sat_info;
@@ -252,8 +252,8 @@ void console_worker(void)
       extern const char* cntl_status;
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
-      (void)printf("e=%.3f dac=%d iocxo=%.1f temp=%.1f sat=%d lat=%f lon=%f obs=%lu meanv=%lu tacc=%lu esum=%f status=%s\n",
-        e, dacval, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
+      (void)printf("e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu esum=%f status=%s\n",
+        e, dac_value, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
     }
   }
 }
