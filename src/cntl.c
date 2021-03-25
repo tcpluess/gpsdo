@@ -110,7 +110,6 @@ static void cntl(void);
 float setpoint = 0.0f;
 
 float e = 0.0f;
-uint16_t dacval = 0u;
 double esum = 32768.0;
 const char* cntl_status = "";
 
@@ -303,6 +302,7 @@ static void cntl(void)
   static uint32_t statuscount = 0;
   static uint32_t outlier_count = 0;
   static uint64_t last_outlier_time = 0;
+  uint16_t dacval = 0u;
 
   /* determine the time interval (phase) error */
   float tic = read_tic();
