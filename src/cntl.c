@@ -61,7 +61,7 @@
 
 /* if no outliers are detected within this time, the outlier counter is
    reset */
-#define OUTLIER_DURATION 10u /* ignore outliers shorter than 10sec */
+#define OUTLIER_DURATION 5u * (60u * 1000u) /* 5 min in msec */
 
 /* the tic actually has an offset of 300ns because of the synchronisation
    logic internal to the stm32. this offset was determined empirically and
@@ -417,7 +417,16 @@ static void cntl(void)
         {
           outlier_count = 0u;
           statuscount = 0u;
-          stat = locked;
+
+          /* if the phase error is small, the slow pll mode is sufficient */
+          if(abs_err < 200.0f)
+          {
+            stat = locked;
+          }
+          else
+          {
+            stat = fast_track;
+          }
         }
       }
       else
