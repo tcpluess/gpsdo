@@ -61,7 +61,7 @@
 
 /* if no outliers are detected within this time, the outlier counter is
    reset */
-#define OUTLIER_DURATION 5u * (60u * 1000u) /* 5 min in msec */
+#define OUTLIER_DURATION 10u /* ignore outliers shorter than 10sec */
 
 /* the tic actually has an offset of 300ns because of the synchronisation
    logic internal to the stm32. this offset was determined empirically and
