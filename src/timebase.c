@@ -173,9 +173,9 @@ float get_tic(void)
 
   /* this brings the time interval into the range -0.5sec to +0.5sec */
   float ret;
-  if(ti > 25e6f)
+  if(ti > 5e6f)
   {
-    ret = (50e6f - ti);
+    ret = (10e6f - ti);
   }
   else
   {
@@ -184,7 +184,7 @@ float get_tic(void)
 
 
   /* to find the exact time interval, the interpolator value must be added */
-  ret = ret*20 + tdc;
+  ret = ret*100 + tdc;
   return ret;
 }
 
@@ -325,15 +325,16 @@ static void enable_timer(void)
   RCC_APB1ENR |= BIT_00;
 
 #ifdef USE_PLL
-  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 50 MHz */
-  TIM2_PSC = 0;
+  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 50 MHz.
+     a prescaler of 4 divides by 5, so the timer runs at 10 MHz. */
+  TIM2_PSC = 4;
 #else
   /* no prescaler, timer 2 runs with 10 MHz clock */
   TIM2_PSC = 0;
 #endif
 
 #ifdef USE_PLL
-  TIM2_ARR = 49999999u;
+  TIM2_ARR = 9999999u;
 #else
   /* timer wraps after 1 second */
   TIM2_ARR = 9999999u;
