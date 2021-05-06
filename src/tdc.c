@@ -118,7 +118,7 @@ void setup_tdc(void)
   RCC_APB2ENR |= BIT_12;
 
   /* configure spi1 */
-  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (5u << 3) |  BIT_02;
+  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (7u << 3) |  BIT_02;
   SPI1_CR2 = 0;
 
   /* enable spi2 */
