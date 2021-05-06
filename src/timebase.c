@@ -47,13 +47,13 @@
 #ifdef USE_PLL
 #define HSECLK 10000000u
 #define CPUCLK 160000000u
-#define PLLP 0u
-#define PLLQ 2u
+#define PLLN 100u /* vco runs at 200 MHz */
 #define PLLM 5u
-#define PLLN 160u
-#define PPRE2 4u
-#define PPRE1 5u
-#define HPRE 0u
+#define PLLQ 2u
+#define PLLP 0u /* vco frequency divided by 2 -> 100 MHz pll output */
+#define HPRE 0u /* ahb clock = pll clock */
+#define PPRE2 4u /* ahb clock divided by 2 -> apb2 runs at 50 MHz */
+#define PPRE1 5u /* ahb clock divided by 4 -> apb1 runs at 25 MHz */
 
 #define FVCO (HSECLK/PLLM*PLLN)
 #define PLL_INCLK (HSECLK/PLLM)
@@ -169,14 +169,13 @@ float get_tic(void)
   float tdc = get_tdc();
   uint32_t tic = tic_capture;
 
-
   float ti = tic;
 
   /* this brings the time interval into the range -0.5sec to +0.5sec */
   float ret;
-  if(ti > 5e6f)
+  if(ti > 25e6f)
   {
-    ret = (10e6f - ti);
+    ret = (50e6f - ti);
   }
   else
   {
@@ -185,7 +184,7 @@ float get_tic(void)
 
 
   /* to find the exact time interval, the interpolator value must be added */
-  ret = ret*100 + tdc;
+  ret = ret*20 + tdc;
   return ret;
 }
 
@@ -238,7 +237,10 @@ static void enable_osc(void)
 
 #else
 
-  /* configure the clock dividers such that the peripheral clocks are 10MHz */
+  /* enable the i and d caches, prefetch and use high latency for the flash */
+  FLASH_ACR = BIT_10 | BIT_09 | BIT_08 | 7u;
+
+  /* configure the clock dividers */
   RCC_CFGR = (PPRE2 << 13) | (PPRE1 << 10) | (HPRE << 4);
 
   /* configure the pll for 160MHz ahb clock */
@@ -323,15 +325,19 @@ static void enable_timer(void)
   RCC_APB1ENR |= BIT_00;
 
 #ifdef USE_PLL
-  /* prescaler 1 - the timer clock is divided by 2 */
-  TIM2_PSC = 1u;
+  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 50 MHz */
+  TIM2_PSC = 0;
 #else
   /* no prescaler, timer 2 runs with 10 MHz clock */
   TIM2_PSC = 0;
 #endif
 
+#ifdef USE_PLL
+  TIM2_ARR = 49999999u;
+#else
   /* timer wraps after 1 second */
   TIM2_ARR = 9999999u;
+#endif
 
   /* pwm mode for the pps output, set pulse duration */
   TIM2_SMCR = 0;
@@ -396,7 +402,7 @@ static void configure_systick(void)
   #ifndef USE_PLL
   SYSTICKRVR = (((10000000u / 8u) / 100) - 1u);
   #else
-  SYSTICKRVR = (((160000000u / 8u) / 100) - 1u);
+  SYSTICKRVR = (((100000000u / 8u) / 100) - 1u);
   #endif
   SYSTICKCSR = (BIT_01 | BIT_00);
   vic_enableirq(SYSTICK_VECTOR, systick_handler);
