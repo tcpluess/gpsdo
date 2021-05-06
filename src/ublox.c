@@ -87,6 +87,9 @@
 
 #define RECEIVE_TIMEOUT 150u /* ms */
 
+#define FIX_3D 3u
+#define FIX_TIME 5u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -391,8 +394,7 @@ bool check_fix(void)
   /* fix is only valid if not too old */
   if(age < 1000)
   {
-    /* 3d fix = 3, timing fix = 5 */
-    if((fixtype == 3) || (fixtype == 5))
+    if((fixtype == FIX_3D) || (fixtype == FIX_TIME))
     {
       return true;
     }
