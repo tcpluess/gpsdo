@@ -42,7 +42,7 @@
 #define TIM2_VECTOR 28
 #define SYSTICK_VECTOR -1
 
-//#define USE_PLL
+#define USE_PLL
 
 #ifdef USE_PLL
 #define HSECLK 10000000u
@@ -51,14 +51,19 @@
 #define PLLQ 2u
 #define PLLM 5u
 #define PLLN 160u
-#define PPRE2 7u
-#define PPRE1 7u
+#define PPRE2 4u
+#define PPRE1 5u
+#define HPRE 0u
 
 #define FVCO (HSECLK/PLLM*PLLN)
 #define PLL_INCLK (HSECLK/PLLM)
 
 #if (PLL_INCLK < 1000000u) || (PLL_INCLK > 2000000u)
 #error "The input clock to the PLL shall be between 1MHz and 2MHz"
+#endif
+
+#if (PLLN < 50u) || (PLLN > 432u)
+#error "wrong PLLN value"
 #endif
 
 #if (FVCO < 100000000u) || (FVCO > 432000000)
@@ -234,7 +239,7 @@ static void enable_osc(void)
 #else
 
   /* configure the clock dividers such that the peripheral clocks are 10MHz */
-  RCC_CFGR = (PPRE2 << 13) | (PPRE1 << 10);
+  RCC_CFGR = (PPRE2 << 13) | (PPRE1 << 10) | (HPRE << 4);
 
   /* configure the pll for 160MHz ahb clock */
   RCC_PLLCFGR = (PLLQ << 24) | BIT_22 | (PLLP << 16) | (PLLN << 6) | PLLM;
