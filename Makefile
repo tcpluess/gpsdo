@@ -46,7 +46,7 @@ DDEFS =
 DADEFS =
 
 # List all default directories to look for include files here
-DINCDIR =
+DINCDIR = $(sort $(dir $(call rwildcard,src/include/,*)))
 
 # List the default directory to look for the libraries here
 DLIBDIR =
@@ -95,7 +95,7 @@ SRC = $(call rwildcard,src/,*.c)
 ASRC = $(call rwildcard,src/,*.s)
 
 # List all user directories here
-UINCDIR = $(sort $(dir $(call rwildcard,src/include/,*)))
+UINCDIR =
 
 # List the user directory to look for the libraries here
 ULIBDIR =
