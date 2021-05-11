@@ -72,6 +72,8 @@
 
 #define DATA_MSK 0xffffffu
 
+#define TDC_SPI_DIVIDER 2u /* apb2 clock is 80 MHz, 2 amounts to divider 8 */
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -118,7 +120,7 @@ void setup_tdc(void)
   RCC_APB2ENR |= BIT_12;
 
   /* configure spi1 */
-  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (5u << 3) |  BIT_02;
+  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
   SPI1_CR2 = 0;
 
   /* enable spi2 */
@@ -295,6 +297,9 @@ static void tdc_ss(bool select)
   {
     GPIOA_BSRR = BIT_04;
   }
+
+  /* include a small delay to meet the setup time. */
+  for(int i=0; i<2000; i++);
 }
 
 /*============================================================================*/

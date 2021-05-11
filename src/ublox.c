@@ -53,8 +53,8 @@
 #define BAUD_RECONFIGURE 115200u /* baudrate after initialisation */
 
 /* macros to set the integer and fractional part of the baudrate generator */
-#define BAUD_INT(x) ((uint32_t)(10000000.0/(16.0*(x))))
-#define BAUD_FRAC(x) ((uint32_t)((10000000.0/x-16.0*BAUD_INT(x))+0.5))
+#define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
+#define BAUD_FRAC(x) ((uint32_t)((40000000.0/x-16.0*BAUD_INT(x))+0.5))
 
 /* usart interrupt vector number */
 #define IRQ_NUM 39
