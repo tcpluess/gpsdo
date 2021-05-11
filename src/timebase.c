@@ -375,8 +375,8 @@ static void configure_systick(void)
   uptime_msec = 0;
 
   /* the systick timer is used to calculate the uptime in msec - the systick
-     handler is called 100 times per second */
-  SYSTICKRVR = (((CPUCLK / 8u) / 100) - 1u);
+     handler is called 1000 times per second */
+  SYSTICKRVR = (((CPUCLK / 8u) / 1000) - 1u);
   SYSTICKCSR = (BIT_01 | BIT_00);
   vic_enableirq(SYSTICK_VECTOR, systick_handler);
 }
@@ -392,7 +392,7 @@ static void systick_handler(void)
   out: none
 ==============================================================================*/
 {
-  uptime_msec += 10;
+  uptime_msec += 1;
 }
 
 /*******************************************************************************
