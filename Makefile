@@ -127,6 +127,8 @@ endif
 
 ADEFS   = $(DADEFS) $(UADEFS)
 OBJS    = $(addsuffix .o, $(ASRC) $(SRC))
+LIST    = $(addsuffix .lss, $(ASRC) $(SRC))
+DEP     = $(addsuffix .d, $(ASRC) $(SRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
@@ -182,8 +184,8 @@ doc:
 
 .PHONY: clean
 clean:
-	@-rm -rf src/*.o src/*.d src/*.lss
-	@-rm -rf lst/*.lss lst/*.map
-	@-rm -rf bin/*.elf bin/*.hex bin/*.bin bin/*.s19
+	@rm -rfv $(OBJS) $(LIST) $(DEP)
+	@rm -rfv bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).bin bin/$(FULL_PRJ).s19
+	@rm -rfv lst/disassembly.lss
 
 -include $(wildcard src/*.d)
