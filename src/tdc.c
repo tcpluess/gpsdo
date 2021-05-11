@@ -299,7 +299,10 @@ static void tdc_ss(bool select)
   }
 
   /* include a small delay to meet the setup time. */
-  for(int i=0; i<2000; i++);
+  for(int i=0; i<2000; i++)
+  {
+    asm volatile ("nop");
+  }
 }
 
 /*============================================================================*/
