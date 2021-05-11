@@ -36,6 +36,8 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
+extern uint32_t StackTop; /* defined by the linker */
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -48,13 +50,17 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+extern void xPortPendSVHandler(void);
+extern void xPortSysTickHandler(void);
+extern void vPortSVCHandler(void);
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
 __attribute__((aligned (1024))) static funcptr_t vector_table[] =
 {
-    /* __initial_sp */                      0,
+    /* __initial_sp */                      (funcptr_t)&StackTop,
     /* Reset_Handler */                     0,
     /* NMI_Handler */                       0,
     /* HardFault_Handler */                 0,
@@ -65,11 +71,11 @@ __attribute__((aligned (1024))) static funcptr_t vector_table[] =
     /* 0 */                                 0,
     /* 0 */                                 0,
     /* 0 */                                 0,
-    /* SVC_Handler */                       0,
+    /* SVC_Handler */                       (funcptr_t)vPortSVCHandler,
     /* DebugMon_Handler */                  0,
     /* 0 */                                 0,
-    /* PendSV_Handler */                    0,
-    /* SysTick_Handler */                   0,
+    /* PendSV_Handler */                    (funcptr_t)xPortPendSVHandler,
+    /* SysTick_Handler */                   (funcptr_t)xPortSysTickHandler,
     /* 0: WWDG_IRQHandler */                0,
     /* 1: PVD_IRQHandler */                 0,
     /* 2: TAMPER_STAMP_IRQHandler */        0,

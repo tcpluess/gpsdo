@@ -28,6 +28,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "stm32f407.h"
 #include "misc.h"
 #include "temperature.h"
@@ -69,9 +71,8 @@ static void led_setup(void);
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-int main(void)
+void mainfunction(void * pvParameters)
 {
-  vic_init();
   led_setup();
   eep_init();
   load_config();
@@ -94,8 +95,17 @@ int main(void)
     gps_worker();
     cntl_worker();
     console_worker();
+    vTaskDelay(1);
   }
+}
 
+int main(void)
+{
+  vic_init();
+
+  xTaskCreate(mainfunction, "task", 500, NULL, 2, NULL);
+
+  vTaskStartScheduler();
   /*lint -unreachable */
   return 0;
 }
@@ -110,6 +120,28 @@ static void led_setup(void)
   GPIOE_MODER |= (1u << 28) | (1u << 30);
   GPIOE_BSRR = BIT_30 | BIT_31;
 }
+
+
+void vApplicationStackOverflowHook( TaskHandle_t xTask,
+                                               char * pcTaskName )
+{
+  /* This will get called if a stack overflow is detected during the context
+     switch.  Set configCHECKFORSTACKOVERFLOWS to 2 to also check for stack
+     problems within nested interrupts, but only do this for debug purposes as
+     it will increase the context switch time. /
+  (void)pxTask;
+  (void)pcTaskName;
+  taskDISABLE_INTERRUPTS();
+  / Write your code here … */
+  for(;;) {}
+}
+
+void vApplicationIdleHook(void)
+{
+  static int i = 0;
+  i++;
+}
+
 
 /*******************************************************************************
  * END OF CODE

@@ -147,6 +147,10 @@ float get_tdc(void)
   float time1 = tdc_read24(ADDR_TIME1);
 
   float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+  if((ns < 100.0f) || (ns > 210.0f))
+  {
+    printf("tdc error!\n");
+  }
   return ns;
 }
 

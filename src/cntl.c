@@ -67,7 +67,7 @@
    logic internal to the stm32. this offset was determined empirically and
    is chosten such that at a tic value of 0, the 1PPS output and the tic input
    occur at the same time. */
-#define TIC_OFFSET 300u
+#define TIC_OFFSET 0u
 
 #define TAU_FASTTRACK 10.0
 #define TAU_LOCKED 100.0

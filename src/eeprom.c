@@ -237,6 +237,11 @@ void load_config(void)
 
     cfg.timeoffset = 0;
   }
+  else
+  {
+    extern double esum;
+    esum = (double)cfg.last_dacval;
+  }
 }
 
 

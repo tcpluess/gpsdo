@@ -112,7 +112,7 @@ void timebase_init(void)
   res = false;
   tic_capture = 0;
 
-  configure_systick();
+  //configure_systick();
 
   /* enable the external oscillator and the mco output and start the timer */
   enable_osc();
@@ -398,3 +398,8 @@ static void systick_handler(void)
 /*******************************************************************************
  * END OF CODE
  ******************************************************************************/
+
+void vApplicationTickHook(void)
+{
+  uptime_msec += 1;
+}

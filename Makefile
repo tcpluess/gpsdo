@@ -56,7 +56,7 @@ DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
 PROJECT        = gnssdo
-RUN_FROM_FLASH = 1
+RUN_FROM_FLASH = 0
 USE_HARD_FPU   = 1
 HEAP_SIZE      = 0
 STACK_SIZE     = 8k
