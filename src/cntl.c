@@ -63,11 +63,8 @@
    reset */
 #define OUTLIER_DURATION 5u * (60u * 1000u) /* 5 min in msec */
 
-/* the tic actually has an offset of 300ns because of the synchronisation
-   logic internal to the stm32. this offset was determined empirically and
-   is chosten such that at a tic value of 0, the 1PPS output and the tic input
-   occur at the same time. */
-#define TIC_OFFSET 300u
+/* used to add a constant offset to the tic values. */
+#define TIC_OFFSET 0u
 
 #define TAU_FASTTRACK 10.0
 #define TAU_LOCKED 100.0
@@ -182,6 +179,7 @@ void cntl_worker(void)
     case warmup:
     {
       blink_nervous();
+      esum = cfg.last_dacval;
 
       /* measure the ocxo current; when the ocxo is warm, the current drops */
       start_conversion();
