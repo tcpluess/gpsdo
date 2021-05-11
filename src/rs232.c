@@ -42,8 +42,8 @@
  ******************************************************************************/
 
 #define TXBUFFERSIZE 512
-#define BAUD_INT(x) ((uint32_t)(25000000.0/(16.0*(x))))
-#define BAUD_FRAC(x) ((uint32_t)((25000000.0/(x)-16.0*BAUD_INT(x))+0.5))
+#define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
+#define BAUD_FRAC(x) ((uint32_t)((40000000.0/(x)-16.0*BAUD_INT(x))+0.5))
 
 #define RXBUFFERSIZE 10u
 

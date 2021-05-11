@@ -42,21 +42,22 @@
 #define TIM2_VECTOR 28
 #define SYSTICK_VECTOR -1
 
-#define USE_PLL
-
-#ifdef USE_PLL
 #define HSECLK 10000000u
-#define CPUCLK 160000000u
-#define PLLN 100u /* vco runs at 200 MHz */
+#define PLLN 160u /* vco runs at 320 MHz */
 #define PLLM 5u
 #define PLLQ 2u
-#define PLLP 0u /* vco frequency divided by 2 -> 100 MHz pll output */
+#define PLLP 0u /* vco frequency divided by 2 -> 160 MHz pll output */
 #define HPRE 0u /* ahb clock = pll clock */
-#define PPRE2 4u /* ahb clock divided by 2 -> apb2 runs at 50 MHz */
-#define PPRE1 5u /* ahb clock divided by 4 -> apb1 runs at 25 MHz */
+#define PPRE2 4u /* apb2 clock divided by 4 -> apb2 runs at 80 MHz */
+#define PPRE1 5u /* apb1 clock divided by 4 -> apb1 runs at 40 MHz */
 
 #define FVCO (HSECLK/PLLM*PLLN)
 #define PLL_INCLK (HSECLK/PLLM)
+#define CPUCLK (FVCO/((PLLP + 1u) * 2u))
+
+#if (CPUCLK > 168000000)
+#error "The CPU clock is too high"
+#endif
 
 #if (PLL_INCLK < 1000000u) || (PLL_INCLK > 2000000u)
 #error "The input clock to the PLL shall be between 1MHz and 2MHz"
@@ -69,7 +70,8 @@
 #if (FVCO < 100000000u) || (FVCO > 432000000)
 #error "The VCO frequency shall be between 100MHz and 432MHz"
 #endif
-#endif
+
+#define TIMER_DIVISION 8u /* 40 MHz divided by 4 -> 10 MHz */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -182,9 +184,8 @@ float get_tic(void)
     ret = -ti;
   }
 
-
   /* to find the exact time interval, the interpolator value must be added */
-  ret = ret*100 + tdc;
+  ret = ret*100.0f + tdc;
   return ret;
 }
 
@@ -223,20 +224,6 @@ static void enable_osc(void)
     }
   } while(true);
 
-#ifndef USE_PLL
-
-  /* switch the cpu clock to the ext. osc. and wait until it is switched */
-  RCC_CFGR |= BIT_00;
-  do
-  {
-    if((RCC_CFGR & (BIT_02 | BIT_03)) == BIT_02)
-    {
-      break;
-    }
-  } while(true);
-
-#else
-
   /* enable the i and d caches, prefetch and use high latency for the flash */
   FLASH_ACR = BIT_10 | BIT_09 | BIT_08 | 7u;
 
@@ -265,7 +252,6 @@ static void enable_osc(void)
       break;
     }
   } while(true);
-#endif
 
   /* disable internal osc. */
   RCC_CR &= ~BIT_00;
@@ -324,28 +310,18 @@ static void enable_timer(void)
   /* enable timer */
   RCC_APB1ENR |= BIT_00;
 
-#ifdef USE_PLL
-  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 50 MHz.
-     a prescaler of 4 divides by 5, so the timer runs at 10 MHz. */
-  TIM2_PSC = 4;
-#else
-  /* no prescaler, timer 2 runs with 10 MHz clock */
-  TIM2_PSC = 0;
-#endif
+  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 40 MHz.
+     a prescaler of N divides by N+1. the timer shall run at 10 MHz */
+  TIM2_PSC = (TIMER_DIVISION - 1u);
 
-#ifdef USE_PLL
-  TIM2_ARR = 9999999u;
-#else
   /* timer wraps after 1 second */
   TIM2_ARR = 9999999u;
-#endif
 
   /* pwm mode for the pps output, set pulse duration */
   TIM2_SMCR = 0;
   TIM2_CCER = 0;
   TIM2_CCMR1 = (6u << 12) | BIT_11;
   set_pps_duration(100u);
-
 
   /* capture mode for ch3 */
   TIM2_CCMR2 = (1u << 0);
@@ -370,7 +346,7 @@ static void capture_irq(void)
   if(res)
   {
     /* timebase reset requested */
-    TIM2_CNT = 0;
+    TIM2_CNT = 7; // TODO: this is somewhat hackish. better ideas??
     res = false;
   }
   else
@@ -400,11 +376,7 @@ static void configure_systick(void)
 
   /* the systick timer is used to calculate the uptime in msec - the systick
      handler is called 100 times per second */
-  #ifndef USE_PLL
-  SYSTICKRVR = (((10000000u / 8u) / 100) - 1u);
-  #else
-  SYSTICKRVR = (((100000000u / 8u) / 100) - 1u);
-  #endif
+  SYSTICKRVR = (((CPUCLK / 8u) / 100) - 1u);
   SYSTICKCSR = (BIT_01 | BIT_00);
   vic_enableirq(SYSTICK_VECTOR, systick_handler);
 }
