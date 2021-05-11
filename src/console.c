@@ -140,7 +140,7 @@ void console_worker(void)
     {
       (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
       (void)printf("use \"help\" to see the available commands\n");
-      (void)printf("version 2021-05-06\n\n");
+      (void)printf("version 2021-05-11\n\n");
       status = prompt;
       auto_disp = false;
       break;
