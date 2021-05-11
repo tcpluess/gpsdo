@@ -95,7 +95,8 @@ SRC = $(call rwildcard,src/,*.c)
 ASRC = $(call rwildcard,src/,*.s)
 
 # List all user directories here
-UINCDIR =
+UINCDIR = src/freertos/include \
+          src/freertos/portable/GCC/ARM_CM4F
 
 # List the user directory to look for the libraries here
 ULIBDIR =
@@ -188,4 +189,4 @@ clean:
 	@rm -rfv bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).bin bin/$(FULL_PRJ).s19
 	@rm -rfv lst/disassembly.lss
 
--include $(wildcard src/*.d)
+-include $(DEP)
