@@ -174,66 +174,69 @@ static void blink_slow(bool on)
 }
 
 
-void cntl_worker(void)
+void cntl_task(void* param)
 {
-  switch(gpsdostatus)
+  for(;;)
   {
-    /* warmup: wait until the ocxo is ready */
-    case warmup:
+    switch(gpsdostatus)
     {
-      blink_nervous();
-
-      /* measure the ocxo current; when the ocxo is warm, the current drops */
-      start_conversion();
-      float iocxo = get_iocxo();
-      if(iocxo < OCXO_CURRENT_LIM)
+      /* warmup: wait until the ocxo is ready */
+      case warmup:
       {
-        ppsenable(true);
+        blink_nervous();
 
-        /* if gnss is available, go to track/lock mode, otherwise holdover */
+        /* measure the ocxo current; when the ocxo is warm, the current drops */
+        start_conversion();
+        float iocxo = get_iocxo();
+        if(iocxo < OCXO_CURRENT_LIM)
+        {
+          ppsenable(true);
+
+          /* if gnss is available, go to track/lock mode, otherwise holdover */
+          if(check_fix())
+          {
+            gpsdostatus = track_lock;
+          }
+          else
+          {
+            gpsdostatus = holdover;
+          }
+        }
+        break;
+      }
+
+      /* holdover mode: wait until the position is valid */
+      case holdover:
+      {
+        blink_fast();
+
         if(check_fix())
         {
           gpsdostatus = track_lock;
+        }
+        break;
+      }
+
+      /* track/lock mode: control loop is active */
+      case track_lock:
+      {
+        blink_slow(false);
+
+        /* only look at the 1pps signal if the fix is valid; if fix is invalid,
+           go to holdover mode */
+        if(check_fix())
+        {
+          /* is it time to run the control loop? */
+          if(pps_elapsed())
+          {
+            blink_slow(true);
+            cntl();
+          }
         }
         else
         {
           gpsdostatus = holdover;
         }
-      }
-      break;
-    }
-
-    /* holdover mode: wait until the position is valid */
-    case holdover:
-    {
-      blink_fast();
-
-      if(check_fix())
-      {
-        gpsdostatus = track_lock;
-      }
-      break;
-    }
-
-    /* track/lock mode: control loop is active */
-    case track_lock:
-    {
-      blink_slow(false);
-
-      /* only look at the 1pps signal if the fix is valid; if fix is invalid,
-         go to holdover mode */
-      if(check_fix())
-      {
-        /* is it time to run the control loop? */
-        if(pps_elapsed())
-        {
-          blink_slow(true);
-          cntl();
-        }
-      }
-      else
-      {
-        gpsdostatus = holdover;
       }
     }
   }

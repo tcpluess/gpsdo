@@ -47,6 +47,7 @@
 	extern uint32_t SystemCoreClock;
 #endif
 
+#define configAPPLICATION_ALLOCATED_HEAP 1
 #define configUSE_PREEMPTION			1
 #define configUSE_IDLE_HOOK				1
 #define configUSE_TICK_HOOK				1

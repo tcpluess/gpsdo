@@ -28,6 +28,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "semphr.h"
 #include "timebase.h"
 #include "stm32f407.h"
 #include "misc.h"
@@ -102,6 +104,8 @@ static volatile bool res;
 static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
 
+static SemaphoreHandle_t timepulse_semaphore;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -112,7 +116,7 @@ void timebase_init(void)
   res = false;
   tic_capture = 0;
 
-  //configure_systick();
+  vSemaphoreCreateBinary(timepulse_semaphore);
 
   /* enable the external oscillator and the mco output and start the timer */
   enable_osc();
@@ -126,9 +130,8 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  if(pps)
+  if(xSemaphoreTake(timepulse_semaphore, 1100))
   {
-    pps = false;
     return true;
   }
   else
@@ -351,8 +354,7 @@ static void capture_irq(void)
   }
   else
   {
-    /* setting the pps flag lets the main program do its job */
-    pps = true;
+    xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
 
     /* read out the captured value */
     tic_capture = TIM2_CCR3;

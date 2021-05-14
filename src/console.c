@@ -28,6 +28,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "console.h"
 #include "rs232.h"
 #include "eeprom.h"
@@ -128,133 +130,138 @@ static bool auto_disp = false;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void console_worker(void)
+void console_task(void* param)
 {
+  rs232_init();
   static consolestatus_t status = startup;
   int rx;
-
-  switch(status)
+  for(;;)
   {
-    /* clears the terminal and prints the info screen */
-    case startup:
+    switch(status)
     {
-      (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-      (void)printf("use \"help\" to see the available commands\n");
-      (void)printf("version 2021-05-06\n\n");
-      status = prompt;
-      auto_disp = false;
-      break;
-    }
-
-    /* prints the console prompt character */
-    case prompt:
-    {
-      txchar('#');
-      txchar(' ');
-      status = input;
-      wrpos = 0;
-      break;
-    }
-
-    /* processes the received characters and echoes them back accordingly */
-    case input:
-    {
-      rx = kbhit();
-
-      switch(rx)
+      /* clears the terminal and prints the info screen */
+      case startup:
       {
-        /* no character received, nothing to do */
-        case -1:
-        {
-          break;
-        }
-
-        /* backspace entered: only need to do something if the line buffer is not
-           empty; erase the last character in the terminal by going back one,
-           sending a space and again going back one; also decrease the
-           writing pos into the line buffer */
-        case '\b':
-        {
-          if(wrpos > 0)
-          {
-            txchar('\b');
-            txchar(' ');
-            txchar('\b');
-            wrpos--;
-          }
-          break;
-        }
-
-        /* enter is pressed, terminate the line buffer and evaluate it
-           or do nothing if the line buffer is empty */
-        case '\r':
-        case '\n':
-        {
-          auto_disp = false;
-          txchar('\r');
-          txchar('\n');
-          linebuffer[wrpos] = '\0';
-          if(strlen(linebuffer) > 0)
-          {
-            status = evaluate;
-          }
-          else
-          {
-            status = prompt;
-          }
-          break;
-        }
-
-        /* a normal character is received, so echo back and add it into
-           the line buffer */
-        default:
-        {
-          /* FIXME: need to check this condition */
-          if(wrpos < MAX_LINELEN-2)
-          {
-            txchar((char)rx);
-            linebuffer[wrpos] = (char)rx;
-            wrpos++;
-          }
-          break;
-        }
+        (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
+        (void)printf("use \"help\" to see the available commands\n");
+        (void)printf("version 2021-05-06\n\n");
+        status = prompt;
+        auto_disp = false;
+        break;
       }
-      break;
+
+      /* prints the console prompt character */
+      case prompt:
+      {
+        txchar('#');
+        txchar(' ');
+        status = input;
+        wrpos = 0;
+        break;
+      }
+
+      /* processes the received characters and echoes them back accordingly */
+      case input:
+      {
+        rx = kbhit();
+
+        switch(rx)
+        {
+          /* no character received, nothing to do */
+          case -1:
+          {
+            break;
+          }
+
+          /* backspace entered: only need to do something if the line buffer is not
+             empty; erase the last character in the terminal by going back one,
+             sending a space and again going back one; also decrease the
+             writing pos into the line buffer */
+          case '\b':
+          {
+            if(wrpos > 0)
+            {
+              txchar('\b');
+              txchar(' ');
+              txchar('\b');
+              wrpos--;
+            }
+            break;
+          }
+
+          /* enter is pressed, terminate the line buffer and evaluate it
+             or do nothing if the line buffer is empty */
+          case '\r':
+          case '\n':
+          {
+            auto_disp = false;
+            txchar('\r');
+            txchar('\n');
+            linebuffer[wrpos] = '\0';
+            if(strlen(linebuffer) > 0)
+            {
+              status = evaluate;
+            }
+            else
+            {
+              status = prompt;
+            }
+            break;
+          }
+
+          /* a normal character is received, so echo back and add it into
+             the line buffer */
+          default:
+          {
+            /* FIXME: need to check this condition */
+            if(wrpos < MAX_LINELEN-2)
+            {
+              txchar((char)rx);
+              linebuffer[wrpos] = (char)rx;
+              wrpos++;
+            }
+            break;
+          }
+        }
+        break;
+      }
+
+      /* if a command line has been entered, it is processed in this state */
+      case evaluate:
+      {
+        const char* toks[MAX_TOKENS];
+        int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
+        interpreter(ntoks, toks);
+        status = prompt;
+        break;
+      }
     }
 
-    /* if a command line has been entered, it is processed in this state */
-    case evaluate:
+    if(auto_disp)
     {
-      const char* toks[MAX_TOKENS];
-      int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
-      interpreter(ntoks, toks);
-      status = prompt;
-      break;
+      static uint64_t last = 0;
+      uint64_t now = get_uptime_msec();
+      if(now - last >= 1000ull)
+      {
+        last = now;
+
+        float i = get_iocxo();
+        float t = get_temperature();
+        extern float e;
+        extern uint16_t dac_value;
+        extern gpsinfo_t pvt_info;
+        extern svindata_t svin_info;
+        extern sv_info_t sat_info;
+        extern double esum;
+        extern const char* cntl_status;
+        uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+
+        (void)printf("e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu esum=%f status=%s\n",
+          e, dac_value, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
+      }
     }
-  }
 
-  if(auto_disp)
-  {
-    static uint64_t last = 0;
-    uint64_t now = get_uptime_msec();
-    if(now - last >= 1000ull)
-    {
-      last = now;
-
-      float i = get_iocxo();
-      float t = get_temperature();
-      extern float e;
-      extern uint16_t dac_value;
-      extern gpsinfo_t pvt_info;
-      extern svindata_t svin_info;
-      extern sv_info_t sat_info;
-      extern double esum;
-      extern const char* cntl_status;
-      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
-
-      (void)printf("e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu esum=%f status=%s\n",
-        e, dac_value, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
-    }
+    vTaskDelay(10);
   }
 }
 

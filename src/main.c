@@ -40,7 +40,6 @@
 #include "timebase.h"
 #include "vic.h"
 #include "adc.h"
-#include "ublox.h"
 #include "eeprom.h"
 #include "console.h"
 #include "cntl.h"
@@ -63,6 +62,9 @@
 
 static void led_setup(void);
 
+__attribute__((section(".freertos_heap")))
+uint8_t ucHeap[configTOTAL_HEAP_SIZE];
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -71,14 +73,17 @@ static void led_setup(void);
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void mainfunction(void * pvParameters)
+extern void gps_task(void * pvParameters);
+extern void cntl_task(void * pvParameters);
+extern void console_task(void * pvParameters);
+
+
+void init(void * pvParameters)
 {
   led_setup();
   eep_init();
   load_config();
   timebase_init();
-  ublox_init();
-  rs232_init();
   dac_setup();
   tmp_init();
   setup_tdc();
@@ -90,12 +95,13 @@ void mainfunction(void * pvParameters)
   timebase_reset();
   enable_tdc();
 
+  xTaskCreate(gps_task, "gps", 250, NULL, 2, NULL);
+  xTaskCreate(cntl_task, "control", 250, NULL, 2, NULL);
+  xTaskCreate(console_task, "console", 250, NULL, 2, NULL);
+
   for(;;)
   {
-    gps_worker();
-    cntl_worker();
-    console_worker();
-    vTaskDelay(1);
+    vTaskDelete(NULL);
   }
 }
 
@@ -103,7 +109,7 @@ int main(void)
 {
   vic_init();
 
-  xTaskCreate(mainfunction, "task", 500, NULL, 2, NULL);
+  xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
 
   vTaskStartScheduler();
   /*lint -unreachable */

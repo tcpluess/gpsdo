@@ -167,12 +167,33 @@ __attribute__((aligned (1024))) static funcptr_t vector_table[] =
 void vic_init(void)
 {
   VTOR = (uint32_t)vector_table;
+  AIRCR = 0x05FA0300;
+  IP0 = 0x60606060u;
+  IP1 = 0x60606060u;
+  IP2 = 0x60606060u;
+  IP3 = 0x60606060u;
+  IP4 = 0x60606060u;
+  IP5 = 0x60606060u;
+  IP6 = 0x60606060u;
+  IP7 = 0x60606060u;
+  IP8 = 0x60606060u;
+  IP9 = 0x60606060u;
+  IP10 = 0x60606060u;
+  IP11 = 0x60606060u;
+  IP12 = 0x60606060u;
+  IP13 = 0x60606060u;
+  IP14 = 0x60606060u;
+  IP15 = 0x60606060u;
+  IP16 = 0x60606060u;
+  IP17 = 0x60606060u;
+  IP18 = 0x60606060u;
+  IP19 = 0x60606060u;
 }
 
 void vic_enableirq(int32_t intnum, funcptr_t func)
 {
   vector_table[intnum + 16] = func;
-  if(intnum > 0)
+  if(intnum >= 0)
   {
     if(intnum < 32)
     {
