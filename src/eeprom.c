@@ -233,14 +233,9 @@ void load_config(void)
     cfg.tau = 250u;
     cfg.filt = 50u;
 
-    cfg.elevation_mask = 5; /* 5 degree elevation mask */
+    cfg.elevation_mask = 15; /* 5 degree elevation mask */
 
     cfg.timeoffset = 0;
-  }
-  else
-  {
-    extern double esum;
-    esum = (double)cfg.last_dacval;
   }
 }
 

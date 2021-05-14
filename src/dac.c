@@ -54,8 +54,6 @@
 static void spi_ss(bool enable);
 static void spi_transmit(uint8_t data);
 
-uint16_t dac_value = 0;
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -124,7 +122,8 @@ void set_dac(uint16_t data)
   /* unselect */
   spi_ss(false);
 
-  dac_value = data;
+  extern volatile uint16_t stat_dac;
+  stat_dac = data;
 }
 
 /*******************************************************************************

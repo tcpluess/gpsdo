@@ -46,7 +46,6 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define TXBUFFERSIZE 512
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
 #define BAUD_FRAC(x) ((uint32_t)((40000000.0/(x)-16.0*BAUD_INT(x))+0.5))
 
@@ -122,7 +121,7 @@ int kbhit(void)
 
 void txchar(char c)
 {
-  xStreamBufferSend(txstream, &c, 1, portMAX_DELAY);
+  (void)xStreamBufferSend(txstream, &c, 1, portMAX_DELAY);
   enable_txempty_irq();
 }
 
@@ -160,7 +159,7 @@ static void irq_handler(void)
   {
     /* DR must be read anyways to acknowledge the interrupt */
     uint8_t tmp = (uint8_t)USART2_DR;
-    xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
+    (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
   }
 
   USART2_SR = 0;

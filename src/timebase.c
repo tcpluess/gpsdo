@@ -40,9 +40,8 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-/* interrupt vector numbers for the systick and the timer 2 */
+/* interrupt vector number for the timer 2 */
 #define TIM2_VECTOR 28
-#define SYSTICK_VECTOR -1
 
 #define HSECLK 10000000u
 #define PLLN 160u /* vco runs at 320 MHz */
@@ -53,7 +52,7 @@
 #define PPRE2 4u /* apb2 clock divided by 4 -> apb2 runs at 80 MHz */
 #define PPRE1 5u /* apb1 clock divided by 4 -> apb1 runs at 40 MHz */
 
-#define FVCO (HSECLK/PLLM*PLLN)
+#define FVCO ((HSECLK/PLLM)*PLLN)
 #define PLL_INCLK (HSECLK/PLLM)
 #define CPUCLK (FVCO/((PLLP + 1u) * 2u))
 
@@ -92,14 +91,11 @@ static void enable_mco(void);
 static void configure_ppsenable(void);
 static void enable_timer(void);
 static void capture_irq(void);
-static void configure_systick(void);
-static void systick_handler(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static volatile bool pps;
 static volatile bool res;
 static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
@@ -112,9 +108,9 @@ static SemaphoreHandle_t timepulse_semaphore;
 
 void timebase_init(void)
 {
-  pps = false;
   res = false;
   tic_capture = 0;
+  uptime_msec = 0ull;
 
   vSemaphoreCreateBinary(timepulse_semaphore);
 
@@ -130,7 +126,7 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  if(xSemaphoreTake(timepulse_semaphore, 1100))
+  if(xSemaphoreTake(timepulse_semaphore, 50))
   {
     return true;
   }
@@ -161,10 +157,8 @@ void ppsenable(bool enable)
 
 void timebase_reset(void)
 {
-  pps = false;
   res = true;
 }
-
 
 
 float get_tic(void)
@@ -173,6 +167,7 @@ float get_tic(void)
      periods) from the tdc and the capture register, respectively */
   float tdc = get_tdc();
   uint32_t tic = tic_capture;
+  tic_capture = 0;
 
   float ti = tic;
 
@@ -201,7 +196,11 @@ void set_pps_duration(uint32_t ms)
 
 uint64_t get_uptime_msec(void)
 {
-  return uptime_msec;
+  uint64_t ret;
+  vPortEnterCritical();
+  ret = uptime_msec;
+  vPortExitCritical();
+  return ret;
 }
 
 /*******************************************************************************
@@ -349,12 +348,12 @@ static void capture_irq(void)
   if(res)
   {
     /* timebase reset requested */
-    TIM2_CNT = 7; // TODO: this is somewhat hackish. better ideas??
+    TIM2_CNT = 6; // TODO: this is somewhat hackish. better ideas??
     res = false;
   }
   else
   {
-    xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
+    (void)xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
 
     /* read out the captured value */
     tic_capture = TIM2_CCR3;
@@ -362,39 +361,6 @@ static void capture_irq(void)
 
   /* acknowledge */
   TIM2_SR = 0;
-}
-
-
-/*============================================================================*/
-static void configure_systick(void)
-/*------------------------------------------------------------------------------
-  Function:
-  configures the cortex m systick timer for 10ms repetition frequency
-  in:  none
-  out: none
-==============================================================================*/
-{
-  uptime_msec = 0;
-
-  /* the systick timer is used to calculate the uptime in msec - the systick
-     handler is called 100 times per second */
-  SYSTICKRVR = (((CPUCLK / 8u) / 100) - 1u);
-  SYSTICKCSR = (BIT_01 | BIT_00);
-  vic_enableirq(SYSTICK_VECTOR, systick_handler);
-}
-
-
-/*============================================================================*/
-static void systick_handler(void)
-/*------------------------------------------------------------------------------
-  Function:
-  this is the actual systick handler, called 100 times per second, used to
-  keep track of the uptime
-  in:  none
-  out: none
-==============================================================================*/
-{
-  uptime_msec += 10;
 }
 
 /*******************************************************************************

@@ -1,5 +1,8 @@
  /* include directories: */
  -i"d:\bin\Lint\include\"
+ -i"d:\tmp\gpsdo_firmware\src\include\"
+ -i"d:\tmp\gpsdo_firmware\src\freertos\include\"
+ -i"d:\tmp\gpsdo_firmware\src\freertos\portable\GCC\ARM_CM4F\"
 
  -d__attribute__(x)
 
@@ -8,6 +11,8 @@
 -e722 /* semicolon next to while() is deliberate */
 -e835 /* shift count of zero is deliberate */
 -e537 /* repeated include file is no problem */
+-e845 /* right argument to | is 0 */
+-e793 /* some names are longer than 31 characters */
 +fsu /* strings are arrays of unsigned char */
 +fan /* allow anonymous unions */
 +fas /* allow anonymous unions */

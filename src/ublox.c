@@ -43,9 +43,6 @@
 #include "convert.h"
 #include "eeprom.h"
 
-#include <math.h>
-#include <string.h>
-
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -104,18 +101,6 @@
 
 typedef enum
 {
-  reset,
-  wait_ready,
-  configure_uart,
-  configure_messages,
-  wait_fix,
-  normal,
-  fixpos_mode,
-  survey_in
-} workerstatus_t;
-
-typedef enum
-{
   ubx_header1,
   ubx_header2,
   ubx_class,
@@ -137,7 +122,6 @@ typedef struct
   union
   {
     volatile bool valid;
-    volatile bool empty;
   };
 } ubxbuffer_t;
 
@@ -160,7 +144,10 @@ sv_info_t sat_info;
 /* not static because from eeprom */
 extern config_t cfg;
 
-static workerstatus_t status;
+
+static volatile bool do_svin;
+static volatile bool do_disable_tmode;
+static volatile bool do_set_fixpos_mode;
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -184,10 +171,13 @@ static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
   uint32_t dur, uint32_t acc, uint32_t acc_lim);
 static bool ubx_receive_packet(ubxbuffer_t* rx);
 
-static void ubx_transmit_packet(ubxbuffer_t* tx);
+static void ubx_transmit_packet(const ubxbuffer_t* tx);
 
 static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
+
+
+static void dispatch_messages(void);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -195,10 +185,13 @@ static StreamBufferHandle_t txstream;
 
 void gps_task(void* param)
 {
-  rxstream = xStreamBufferCreate(200, 10);
-  txstream = xStreamBufferCreate(100, 1);
+  (void)param;
+  rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
+  txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
   qerr = 0.0f;
-  status = reset;
+  do_svin = false;
+  do_disable_tmode = false;
+  do_set_fixpos_mode = false;
 
   init_uart();
 
@@ -238,70 +231,29 @@ void gps_task(void* param)
   ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
 
   /* timing mode must be disabled before survey-in can be started again */
-  disable_tmode();
+  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
 
-  uint32_t num_messages = 0;
   for(;;)
   {
-    ubxbuffer_t rx;
-    if(ubx_receive_packet(&rx))
+    dispatch_messages();
+
+    if(do_disable_tmode)
     {
-      num_messages++;
-      switch(rx.msgclass)
-      {
-        case UBX_CLASS_NAV:
-        {
-          switch(rx.msgid)
-          {
-            case UBX_ID_NAV_SAT:
-            {
-              unpack_sv(rx.msg, &sat_info);
-              break;
-            }
+      do_disable_tmode = false;
+      ubx_config_tmode(tmode_disable, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+    }
 
-            case UBX_ID_NAV_PVT:
-            {
-              unpack_pvt(rx.msg, &pvt_info);
-              break;
-            }
+    if(do_svin)
+    {
+      do_svin = false;
+      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+      ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+    }
 
-            default:
-            {
-              break;
-            }
-          }
-          break;
-        }
-
-        case UBX_CLASS_TIM:
-        {
-          switch(rx.msgid)
-          {
-            case UBX_ID_TIM_TP:
-            {
-              unpack_tp(rx.msg, &qerr);
-              break;
-            }
-
-            case UBX_ID_TIM_SVIN:
-            {
-              unpack_svin(rx.msg, &svin_info);
-              break;
-            }
-
-            default:
-            {
-              break;
-            }
-          }
-          break;
-        }
-
-        default:
-        {
-          break;
-        }
-      }
+    if(do_set_fixpos_mode)
+    {
+      do_set_fixpos_mode = false;
+      ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
     }
   }
 
@@ -359,22 +311,20 @@ float get_timepulse_error(void)
 
 void start_svin(void)
 {
-  ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
-  status = survey_in;
+  do_svin = true;
 }
 
 
 void set_fixpos_mode(void)
 {
-    ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
-    status = fixpos_mode;
+  do_set_fixpos_mode = true;
 }
 
 
 void disable_tmode(void)
 {
-  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-  if(cfg.fixpos_valid)
+  do_disable_tmode = true;
+/*  if(cfg.fixpos_valid)
   {
     set_fixpos_mode();
     status = fixpos_mode;
@@ -382,27 +332,18 @@ void disable_tmode(void)
   else
   {
     status = normal;
-  }
-}
-
-
-void gps_restart(void)
-{
-  status = reset;
+  }*/
 }
 
 
 bool check_fix(void)
 {
   uint64_t ms = get_uptime_msec();
-
-  /* position, velocity and time info */
-  extern gpsinfo_t pvt_info;
   uint8_t fixtype = pvt_info.fixtype;
   uint64_t age = ms - pvt_info.time;
 
   /* fix is only valid if not too old */
-  if(age < 1000)
+  if(age < 1200)
   {
     if((fixtype == FIX_3D) || (fixtype == FIX_TIME))
     {
@@ -503,9 +444,9 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
 {
   irqstatus_t rxstatus = ubx_header1;
 
-  uint32_t wrpos;
-  uint8_t cka;
-  uint8_t ckb;
+  uint32_t wrpos = 0;
+  uint8_t cka = 0;
+  uint8_t ckb = 0;
   uint8_t tmpdata;
 
   for(;;)
@@ -546,8 +487,6 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
 
       case ubx_class:
       {
-        cka = 0;
-        ckb = 0;
         rx->msgclass = tmpdata;
         rxstatus = ubx_id;
         break;
@@ -582,7 +521,6 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
         else
         {
           /* reset the writing position in the receive buffer */
-          wrpos = 0;
           rxstatus = ubx_data;
         }
         break;
@@ -627,6 +565,7 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
           rx->valid = true;
           return true;
         }
+        break;
       }
 
       default:
@@ -643,7 +582,7 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
 
 
 /*============================================================================*/
-static void ubx_transmit_packet(ubxbuffer_t* tx)
+static void ubx_transmit_packet(const ubxbuffer_t* tx)
 /*------------------------------------------------------------------------------
   Function:
   the txhandler is the interrupt handler which is called whenever the tx data
@@ -747,7 +686,7 @@ static void ubx_transmit_packet(ubxbuffer_t* tx)
 
     txstatus = nextstatus;
 
-    xStreamBufferSend(txstream, &tmpdata, 1, portMAX_DELAY);
+    (void)xStreamBufferSend(txstream, &tmpdata, 1, portMAX_DELAY);
     enable_txempty_irq();
   }
 }
@@ -769,7 +708,7 @@ static void uart_irq_handler(void)
   if(sr & BIT_05)
   {
     uint8_t tmp = (uint8_t)USART3_DR;
-    xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
+    (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
   }
 
   /* tx buffer empty? */
@@ -811,13 +750,11 @@ static bool gps_wait_ack(void)
           case UBX_ID_NAK:
           {
             return false;
-            break;
           }
 
           case UBX_ID_ACK:
           {
             return true;
-            break;
           }
 
           default:
@@ -1156,6 +1093,70 @@ static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
     pack_u32_le(tmp.msg, 24, acc_lim);  /* survey-in accuracy limit */
     ubx_transmit_packet(&tmp);
   } while(gps_wait_ack() == false);
+}
+
+
+static void dispatch_messages(void)
+{
+  ubxbuffer_t rx;
+  if(ubx_receive_packet(&rx))
+  {
+    switch(rx.msgclass)
+    {
+      case UBX_CLASS_NAV:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_NAV_SAT:
+          {
+            unpack_sv(rx.msg, &sat_info);
+            break;
+          }
+
+          case UBX_ID_NAV_PVT:
+          {
+            unpack_pvt(rx.msg, &pvt_info);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      case UBX_CLASS_TIM:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_TIM_TP:
+          {
+            unpack_tp(rx.msg, &qerr);
+            break;
+          }
+
+          case UBX_ID_TIM_SVIN:
+          {
+            unpack_svin(rx.msg, &svin_info);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      default:
+      {
+        break;
+      }
+    }
+  }
 }
 
 /*******************************************************************************

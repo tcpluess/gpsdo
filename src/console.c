@@ -37,7 +37,6 @@
 #include "timebase.h"
 #include "temperature.h"
 #include "adc.h"
-#include "cntl.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -89,7 +88,6 @@ static void showcfg(int argc, const char* const argv[]);
 static void enable_disp(int argc, const char* const argv[]);
 static void svin(int argc, const char* const argv[]);
 static void sat(int argc, const char* const argv[]);
-static void restart(int argc, const char* const argv[]);
 static void auto_svin(int argc, const char* const argv[]);
 static void conf_timeconst(int argc, const char* const argv[]);
 static void man_hold(int argc, const char* const argv[]);
@@ -113,7 +111,6 @@ static command_t cmds[] =
   {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
   {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
   {sat,             "sat",        "display satellite info"},
-  {restart,         "restart",    "restart the gps module"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
   {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
   {man_hold,        "hold",       "on|off - holds the DAC value"},
@@ -126,12 +123,20 @@ extern config_t cfg;
 
 static bool auto_disp = false;
 
+volatile float stat_e;
+volatile uint16_t stat_dac;
+
+extern volatile gpsinfo_t pvt_info;
+extern volatile svindata_t svin_info;
+extern volatile sv_info_t sat_info;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
 void console_task(void* param)
 {
+  (void)param;
   rs232_init();
   static consolestatus_t status = startup;
   int rx;
@@ -239,29 +244,31 @@ void console_task(void* param)
 
     if(auto_disp)
     {
-      static uint64_t last = 0;
-      uint64_t now = get_uptime_msec();
-      if(now - last >= 1000ull)
-      {
-        last = now;
+       static uint64_t last = 0;
+       uint64_t now = get_uptime_msec();
+       if(now - last >= 1000ull)
+       {
+         last = now;
 
         float i = get_iocxo();
         float t = get_temperature();
-        extern float e;
-        extern uint16_t dac_value;
-        extern gpsinfo_t pvt_info;
-        extern svindata_t svin_info;
-        extern sv_info_t sat_info;
-        extern double esum;
+
         extern const char* cntl_status;
         uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
-        (void)printf("e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu esum=%f status=%s\n",
-          e, dac_value, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
-      }
-    }
+        (void)printf("%llu e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu status=%s\n",
+          now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
+        }
+        else
+        {
+          vTaskDelay(10);
 
-    vTaskDelay(10);
+        }
+    }
+    else
+    {
+      vTaskDelay(10);
+    }
   }
 }
 
@@ -548,7 +555,6 @@ static void svin(int argc, const char* const argv[])
       uint32_t accuracy = (uint32_t)atoi(argv[1]);
       if((time != 0) && (accuracy != 0))
       {
-        disable_tmode();
         cfg.svin_dur = time;
         cfg.accuracy_limit = accuracy;
         start_svin();
@@ -580,9 +586,6 @@ static void sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    extern sv_info_t sat_info;
-    extern gpsinfo_t pvt_info;
-
     for(int i = 0; i < sat_info.numsv; i++)
     {
       const char* gnss;
@@ -647,27 +650,6 @@ static void sat(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static void restart(int argc, const char* const argv[])
-/*------------------------------------------------------------------------------
-  Function:
-  displays satellite info
-  in:  argc -> number of arguments, see below
-       argv -> array of strings; none required
-  out: none
-==============================================================================*/
-{
-  /* unused */
-  (void)argv;
-
-  if(argc == 0)
-  {
-    gps_restart();
-    cntl_restart();
-  }
-}
-
-
-/*============================================================================*/
 static void auto_svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
@@ -716,7 +698,7 @@ static void conf_timeconst(int argc, const char* const argv[])
       (void)printf("value for tau out of range: 10 < tau < 3600\n");
     }
 
-    if((filt >= 0) && (filt < 100))
+    if((filt > 0) && (filt < 100))
     {
       cfg.filt = filt;
     }
@@ -762,6 +744,7 @@ static void uptime(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
+  (void)argv;
   if(argc == 0)
   {
     uint64_t tm = get_uptime_msec();
@@ -771,9 +754,9 @@ static void uptime(int argc, const char* const argv[])
     uint32_t min = tm % 60;
     tm = tm / 60;
     uint32_t hour = tm % 24;
-    uint32_t day = tm / 24;
+    uint32_t day = (uint32_t)(tm / 24ull);
 
-    printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
+    (void)printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
   }
 }
 
@@ -792,9 +775,6 @@ static void offset(int argc, const char* const argv[])
     /* when the setpoint is changed, then restart the control loop.
        otherwise, it takes too long until the pll locks with the new phase. */
     cfg.timeoffset = atoi(argv[0]);
-    extern float setpoint;
-    setpoint = (float)cfg.timeoffset;
-    cntl_restart();
   }
 }
 

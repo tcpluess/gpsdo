@@ -28,6 +28,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "cntl.h"
 #include "misc.h"
 #include "ublox.h"
@@ -61,7 +63,7 @@
 
 /* if no outliers are detected within this time, the outlier counter is
    reset */
-#define OUTLIER_DURATION 5u * (60u * 1000u) /* 5 min in msec */
+#define OUTLIER_DURATION (5u * (60u * 1000u)) /* 5 min in msec */
 
 /* the tic actually has an offset of 300ns because of the synchronisation
    logic internal to the stm32. this offset was determined empirically and
@@ -92,7 +94,7 @@ typedef enum
 {
   fast_track,
   locked,
-  stable,
+  stable
 } controlstatus_t;
 
 /*******************************************************************************
@@ -102,125 +104,87 @@ typedef enum
 static float read_tic(void);
 static uint16_t pi_control(double KP, double TI, double e);
 static void cntl(void);
+static void ledon(void);
+static void ledoff(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-float setpoint = 0.0f;
-
-float e = 0.0f;
-double esum = 32768.0;
+static double esum;
 const char* cntl_status = "";
 
 extern config_t cfg;
-static status_t gpsdostatus = warmup;
+static status_t gpsdostatus;
 static controlstatus_t stat = fast_track;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-static void blink(uint32_t ontime, uint32_t offtime)
-{
-  uint64_t ms = get_uptime_msec();
-  static uint64_t next = 0;
-  static bool on = false;
-
-  if(ms >= next)
-  {
-    if(on)
-    {
-      on = false;
-      GPIOE_BSRR = BIT_31;
-      next = ms + offtime;
-    }
-    else
-    {
-      on = true;
-      GPIOE_BSRR = BIT_15;
-      next = ms + ontime;
-    }
-  }
-}
-
-
-static void blink_nervous(void)
-{
-  blink(50u, 50u);
-}
-
-static void blink_fast(void)
-{
-  blink(100u, 100u);
-}
-
-static void blink_slow(bool on)
-{
-  uint64_t ms = get_uptime_msec();
-  static uint64_t next = 0;
-  if(on)
-  {
-    GPIOE_BSRR = BIT_15;
-    next = ms + 100ull;
-  }
-  else
-  {
-    if(ms >= next)
-    {
-      GPIOE_BSRR = BIT_31;
-    }
-  }
-}
-
-
 void cntl_task(void* param)
 {
+  (void)param;
+  gpsdostatus = warmup;
+  uint64_t firstfix = 0;
+  esum = cfg.last_dacval;
+
   for(;;)
   {
+    start_conversion();
+
     switch(gpsdostatus)
     {
       /* warmup: wait until the ocxo is ready */
       case warmup:
       {
-        blink_nervous();
+        ledon();
 
         /* measure the ocxo current; when the ocxo is warm, the current drops */
-        start_conversion();
         float iocxo = get_iocxo();
         if(iocxo < OCXO_CURRENT_LIM)
         {
-          ppsenable(true);
-
-          /* if gnss is available, go to track/lock mode, otherwise holdover */
-          if(check_fix())
-          {
-            gpsdostatus = track_lock;
-          }
-          else
-          {
-            gpsdostatus = holdover;
-          }
+          gpsdostatus = holdover;
         }
+
+        vTaskDelay(pdMS_TO_TICKS(50));
+        ledoff();
+        vTaskDelay(pdMS_TO_TICKS(50));
+
         break;
       }
 
       /* holdover mode: wait until the position is valid */
       case holdover:
       {
-        blink_fast();
+        extern gpsinfo_t pvt_info;
+        ledon();
 
         if(check_fix())
         {
-          gpsdostatus = track_lock;
+          if(firstfix == 0)
+          {
+            firstfix = get_uptime_msec();
+          }
+          else if(pvt_info.tacc < (uint32_t)MAX_PHASE_ERR)
+          {
+            if(pps_elapsed())
+            {
+              firstfix = 0;
+              gpsdostatus = track_lock;
+            }
+          }
         }
+
+        vTaskDelay(pdMS_TO_TICKS(200));
+        ledoff();
+        vTaskDelay(pdMS_TO_TICKS(200));
         break;
       }
 
       /* track/lock mode: control loop is active */
       case track_lock:
       {
-        blink_slow(false);
 
         /* only look at the 1pps signal if the fix is valid; if fix is invalid,
            go to holdover mode */
@@ -229,8 +193,10 @@ void cntl_task(void* param)
           /* is it time to run the control loop? */
           if(pps_elapsed())
           {
-            blink_slow(true);
+            ledon();
             cntl();
+            vTaskDelay(pdMS_TO_TICKS(50));
+            ledoff();
           }
         }
         else
@@ -250,6 +216,19 @@ void cntl_restart(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+static void ledon(void)
+{
+      GPIOE_BSRR = BIT_15;
+}
+
+
+static void ledoff(void)
+{
+      GPIOE_BSRR = BIT_31;
+
+}
+
 
 static float read_tic(void)
 {
@@ -299,25 +278,24 @@ static uint16_t pi_control(double KP, double TI, double ee)
   }
 }
 
+extern volatile float stat_e;
 
 static void cntl(void)
 {
   static uint32_t statuscount = 0;
   static uint32_t outlier_count = 0;
   static uint64_t last_outlier_time = 0;
+  float e;
   uint16_t dacval = 0u;
 
   /* determine the time interval (phase) error */
   float tic = read_tic();
 
   /* TODO: read these values from the eeprom */
-  e = tic - setpoint;
+  e = tic - (float)cfg.timeoffset;
 
   /* this is somewhat hack-ish, but avoids using fabs() */
   float abs_err = e > 0 ? e : -e;
-
-  /* this is required if the ocxo current consumption is to be measured */
-  start_conversion();
 
   /* if the phase error is less than one period, assume the pll is locked and
      switch on the green lock led */
@@ -328,11 +306,9 @@ static void cntl(void)
   else
   {
     GPIOE_BSRR = BIT_30;
+
     if(abs_err > 10000)
     {
-        /* if the phase error is too large it takes too much time until the
-           controller would settle, so we reset the timers. however this will
-           give a sharp 'bump' in the frequency and phase. */
       timebase_reset();
       return;
     }
@@ -454,6 +430,9 @@ static void cntl(void)
   }
 
   set_dac(dacval);
+
+  stat_e = e;
+
 }
 
 /*******************************************************************************

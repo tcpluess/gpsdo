@@ -31,6 +31,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "tdc.h"
 #include "stm32f407.h"
 #include "misc.h"
@@ -72,7 +74,7 @@
 
 #define DATA_MSK 0xffffffu
 
-#define TDC_SPI_DIVIDER 2u /* apb2 clock is 80 MHz, 2 amounts to divider 8 */
+#define TDC_SPI_DIVIDER 7u /* apb2 clock is 80 MHz, 2 amounts to divider 8 */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -147,10 +149,6 @@ float get_tdc(void)
   float time1 = tdc_read24(ADDR_TIME1);
 
   float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
-  if((ns < 100.0f) || (ns > 210.0f))
-  {
-    printf("tdc error!\n");
-  }
   return ns;
 }
 
@@ -292,6 +290,7 @@ static void tdc_ss(bool select)
 {
   /* wait until not busy */
   while(SPI1_SR & BIT_07);
+  vTaskDelay(pdMS_TO_TICKS(2));
 
   if(select)
   {
@@ -303,7 +302,7 @@ static void tdc_ss(bool select)
   }
 
   /* include a small delay to meet the setup time. */
-  for(int i=0; i<2000; i++);
+  vTaskDelay(pdMS_TO_TICKS(2));
 }
 
 /*============================================================================*/
