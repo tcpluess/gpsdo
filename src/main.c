@@ -95,9 +95,9 @@ void init(void * pvParameters)
   timebase_reset();
   enable_tdc();
 
-  xTaskCreate(gps_task, "gps", 250, NULL, 2, NULL);
-  xTaskCreate(cntl_task, "control", 250, NULL, 2, NULL);
-  xTaskCreate(console_task, "console", 250, NULL, 2, NULL);
+  xTaskCreate(gps_task, "gps", 2000, NULL, 2, NULL);
+  xTaskCreate(cntl_task, "control", 1200, NULL, 2, NULL);
+  xTaskCreate(console_task, "console", 1000, NULL, 2, NULL);
 
   for(;;)
   {
@@ -139,7 +139,7 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask,
   (void)pcTaskName;
   taskDISABLE_INTERRUPTS();
   / Write your code here … */
-  for(;;) {}
+  asm volatile ("bkpt #0");
 }
 
 void vApplicationIdleHook(void)
