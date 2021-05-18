@@ -12,9 +12,9 @@ SECTIONS
   {
     . = ALIGN(4);
     KEEP(*(.vectors*))
-    KEEP(*(.text*))
-    KEEP(*(.rodata))
-    KEEP(*(.rodata*))
+    *(.text*)
+    *(.rodata)
+    *(.rodata*)
     . = ALIGN(4);
   } > flash
 

@@ -149,7 +149,7 @@ void console_task(void* param)
       {
         (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
         (void)printf("use \"help\" to see the available commands\n");
-        (void)printf("version 2021-05-06\n\n");
+        (void)printf("compiled " __DATE__ " " __TIME__ "\n\n");
         status = prompt;
         auto_disp = false;
         break;
