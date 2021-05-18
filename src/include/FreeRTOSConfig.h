@@ -41,12 +41,7 @@
  * See http://www.freertos.org/a00110.html
  *----------------------------------------------------------*/
 
-/* Ensure stdint is only used by the compiler, and not the assembler. */
-#ifdef __ICCARM__
-	#include <stdint.h>
-	extern uint32_t SystemCoreClock;
-#endif
-
+#define configUSE_NEWLIB_REENTRANT 1
 #define configAPPLICATION_ALLOCATED_HEAP 1
 #define configUSE_PREEMPTION			1
 #define configUSE_IDLE_HOOK				1

@@ -34,6 +34,7 @@
 
 #include "FreeRTOS.h"
 #include "stream_buffer.h"
+#include "event_groups.h"
 #include "task.h"
 #include "ublox.h"
 #include "stm32f407.h"
@@ -145,10 +146,6 @@ sv_info_t sat_info;
 extern config_t cfg;
 
 
-static volatile bool do_svin;
-static volatile bool do_disable_tmode;
-static volatile bool do_set_fixpos_mode;
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -175,9 +172,15 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx);
 
 static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
-
+static EventGroupHandle_t ublox_events;
 
 static void dispatch_messages(void);
+
+#define EVENT_RXDATA BIT_00
+#define EVENT_DO_SVIN BIT_01
+#define EVENT_DISABLE_TMODE BIT_02
+#define EVENT_SET_FIXPOS_MODE BIT_03
+#define EVENTS_MASK 0xfu
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -188,10 +191,8 @@ void gps_task(void* param)
   (void)param;
   rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
   txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
+  ublox_events = xEventGroupCreate();
   qerr = 0.0f;
-  do_svin = false;
-  do_disable_tmode = false;
-  do_set_fixpos_mode = false;
 
   init_uart();
 
@@ -235,24 +236,27 @@ void gps_task(void* param)
 
   for(;;)
   {
-    dispatch_messages();
+    uint32_t bits = xEventGroupWaitBits(ublox_events, EVENTS_MASK,
+                                        true, false, portMAX_DELAY);
 
-    if(do_disable_tmode)
+    if(bits & EVENT_RXDATA)
     {
-      do_disable_tmode = false;
+      dispatch_messages();
+    }
+
+    if(bits & EVENT_DISABLE_TMODE)
+    {
       ubx_config_tmode(tmode_disable, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
     }
 
-    if(do_svin)
+    if(bits & EVENT_DO_SVIN)
     {
-      do_svin = false;
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
       ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
     }
 
-    if(do_set_fixpos_mode)
+    if(bits & EVENT_SET_FIXPOS_MODE)
     {
-      do_set_fixpos_mode = false;
       ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
     }
   }
@@ -311,19 +315,19 @@ float get_timepulse_error(void)
 
 void start_svin(void)
 {
-  do_svin = true;
+  xEventGroupSetBits(ublox_events, EVENT_DO_SVIN);
 }
 
 
 void set_fixpos_mode(void)
 {
-  do_set_fixpos_mode = true;
+  xEventGroupSetBits(ublox_events, EVENT_SET_FIXPOS_MODE);
 }
 
 
 void disable_tmode(void)
 {
-  do_disable_tmode = true;
+  xEventGroupSetBits(ublox_events, EVENT_DISABLE_TMODE);
 /*  if(cfg.fixpos_valid)
   {
     set_fixpos_mode();
@@ -709,6 +713,7 @@ static void uart_irq_handler(void)
   {
     uint8_t tmp = (uint8_t)USART3_DR;
     (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
+    (void)xEventGroupSetBitsFromISR(ublox_events, EVENT_RXDATA, NULL);
   }
 
   /* tx buffer empty? */
