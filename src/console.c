@@ -93,6 +93,7 @@ static void conf_timeconst(int argc, const char* const argv[]);
 static void man_hold(int argc, const char* const argv[]);
 static void uptime(int argc, const char* const argv[]);
 static void offset(int argc, const char* const argv[]);
+static void info(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -116,6 +117,7 @@ static command_t cmds[] =
   {man_hold,        "hold",       "on|off - holds the DAC value"},
   {uptime,          "uptime",     "shows the current uptime"},
   {offset,          "offset",     "sets the offset of the pps output"},
+  {info,            "info",       "show version information"},
 };
 
 /* not static because it must be globally accessible */
@@ -147,9 +149,7 @@ void console_task(void* param)
       /* clears the terminal and prints the info screen */
       case startup:
       {
-        (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-        (void)printf("use \"help\" to see the available commands\n");
-        (void)printf("compiled " __DATE__ " " __TIME__ "\n\n");
+        info(0, NULL);
         status = prompt;
         auto_disp = false;
         break;
@@ -776,6 +776,23 @@ static void offset(int argc, const char* const argv[])
        otherwise, it takes too long until the pll locks with the new phase. */
     cfg.timeoffset = atoi(argv[0]);
   }
+}
+
+
+/*============================================================================*/
+static void info(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  show version info
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  (void)argc;
+  (void)argv;
+  (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
+  (void)printf("use \"help\" to see the available commands\n");
+  (void)printf("compiled " __DATE__ " " __TIME__ "\n\n");
 }
 
 /*******************************************************************************
