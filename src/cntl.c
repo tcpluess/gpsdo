@@ -126,7 +126,6 @@ void cntl_task(void* param)
 {
   (void)param;
   gpsdostatus = warmup;
-  uint64_t firstfix = 0;
   esum = cfg.last_dacval;
 
   for(;;)
@@ -157,47 +156,28 @@ void cntl_task(void* param)
       /* holdover mode: wait until the position is valid */
       case holdover:
       {
-        extern gpsinfo_t pvt_info;
         ledon();
 
-        if(check_fix())
+        if(gps_waitready())
         {
-          if(firstfix == 0)
-          {
-            firstfix = get_uptime_msec();
-          }
-          else if(pvt_info.tacc < (uint32_t)MAX_PHASE_ERR)
-          {
-            if(pps_elapsed())
-            {
-              firstfix = 0;
-              gpsdostatus = track_lock;
-            }
-          }
+          ledoff();
+          gpsdostatus = track_lock;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(200));
-        ledoff();
-        vTaskDelay(pdMS_TO_TICKS(200));
         break;
       }
 
       /* track/lock mode: control loop is active */
       case track_lock:
       {
-
         /* only look at the 1pps signal if the fix is valid; if fix is invalid,
            go to holdover mode */
-        if(check_fix())
+        if(gps_waitready())
         {
-          /* is it time to run the control loop? */
-          if(pps_elapsed())
-          {
-            ledon();
-            cntl();
-            vTaskDelay(pdMS_TO_TICKS(50));
-            ledoff();
-          }
+          ledon();
+          cntl();
+          vTaskDelay(pdMS_TO_TICKS(50));
+          ledoff();
         }
         else
         {
@@ -432,7 +412,6 @@ static void cntl(void)
   set_dac(dacval);
 
   stat_e = e;
-
 }
 
 /*******************************************************************************

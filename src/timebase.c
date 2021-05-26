@@ -353,10 +353,11 @@ static void capture_irq(void)
   }
   else
   {
-    (void)xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
+    extern void gps_timepulse_ready(void);
 
-    /* read out the captured value */
+    /* read out the captured value and notify waiting tasks */
     tic_capture = TIM2_CCR3;
+    gps_timepulse_notify();
   }
 
   /* acknowledge */

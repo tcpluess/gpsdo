@@ -44,6 +44,8 @@
 #include "convert.h"
 #include "eeprom.h"
 
+#include <math.h>
+
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -111,7 +113,6 @@ typedef enum
   ubx_data,
   ubx_cka,
   ubx_ckb,
-  ubx_done
 } irqstatus_t;
 
 typedef struct
@@ -120,10 +121,6 @@ typedef struct
   uint8_t msgclass;
   uint8_t msgid;
   uint16_t len;
-  union
-  {
-    volatile bool valid;
-  };
 } ubxbuffer_t;
 
 typedef enum
@@ -166,52 +163,149 @@ static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint8_t rate);
 static void ubx_config_navmodel(int8_t elev);
 static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
   uint32_t dur, uint32_t acc, uint32_t acc_lim);
-static bool ubx_receive_packet(ubxbuffer_t* rx);
+static void ubx_receive_packet(ubxbuffer_t* rx);
 
 static void ubx_transmit_packet(const ubxbuffer_t* tx);
+
+static void init_pins(void);
+static void gps_reset(bool do_reset);
 
 static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
 static EventGroupHandle_t ublox_events;
 
-static void dispatch_messages(void);
 
-#define EVENT_RXDATA BIT_00
-#define EVENT_DO_SVIN BIT_01
-#define EVENT_DISABLE_TMODE BIT_02
-#define EVENT_SET_FIXPOS_MODE BIT_03
-#define EVENTS_MASK 0xfu
+#define EVENT_DO_SVIN BIT_00
+#define EVENT_DISABLE_TMODE BIT_01
+#define EVENT_SET_FIXPOS_MODE BIT_02
+
+#define EVENT_TP_RECEIVED BIT_04
+#define EVENT_PVT_RECEIVED BIT_05
+#define EVENT_SAT_RECEIVED BIT_06
+#define EVENT_SVIN_RECEIVED BIT_07
+#define EVENT_TIMEPULSE_OK BIT_08
+#define EVENT_ACK_RECEIVED BIT_09
+#define EVENT_NAK_RECEIVED BIT_10
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
+
+void rx_task(void* param)
+{
+  (void)param;
+  for(;;)
+  {
+    ubxbuffer_t rx;
+    ubx_receive_packet(&rx);
+    switch(rx.msgclass)
+    {
+      case UBX_CLASS_ACK:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_ACK:
+          {
+            xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_NAK:
+          {
+            xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      case UBX_CLASS_NAV:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_NAV_SAT:
+          {
+            unpack_sv(rx.msg, &sat_info);
+            xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_NAV_PVT:
+          {
+            unpack_pvt(rx.msg, &pvt_info);
+            xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      case UBX_CLASS_TIM:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_TIM_TP:
+          {
+            unpack_tp(rx.msg, &qerr);
+            xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_TIM_SVIN:
+          {
+            unpack_svin(rx.msg, &svin_info);
+            xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      default:
+      {
+        break;
+      }
+    }
+  }
+}
+
 void gps_task(void* param)
 {
   (void)param;
+
   rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
   txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
   ublox_events = xEventGroupCreate();
+  xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
   qerr = 0.0f;
 
+  /* initialise hardware */
+  init_pins();
   init_uart();
-
-  /* enable port d */
-  RCC_AHB1ENR |= BIT_03;
-
-  /* configure the reset pin */
-  GPIOD_MODER |= (1u << 20);
-  GPIOD_OTYPER |= (1u << 10);
 
   /* the uart must use the initial baud rate after reset */
   uart_config_baudrate(BAUD_INITIAL);
 
-  /* reset pin low, continue after 1 sec */
-  GPIOD_BSRR = BIT_26;
+  /* reset the gps module */
+  gps_reset(true);
   vTaskDelay(RESET_DELAY);
-
-  /* reset pin high, allow the module 1 sec for startup  */
-  GPIOD_BSRR = BIT_10;
+  gps_reset(false);
   vTaskDelay(RESET_DELAY);
 
   /* after the module has started up, the uart is reconfigured:
@@ -229,20 +323,18 @@ void gps_task(void* param)
   ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
-  ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
 
   /* timing mode must be disabled before survey-in can be started again */
   ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-
   for(;;)
   {
-    uint32_t bits = xEventGroupWaitBits(ublox_events, EVENTS_MASK,
-                                        true, false, portMAX_DELAY);
-
-    if(bits & EVENT_RXDATA)
-    {
-      dispatch_messages();
-    }
+    /* wait until at least one of the following events occurs:
+     - data received from the gps module
+     - request to disable timing mode
+     - request to perform a survey-in
+     - request to configure the fixed position mode */
+    uint32_t bits = EVENT_DISABLE_TMODE | EVENT_DO_SVIN | EVENT_SET_FIXPOS_MODE | EVENT_SVIN_RECEIVED;
+    bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
 
     if(bits & EVENT_DISABLE_TMODE)
     {
@@ -251,6 +343,7 @@ void gps_task(void* param)
 
     if(bits & EVENT_DO_SVIN)
     {
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
       ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
     }
@@ -259,49 +352,23 @@ void gps_task(void* param)
     {
       ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
     }
-  }
 
-#if 0
-    /* wait until there is a valid 3d fix available and then start the survey-in */
-    case wait_fix:
+    if(bits & EVENT_SVIN_RECEIVED)
     {
-      /* start survey-in as soon as there is a fix and the position
-         data is not older than 1sec */
-      if((currenttime - pvt_info.time <= 1000u) && (pvt_info.fixtype == 3))
+      /* if the svin is finished, disable further svin messages */
+      if((svin_info.valid == true) && (svin_info.active == false))
       {
-        start_svin();
-        status = survey_in;
+        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+
+        /* copy the svin data to the configuration */
+        cfg.x = svin_info.x;
+        cfg.y = svin_info.y;
+        cfg.z = svin_info.z;
+        cfg.accuracy = (uint32_t)sqrt((double)svin_info.meanv);
+        cfg.fixpos_valid = true;
       }
-      break;
     }
-
-    /* wait until the survey-in process is finished */
-    case survey_in:
-    {
-        /* if we got some info about the survey-in AND the survey-in is valid
-           AND the survey-in is not active anymore, we should store the current
-           position in the eeprom and switch to fixed-position mode */
-        if((currenttime - svin_info.time <= 1000u) &&
-           (svin_info.valid == true) && (svin_info.active == false))
-        {
-          cfg.x = svin_info.x;
-          cfg.y = svin_info.y;
-          cfg.z = svin_info.z;
-          cfg.accuracy = (uint32_t)sqrt((double)svin_info.meanv);
-          cfg.fixpos_valid = true;
-          status = fixpos_mode;
-        }
-      break;
-    }
-
-    /* normal mode does nothing special */
-    case fixpos_mode:
-    case normal:
-    {
-
-      break;
-    }
-  #endif
+  }
 }
 
 
@@ -340,21 +407,23 @@ void disable_tmode(void)
 }
 
 
-bool check_fix(void)
+bool gps_waitready(void)
 {
-  uint64_t ms = get_uptime_msec();
-  uint8_t fixtype = pvt_info.fixtype;
-  uint64_t age = ms - pvt_info.time;
-
-  /* fix is only valid if not too old */
-  if(age < 1200)
+  uint32_t bits = EVENT_TP_RECEIVED | EVENT_PVT_RECEIVED | EVENT_SAT_RECEIVED | EVENT_TIMEPULSE_OK;
+  if(xEventGroupWaitBits(ublox_events, bits, true, true, pdMS_TO_TICKS(1200)) != bits)
   {
-    if((fixtype == FIX_3D) || (fixtype == FIX_TIME))
-    {
-      return true;
-    }
+    return false;
   }
-  return false;
+  else
+  {
+    return true;
+  }
+}
+
+
+void gps_timepulse_notify(void)
+{
+  xEventGroupSetBits(ublox_events, EVENT_TIMEPULSE_OK);
 }
 
 /*******************************************************************************
@@ -371,17 +440,56 @@ static void init_uart(void)
   out: none
 ==============================================================================*/
 {
-  /* enable gpio d and configure the uart pins */
-  RCC_AHB1ENR |= BIT_03;
-  GPIOD_MODER |= (2u << 16) | (2u << 18);
-  GPIOD_AFRH |= (7u << 0) | (7u << 4);
-
   /* enable usart 3 and install the irq handler */
   RCC_APB1ENR |= BIT_18;
   USART3_BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
   USART3_CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
   //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
+}
+
+
+/*============================================================================*/
+static void init_pins(void)
+/*------------------------------------------------------------------------------
+  Function:
+  initialise the gpio pins for the gps module
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* enable port d */
+  RCC_AHB1ENR |= BIT_03;
+
+  /* configure the reset pin */
+  GPIOD_MODER |= (1u << 20);
+  GPIOD_OTYPER |= (1u << 10);
+
+  /* enable gpio d and configure the uart pins */
+  GPIOD_MODER |= (2u << 16) | (2u << 18);
+  GPIOD_AFRH |= (7u << 0) | (7u << 4);
+}
+
+
+/*============================================================================*/
+static void gps_reset(bool do_reset)
+/*------------------------------------------------------------------------------
+  Function:
+  resets the gps module
+  in:  do_reset -> activate the reset pin if true, deactivate if false
+  out: none
+==============================================================================*/
+{
+  if(do_reset)
+  {
+    /* reset pin low */
+    GPIOD_BSRR = BIT_26;
+  }
+  else
+  {
+    /* reset pin high */
+    GPIOD_BSRR = BIT_10;
+  }
 }
 
 
@@ -436,7 +544,7 @@ static void disable_txempty_irq(void)
 
 
 /*============================================================================*/
-static bool ubx_receive_packet(ubxbuffer_t* rx)
+static void ubx_receive_packet(ubxbuffer_t* rx)
 /*------------------------------------------------------------------------------
   Function:
   checks whether there are messages to be received. if receive data is pending,
@@ -447,17 +555,20 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
 ==============================================================================*/
 {
   irqstatus_t rxstatus = ubx_header1;
-
   uint32_t wrpos = 0;
   uint8_t cka = 0;
   uint8_t ckb = 0;
-  uint8_t tmpdata;
 
   for(;;)
   {
+    uint8_t tmpdata;
+
+    /* wait until some data is received or a timeout occurs */
     if(xStreamBufferReceive(rxstream, &tmpdata, 1, RECEIVE_TIMEOUT) == 0)
     {
-      return false;
+      /* a timeout during reception occured, reset the internal status */
+      rxstatus = ubx_header1;
+      continue;
     }
 
     switch(rxstatus)
@@ -477,6 +588,8 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
       {
         if(tmpdata == SYNC2)
         {
+          cka = 0;
+          ckb = 0;
           rxstatus = ubx_class;
         }
         else
@@ -525,6 +638,7 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
         else
         {
           /* reset the writing position in the receive buffer */
+          wrpos = 0;
           rxstatus = ubx_data;
         }
         break;
@@ -566,15 +680,13 @@ static bool ubx_receive_packet(ubxbuffer_t* rx)
            worker thread */
         if(tmpdata == ckb)
         {
-          rx->valid = true;
-          return true;
+          return;
+        }
+        else
+        {
+          rxstatus = ubx_header1;
         }
         break;
-      }
-
-      default:
-      {
-        return false;
       }
     }
 
@@ -670,16 +782,17 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       case ubx_ckb:
       {
         tmpdata = ckb;
-        nextstatus = ubx_done;
         break;
       }
 
       default:
       {
-        return;
+        break;
       }
     }
 
+    /* exclude the sync bytes and the checksum itself from the
+       checksum calculation. */
     if((txstatus != ubx_cka) && (txstatus != ubx_ckb) &&
        (txstatus != ubx_header1) && (txstatus != ubx_header2))
     {
@@ -688,10 +801,15 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       ckb = ckb + cka;
     }
 
-    txstatus = nextstatus;
-
     (void)xStreamBufferSend(txstream, &tmpdata, 1, portMAX_DELAY);
     enable_txempty_irq();
+
+    if(txstatus == ubx_ckb)
+    {
+      return;
+    }
+
+    txstatus = nextstatus;
   }
 }
 
@@ -713,10 +831,9 @@ static void uart_irq_handler(void)
   {
     uint8_t tmp = (uint8_t)USART3_DR;
     (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
-    (void)xEventGroupSetBitsFromISR(ublox_events, EVENT_RXDATA, NULL);
   }
 
-  /* tx buffer empty? */
+  /* tx buffer empty AND tx buffer empty interrupt enabled? */
   if((sr & BIT_07) && (cr & BIT_07))
   {
     char tx;
@@ -728,7 +845,6 @@ static void uart_irq_handler(void)
     {
       disable_txempty_irq();
     }
-
   }
 }
 
@@ -742,37 +858,15 @@ static bool gps_wait_ack(void)
   out: returns true if ACK received, false in case of NAK
 ==============================================================================*/
 {
-  ubxbuffer_t ack_nak;
-  uint64_t ms = get_uptime_msec();
-  for(;;)
+  uint32_t bits = EVENT_ACK_RECEIVED | EVENT_NAK_RECEIVED;
+  bits = xEventGroupWaitBits(ublox_events, bits, true, false, pdMS_TO_TICKS(ACK_TIMEOUT));
+  if(bits & EVENT_ACK_RECEIVED)
   {
-    if(ubx_receive_packet(&ack_nak))
-    {
-      if(ack_nak.msgclass == UBX_CLASS_ACK)
-      {
-        switch(ack_nak.msgid)
-        {
-          case UBX_ID_NAK:
-          {
-            return false;
-          }
-
-          case UBX_ID_ACK:
-          {
-            return true;
-          }
-
-          default:
-          {
-            continue;
-          }
-        }
-      }
-    }
-    else if(get_uptime_msec() - ms > ACK_TIMEOUT)
-    {
-      return false;
-    }
+    return true;
+  }
+  else
+  {
+    return false;
   }
 }
 
@@ -1098,70 +1192,6 @@ static void ubx_config_tmode(tmode_t mode, int32_t x, int32_t y, int32_t z,
     pack_u32_le(tmp.msg, 24, acc_lim);  /* survey-in accuracy limit */
     ubx_transmit_packet(&tmp);
   } while(gps_wait_ack() == false);
-}
-
-
-static void dispatch_messages(void)
-{
-  ubxbuffer_t rx;
-  if(ubx_receive_packet(&rx))
-  {
-    switch(rx.msgclass)
-    {
-      case UBX_CLASS_NAV:
-      {
-        switch(rx.msgid)
-        {
-          case UBX_ID_NAV_SAT:
-          {
-            unpack_sv(rx.msg, &sat_info);
-            break;
-          }
-
-          case UBX_ID_NAV_PVT:
-          {
-            unpack_pvt(rx.msg, &pvt_info);
-            break;
-          }
-
-          default:
-          {
-            break;
-          }
-        }
-        break;
-      }
-
-      case UBX_CLASS_TIM:
-      {
-        switch(rx.msgid)
-        {
-          case UBX_ID_TIM_TP:
-          {
-            unpack_tp(rx.msg, &qerr);
-            break;
-          }
-
-          case UBX_ID_TIM_SVIN:
-          {
-            unpack_svin(rx.msg, &svin_info);
-            break;
-          }
-
-          default:
-          {
-            break;
-          }
-        }
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-  }
 }
 
 /*******************************************************************************

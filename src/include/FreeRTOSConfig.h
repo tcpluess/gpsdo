@@ -41,6 +41,7 @@
  * See http://www.freertos.org/a00110.html
  *----------------------------------------------------------*/
 
+#define INCLUDE_xTimerPendFunctionCall 1
 #define configUSE_NEWLIB_REENTRANT 1
 #define configAPPLICATION_ALLOCATED_HEAP 1
 #define configUSE_PREEMPTION			1
