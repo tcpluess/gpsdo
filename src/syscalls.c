@@ -64,29 +64,6 @@
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-//caddr_t _sbrk_r(struct _reent *r, int incr)
-void* _sbrk_r(struct _reent *r, ptrdiff_t incr)
-{
-  /* heap start and end come from the linker script */
-  extern char heapstart asm("heapstart");
-  extern char heapend asm("heapend");
-
-  static char* heap_top = &heapstart;
-  char* prev_heap_top = heap_top;
-  char* new_top = heap_top + incr;
-
-  if(new_top > &heapend)
-  {
-    /* Some of the libstdc++-v3 tests rely upon detecting
-      out of memory errors, so do not abort here.  */
-    r->_errno = ENOMEM;
-    return (void*) -1;
-  }
-
-  heap_top = new_top;
-
-  return (void*)prev_heap_top;
-}
 
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
@@ -237,25 +214,6 @@ _exit(int status)
 }
 
 
-void __malloc_lock(struct _reent *p)
-{
-  vTaskSuspendAll();
-}
-
-void __malloc_unlock(struct _reent *p)
-{
-  (void)xTaskResumeAll();
-}
-
-void __env_lock(void)
-{
-  vTaskSuspendAll();
-}
-
-void __env_unlock(void)
-{
-  (void)xTaskResumeAll();
-}
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)

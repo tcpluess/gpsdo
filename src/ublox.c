@@ -147,6 +147,7 @@ extern config_t cfg;
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+static void rx_task(void* param);
 static void init_uart(void);
 static void uart_config_baudrate(uint32_t baud);
 static void enable_txempty_irq(void);
@@ -191,100 +192,6 @@ static EventGroupHandle_t ublox_events;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-
-void rx_task(void* param)
-{
-  (void)param;
-  for(;;)
-  {
-    ubxbuffer_t rx;
-    ubx_receive_packet(&rx);
-    switch(rx.msgclass)
-    {
-      case UBX_CLASS_ACK:
-      {
-        switch(rx.msgid)
-        {
-          case UBX_ID_ACK:
-          {
-            xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
-            break;
-          }
-
-          case UBX_ID_NAK:
-          {
-            xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
-            break;
-          }
-
-          default:
-          {
-            break;
-          }
-        }
-        break;
-      }
-
-      case UBX_CLASS_NAV:
-      {
-        switch(rx.msgid)
-        {
-          case UBX_ID_NAV_SAT:
-          {
-            unpack_sv(rx.msg, &sat_info);
-            xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
-            break;
-          }
-
-          case UBX_ID_NAV_PVT:
-          {
-            unpack_pvt(rx.msg, &pvt_info);
-            xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
-            break;
-          }
-
-          default:
-          {
-            break;
-          }
-        }
-        break;
-      }
-
-      case UBX_CLASS_TIM:
-      {
-        switch(rx.msgid)
-        {
-          case UBX_ID_TIM_TP:
-          {
-            unpack_tp(rx.msg, &qerr);
-            xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
-            break;
-          }
-
-          case UBX_ID_TIM_SVIN:
-          {
-            unpack_svin(rx.msg, &svin_info);
-            xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
-            break;
-          }
-
-          default:
-          {
-            break;
-          }
-        }
-        break;
-      }
-
-      default:
-      {
-        break;
-      }
-    }
-  }
-}
-
 void gps_task(void* param)
 {
   (void)param;
@@ -292,7 +199,7 @@ void gps_task(void* param)
   rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
   txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
   ublox_events = xEventGroupCreate();
-  xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
+  (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
   qerr = 0.0f;
 
   /* initialise hardware */
@@ -339,13 +246,14 @@ void gps_task(void* param)
     if(bits & EVENT_DISABLE_TMODE)
     {
       ubx_config_tmode(tmode_disable, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
     }
 
     if(bits & EVENT_DO_SVIN)
     {
-      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
       ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
     }
 
     if(bits & EVENT_SET_FIXPOS_MODE)
@@ -423,12 +331,121 @@ bool gps_waitready(void)
 
 void gps_timepulse_notify(void)
 {
-  xEventGroupSetBits(ublox_events, EVENT_TIMEPULSE_OK);
+  xEventGroupSetBitsFromISR(ublox_events, EVENT_TIMEPULSE_OK, NULL);
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+/*============================================================================*/
+static void rx_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  this task does nothing more than just wait until data from the gps module is
+  received. it then processes the received data and notifies any tasks waiting
+  for this data.
+  in:  param -> not used (freertos)
+  out: none
+==============================================================================*/
+{
+  (void)param;
+  for(;;)
+  {
+    ubxbuffer_t rx;
+    ubx_receive_packet(&rx);
+    switch(rx.msgclass)
+    {
+      case UBX_CLASS_ACK:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_ACK:
+          {
+            printf("ACK\n");
+            xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_NAK:
+          {
+            printf("NAK\n");
+            xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      case UBX_CLASS_NAV:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_NAV_SAT:
+          {
+            printf("SV\n");
+            unpack_sv(rx.msg, &sat_info);
+            xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_NAV_PVT:
+          {
+            printf("PVT\n");
+            unpack_pvt(rx.msg, &pvt_info);
+            xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      case UBX_CLASS_TIM:
+      {
+        switch(rx.msgid)
+        {
+          case UBX_ID_TIM_TP:
+          {
+            printf("TP\n");
+            unpack_tp(rx.msg, &qerr);
+            xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_TIM_SVIN:
+          {
+            printf("SVIN\n");
+            unpack_svin(rx.msg, &svin_info);
+            xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
+            break;
+          }
+
+          default:
+          {
+            break;
+          }
+        }
+        break;
+      }
+
+      default:
+      {
+        break;
+      }
+    }
+  }
+}
+
 
 /*============================================================================*/
 static void init_uart(void)

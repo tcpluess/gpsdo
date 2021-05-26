@@ -32,7 +32,7 @@
  * See heap_1.c, heap_2.c and heap_3.c for alternative implementations, and the
  * memory management pages of https://www.FreeRTOS.org for more information.
  */
-
+#if 0
 #include <stdlib.h> // maps to newlib...
 #include <malloc.h> // mallinfo...
 #include <errno.h>  // ENOMEM
@@ -312,3 +312,4 @@ void vPortGetHeapStats( HeapStats_t * pxHeapStats )
     }
     taskEXIT_CRITICAL();
 }
+#endif

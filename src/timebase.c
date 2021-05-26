@@ -35,6 +35,7 @@
 #include "misc.h"
 #include "vic.h"
 #include "tdc.h"
+#include "ublox.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -353,8 +354,6 @@ static void capture_irq(void)
   }
   else
   {
-    extern void gps_timepulse_ready(void);
-
     /* read out the captured value and notify waiting tasks */
     tic_capture = TIM2_CCR3;
     gps_timepulse_notify();
