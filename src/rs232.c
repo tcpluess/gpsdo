@@ -108,13 +108,25 @@ void rs232_init(void)
 int kbhit(void)
 {
   char rx;
-  if(xStreamBufferReceive(rxstream, &rx, 1, MAX_CHARACTER_WAITTIME) > 0)
+  if(xStreamBufferReceive(rxstream, &rx, 1, portMAX_DELAY) > 0)
   {
     return rx;
   }
   else
   {
     return -1;
+  }
+}
+
+bool canread(void)
+{
+  if(xStreamBufferIsEmpty(rxstream))
+  {
+    return false;
+  }
+  else
+  {
+    return true;
   }
 }
 

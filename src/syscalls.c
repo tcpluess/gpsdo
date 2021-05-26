@@ -112,6 +112,32 @@ _isatty(int file)
 
 _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 {
+  if(file == STDIN_FILENO)
+  {
+    extern int kbhit(void);
+    int numread;
+    char* dest = (char*)ptr;
+
+    for(numread = 0; numread < len; numread++)
+    {
+      int rxchar = kbhit();
+      if(rxchar >= 0)
+      {
+        dest[numread] = (char)rxchar;
+      }
+      else
+      {
+        r->_errno = EIO;
+      }
+      break;
+    }
+    return numread;
+  }
+  else
+  {
+    r->_errno = EBADF;
+    return 0;
+  }
 #if 0
   char c;
   int  i;

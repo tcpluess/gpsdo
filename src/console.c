@@ -123,8 +123,6 @@ static command_t cmds[] =
 /* not static because it must be globally accessible */
 extern config_t cfg;
 
-static bool auto_disp = false;
-
 volatile float stat_e;
 volatile uint16_t stat_dac;
 
@@ -151,7 +149,6 @@ void console_task(void* param)
       {
         info(0, NULL);
         status = prompt;
-        auto_disp = false;
         break;
       }
 
@@ -168,7 +165,7 @@ void console_task(void* param)
       /* processes the received characters and echoes them back accordingly */
       case input:
       {
-        rx = kbhit();
+        rx = getchar();
 
         switch(rx)
         {
@@ -199,7 +196,6 @@ void console_task(void* param)
           case '\r':
           case '\n':
           {
-            auto_disp = false;
             txchar('\r');
             txchar('\n');
             linebuffer[wrpos] = '\0';
@@ -240,34 +236,6 @@ void console_task(void* param)
         status = prompt;
         break;
       }
-    }
-
-    if(auto_disp)
-    {
-       static uint64_t last = 0;
-       uint64_t now = get_uptime_msec();
-       if(now - last >= 1000ull)
-       {
-         last = now;
-
-        float i = get_iocxo();
-        float t = get_temperature();
-
-        extern const char* cntl_status;
-        uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
-
-        (void)printf("%llu e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu status=%s\n",
-          now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
-        }
-        else
-        {
-          vTaskDelay(10);
-
-        }
-    }
-    else
-    {
-      vTaskDelay(10);
     }
   }
 }
@@ -505,7 +473,7 @@ static void showcfg(int argc, const char* const argv[])
 static void enable_disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  enables the auto-display -- currently implemented as an UGLY HACK
+  enables the auto-display
   in:  argc -> number of arguments, see below
        argv -> array of strings; none required
   out: none
@@ -516,7 +484,29 @@ static void enable_disp(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    auto_disp = true;
+    extern bool canread(void);
+    uint64_t last = 0;
+    uint64_t now = get_uptime_msec();
+    while(canread() == false)
+    {
+      if(now - last >= 1000ull)
+      {
+        last = now;
+
+        float i = get_iocxo();
+        float t = get_temperature();
+
+        extern const char* cntl_status;
+        uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+
+        (void)printf("%llu e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu status=%s\n",
+          now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
+      }
+      else
+      {
+        vTaskDelay(10);
+      }
+    }
   }
 }
 
