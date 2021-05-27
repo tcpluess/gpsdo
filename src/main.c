@@ -95,9 +95,9 @@ void init(void * pvParameters)
   timebase_reset();
   enable_tdc();
 
-  xTaskCreate(gps_task, "gps", 2000, NULL, 2, NULL);
-  xTaskCreate(cntl_task, "control", 1200, NULL, 2, NULL);
-  xTaskCreate(console_task, "console", 1000, NULL, 2, NULL);
+  xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
+  xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
+  xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
 
   for(;;)
   {
@@ -109,7 +109,7 @@ int main(void)
 {
   vic_init();
 
-  xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 2, NULL);
+  xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
 
   vTaskStartScheduler();
   /*lint -unreachable */
