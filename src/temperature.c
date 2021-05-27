@@ -28,8 +28,6 @@
  * INCLUDE FILES
  ******************************************************************************/
 
-#include "FreeRTOS.h"
-#include "task.h"
 #include "temperature.h"
 #include "stm32f407.h"
 #include "misc.h"

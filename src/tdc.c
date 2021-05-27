@@ -177,7 +177,7 @@ float get_tdc(void)
   /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
   if((ns < 90.0f) || (ns > 220.0f))
   {
-    printf("wrong tdc value!\n");
+    (void)printf("wrong tdc value!\n");
   }
   return ns;
 }
@@ -363,7 +363,7 @@ static void tdc_irqhandler(void)
   EXTI_PR = BIT_09;
 
   /* signal to waiting tasks */
-  xSemaphoreGiveFromISR(tdc_irq_pend, NULL);
+  (void)xSemaphoreGiveFromISR(tdc_irq_pend, NULL);
 }
 
 
@@ -395,10 +395,10 @@ static void tdc_waitready(void)
   out: none
 ==============================================================================*/
 {
-  xSemaphoreTake(tdc_irq_pend, portMAX_DELAY);
-  if(tdc_irq_ack() & NEW_MEAS_INT == 0)
+  (void)xSemaphoreTake(tdc_irq_pend, portMAX_DELAY);
+  if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
   {
-    printf("something went wrong!\n");
+    (void)printf("something went wrong!\n");
   }
 }
 

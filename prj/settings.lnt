@@ -1,11 +1,10 @@
  /* include directories: */
  -i"d:\bin\Lint\include\"
- -i"d:\tmp\gpsdo_firmware\src\include\"
- -i"d:\tmp\gpsdo_firmware\src\freertos\include\"
- -i"d:\tmp\gpsdo_firmware\src\freertos\portable\GCC\ARM_CM4F\"
+ -i"include"
+ -i"freertos/include"
+ -i"freertos/portable/GCC/ARM_CM4F"
 
  -d__attribute__(x)
-
 
 -e506 /* constant value boolean my arse */
 -e722 /* semicolon next to while() is deliberate */
@@ -35,3 +34,9 @@ in case of this, append a text to the message that clarifies this a bit. */
 -zero
 
 -esym(522,__disable_irq,__enable_irq)
+
+-esym(773, portRECORD_READY_PRIORITY)
+-esym(773, portRESET_READY_PRIORITY)
+-esym(773, portGET_HIGHEST_PRIORITY)
+-e731
+-esym(522, delay)

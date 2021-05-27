@@ -112,7 +112,7 @@ typedef enum
   ubx_len_msb,
   ubx_data,
   ubx_cka,
-  ubx_ckb,
+  ubx_ckb
 } irqstatus_t;
 
 typedef struct
@@ -290,19 +290,19 @@ float get_timepulse_error(void)
 
 void start_svin(void)
 {
-  xEventGroupSetBits(ublox_events, EVENT_DO_SVIN);
+  (void)xEventGroupSetBits(ublox_events, EVENT_DO_SVIN);
 }
 
 
 void set_fixpos_mode(void)
 {
-  xEventGroupSetBits(ublox_events, EVENT_SET_FIXPOS_MODE);
+  (void)xEventGroupSetBits(ublox_events, EVENT_SET_FIXPOS_MODE);
 }
 
 
 void disable_tmode(void)
 {
-  xEventGroupSetBits(ublox_events, EVENT_DISABLE_TMODE);
+  (void)xEventGroupSetBits(ublox_events, EVENT_DISABLE_TMODE);
 /*  if(cfg.fixpos_valid)
   {
     set_fixpos_mode();
@@ -358,13 +358,13 @@ static void rx_task(void* param)
         {
           case UBX_ID_ACK:
           {
-            xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
             break;
           }
 
           case UBX_ID_NAK:
           {
-            xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
             break;
           }
 
@@ -383,14 +383,14 @@ static void rx_task(void* param)
           case UBX_ID_NAV_SAT:
           {
             unpack_sv(rx.msg, &sat_info);
-            xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
             break;
           }
 
           case UBX_ID_NAV_PVT:
           {
             unpack_pvt(rx.msg, &pvt_info);
-            xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
             break;
           }
 
@@ -409,14 +409,14 @@ static void rx_task(void* param)
           case UBX_ID_TIM_TP:
           {
             unpack_tp(rx.msg, &qerr);
-            xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
             break;
           }
 
           case UBX_ID_TIM_SVIN:
           {
             unpack_svin(rx.msg, &svin_info);
-            xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
+            (void)xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
             break;
           }
 
@@ -723,7 +723,7 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
   uint8_t cka = 0;
   uint8_t ckb = 0;
   uint32_t read_pos = 0;
-  uint8_t tmpdata;
+  uint8_t tmpdata = 0;
 
   for(;;)
   {

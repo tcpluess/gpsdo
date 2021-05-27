@@ -103,8 +103,6 @@ static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
 static SemaphoreHandle_t timepulse_semaphore;
 
-extern config_t cfg;
-
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -129,7 +127,7 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  return xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200));
+  return (bool)xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200));
 }
 
 /*============================================================================*/
@@ -351,7 +349,7 @@ static void capture_irq(void)
   {
     /* read out the captured value and notify waiting tasks */
     tic_capture = TIM2_CCR3;
-    xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
+    (void)xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
   }
 
   /* acknowledge */

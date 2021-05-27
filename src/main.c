@@ -34,7 +34,6 @@
 #include "misc.h"
 #include "temperature.h"
 
-#include "rs232.h"
 #include "dac.h"
 #include "tdc.h"
 #include "timebase.h"
@@ -43,6 +42,7 @@
 #include "eeprom.h"
 #include "console.h"
 #include "cntl.h"
+#include "ublox.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -73,13 +73,12 @@ uint8_t ucHeap[configTOTAL_HEAP_SIZE];
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-extern void gps_task(void * pvParameters);
-extern void cntl_task(void * pvParameters);
-extern void console_task(void * pvParameters);
 
 
-void init(void * pvParameters)
+
+void init(void* param)
 {
+  (void)param;
   led_setup();
   eep_init();
   load_config();
@@ -95,9 +94,9 @@ void init(void * pvParameters)
   timebase_reset();
   enable_tdc();
 
-  xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
-  xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
-  xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
+  (void)xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
+  (void)xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
+  (void)xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
 
   for(;;)
   {
@@ -109,7 +108,7 @@ int main(void)
 {
   vic_init();
 
-  xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
+  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
 
   vTaskStartScheduler();
   /*lint -unreachable */
@@ -128,9 +127,10 @@ static void led_setup(void)
 }
 
 
-void vApplicationStackOverflowHook( TaskHandle_t xTask,
-                                               char * pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
 {
+  (void)task;
+  (void)taskname;
   /* This will get called if a stack overflow is detected during the context
      switch.  Set configCHECKFORSTACKOVERFLOWS to 2 to also check for stack
      problems within nested interrupts, but only do this for debug purposes as
