@@ -684,7 +684,7 @@ static void conf_timeconst(int argc, const char* const argv[])
       (void)printf("value for tau out of range: 10 < tau < 3600\n");
     }
 
-    if((filt > 0) && (filt < 100))
+    if((filt >= 0) && (filt < 100))
     {
       cfg.filt = filt;
     }
