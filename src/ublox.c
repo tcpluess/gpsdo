@@ -134,7 +134,7 @@ typedef enum
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static float qerr;
+static volatile float qerr;
 gpsinfo_t pvt_info;
 svindata_t svin_info;
 sv_info_t sat_info;
@@ -156,7 +156,7 @@ static void uart_irq_handler(void);
 static bool gps_wait_ack(void);
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
-static void unpack_tp(const uint8_t* rdata, float* ret);
+static void unpack_tp(const uint8_t* rdata, volatile float* ret);
 static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
@@ -317,22 +317,18 @@ void disable_tmode(void)
 
 bool gps_waitready(void)
 {
-  uint32_t bits = EVENT_TP_RECEIVED | EVENT_PVT_RECEIVED | EVENT_SAT_RECEIVED | EVENT_TIMEPULSE_OK;
-  if(xEventGroupWaitBits(ublox_events, bits, true, true, pdMS_TO_TICKS(1200)) != bits)
-  {
-    return false;
-  }
-  else
+  uint32_t bits = EVENT_TP_RECEIVED;
+  if(xEventGroupWaitBits(ublox_events, bits, true, true, 0))
   {
     return true;
   }
+  else
+  {
+    return false;
+  }
 }
 
 
-void gps_timepulse_notify(void)
-{
-  xEventGroupSetBitsFromISR(ublox_events, EVENT_TIMEPULSE_OK, NULL);
-}
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
@@ -362,14 +358,12 @@ static void rx_task(void* param)
         {
           case UBX_ID_ACK:
           {
-            printf("ACK\n");
             xEventGroupSetBits(ublox_events, EVENT_ACK_RECEIVED);
             break;
           }
 
           case UBX_ID_NAK:
           {
-            printf("NAK\n");
             xEventGroupSetBits(ublox_events, EVENT_NAK_RECEIVED);
             break;
           }
@@ -388,7 +382,6 @@ static void rx_task(void* param)
         {
           case UBX_ID_NAV_SAT:
           {
-            printf("SV\n");
             unpack_sv(rx.msg, &sat_info);
             xEventGroupSetBits(ublox_events, EVENT_SAT_RECEIVED);
             break;
@@ -396,7 +389,6 @@ static void rx_task(void* param)
 
           case UBX_ID_NAV_PVT:
           {
-            printf("PVT\n");
             unpack_pvt(rx.msg, &pvt_info);
             xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
             break;
@@ -416,7 +408,6 @@ static void rx_task(void* param)
         {
           case UBX_ID_TIM_TP:
           {
-            printf("TP\n");
             unpack_tp(rx.msg, &qerr);
             xEventGroupSetBits(ublox_events, EVENT_TP_RECEIVED);
             break;
@@ -424,7 +415,6 @@ static void rx_task(void* param)
 
           case UBX_ID_TIM_SVIN:
           {
-            printf("SVIN\n");
             unpack_svin(rx.msg, &svin_info);
             xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
             break;
@@ -575,16 +565,19 @@ static void ubx_receive_packet(ubxbuffer_t* rx)
   uint32_t wrpos = 0;
   uint8_t cka = 0;
   uint8_t ckb = 0;
+  uint32_t delay = portMAX_DELAY;
 
   for(;;)
   {
     uint8_t tmpdata;
 
     /* wait until some data is received or a timeout occurs */
-    if(xStreamBufferReceive(rxstream, &tmpdata, 1, RECEIVE_TIMEOUT) == 0)
+    if(xStreamBufferReceive(rxstream, &tmpdata, 1, delay) == 0)
     {
-      /* a timeout during reception occured, reset the internal status */
+      /* a timeout during reception occured, reset the internal status
+         and set the delay to max to wait indefinitely long for the next char */
       rxstatus = ubx_header1;
+      delay = portMAX_DELAY;
       continue;
     }
 
@@ -593,6 +586,7 @@ static void ubx_receive_packet(ubxbuffer_t* rx)
       /* can only proceed if the sync1 and sync2 bytes are received */
       case ubx_header1:
       {
+        delay = RECEIVE_TIMEOUT;
         if(tmpdata == SYNC1)
         {
           rxstatus = ubx_header2;
@@ -958,7 +952,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
 
 
 /*============================================================================*/
-static void unpack_tp(const uint8_t* rdata, float* ret)
+static void unpack_tp(const uint8_t* rdata, volatile float* ret)
 /*------------------------------------------------------------------------------
   Function:
   unpacks the TIM-TP message
