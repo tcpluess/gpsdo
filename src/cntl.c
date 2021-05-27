@@ -39,7 +39,6 @@
 #include "tdc.h"
 #include "dac.h"
 #include "temperature.h"
-
 #include "stm32f407.h"
 
 /*******************************************************************************
@@ -96,6 +95,8 @@ typedef enum
   locked,
   stable
 } controlstatus_t;
+
+extern volatile float stat_e;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
@@ -156,9 +157,10 @@ void cntl_task(void* param)
       /* holdover mode: wait until the position is valid */
       case holdover:
       {
+        stat_e = 0.0f;
         ledon();
 
-        if(gps_waitready())
+        if(gps_waitready() && pps_elapsed())
         {
           ledoff();
           gpsdostatus = track_lock;
@@ -172,12 +174,12 @@ void cntl_task(void* param)
       {
         /* only look at the 1pps signal if the fix is valid; if fix is invalid,
            go to holdover mode */
-        if(gps_waitready())
+        if(pps_elapsed())
         {
-          ledon();
-          cntl();
-          vTaskDelay(pdMS_TO_TICKS(50));
-          ledoff();
+            ledon();
+            cntl();
+            vTaskDelay(pdMS_TO_TICKS(100));
+            ledoff();
         }
         else
         {
@@ -212,7 +214,6 @@ static void ledoff(void)
 
 static float read_tic(void)
 {
-  tdc_waitready();
   float tic = get_tic();
   float qerr = get_timepulse_error();
   enable_tdc();
@@ -258,7 +259,6 @@ static uint16_t pi_control(double KP, double TI, double ee)
   }
 }
 
-extern volatile float stat_e;
 
 static void cntl(void)
 {
