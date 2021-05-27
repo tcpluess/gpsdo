@@ -36,6 +36,7 @@
 #include "vic.h"
 #include "tdc.h"
 #include "ublox.h"
+#include "eeprom.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -50,7 +51,7 @@
 #define PLLQ 2u
 #define PLLP 0u /* vco frequency divided by 2 -> 160 MHz pll output */
 #define HPRE 0u /* ahb clock = pll clock */
-#define PPRE2 4u /* apb2 clock divided by 4 -> apb2 runs at 80 MHz */
+#define PPRE2 4u /* apb2 clock divided by 2 -> apb2 runs at 80 MHz */
 #define PPRE1 5u /* apb1 clock divided by 4 -> apb1 runs at 40 MHz */
 
 #define FVCO ((HSECLK/PLLM)*PLLN)
@@ -100,8 +101,9 @@ static void capture_irq(void);
 static volatile bool res;
 static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
-
 static SemaphoreHandle_t timepulse_semaphore;
+
+extern config_t cfg;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -127,14 +129,7 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  if(xSemaphoreTake(timepulse_semaphore, 50))
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
+  return xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200));
 }
 
 /*============================================================================*/
@@ -349,14 +344,14 @@ static void capture_irq(void)
   if(res)
   {
     /* timebase reset requested */
-    TIM2_CNT = 6; // TODO: this is somewhat hackish. better ideas??
+    TIM2_CNT = 5;
     res = false;
   }
   else
   {
     /* read out the captured value and notify waiting tasks */
     tic_capture = TIM2_CCR3;
-    gps_timepulse_notify();
+    xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
   }
 
   /* acknowledge */
