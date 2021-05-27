@@ -28,6 +28,8 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "console.h"
 #include "rs232.h"
 #include "eeprom.h"
@@ -35,7 +37,6 @@
 #include "timebase.h"
 #include "temperature.h"
 #include "adc.h"
-#include "cntl.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -87,12 +88,12 @@ static void showcfg(int argc, const char* const argv[]);
 static void enable_disp(int argc, const char* const argv[]);
 static void svin(int argc, const char* const argv[]);
 static void sat(int argc, const char* const argv[]);
-static void restart(int argc, const char* const argv[]);
 static void auto_svin(int argc, const char* const argv[]);
 static void conf_timeconst(int argc, const char* const argv[]);
 static void man_hold(int argc, const char* const argv[]);
 static void uptime(int argc, const char* const argv[]);
 static void offset(int argc, const char* const argv[]);
+static void info(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -111,149 +112,130 @@ static command_t cmds[] =
   {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
   {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
   {sat,             "sat",        "display satellite info"},
-  {restart,         "restart",    "restart the gps module"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
   {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
   {man_hold,        "hold",       "on|off - holds the DAC value"},
   {uptime,          "uptime",     "shows the current uptime"},
   {offset,          "offset",     "sets the offset of the pps output"},
+  {info,            "info",       "show version information"},
 };
 
 /* not static because it must be globally accessible */
 extern config_t cfg;
 
-static bool auto_disp = false;
+volatile float stat_e;
+volatile uint16_t stat_dac;
+
+extern volatile gpsinfo_t pvt_info;
+extern volatile svindata_t svin_info;
+extern volatile sv_info_t sat_info;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void console_worker(void)
+void console_task(void* param)
 {
+  (void)param;
+  rs232_init();
   static consolestatus_t status = startup;
   int rx;
-
-  switch(status)
+  for(;;)
   {
-    /* clears the terminal and prints the info screen */
-    case startup:
+    switch(status)
     {
-      (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-      (void)printf("use \"help\" to see the available commands\n");
-      (void)printf("version 2021-05-11\n\n");
-      status = prompt;
-      auto_disp = false;
-      break;
-    }
-
-    /* prints the console prompt character */
-    case prompt:
-    {
-      txchar('#');
-      txchar(' ');
-      status = input;
-      wrpos = 0;
-      break;
-    }
-
-    /* processes the received characters and echoes them back accordingly */
-    case input:
-    {
-      rx = kbhit();
-
-      switch(rx)
+      /* clears the terminal and prints the info screen */
+      case startup:
       {
-        /* no character received, nothing to do */
-        case -1:
-        {
-          break;
-        }
-
-        /* backspace entered: only need to do something if the line buffer is not
-           empty; erase the last character in the terminal by going back one,
-           sending a space and again going back one; also decrease the
-           writing pos into the line buffer */
-        case '\b':
-        {
-          if(wrpos > 0)
-          {
-            txchar('\b');
-            txchar(' ');
-            txchar('\b');
-            wrpos--;
-          }
-          break;
-        }
-
-        /* enter is pressed, terminate the line buffer and evaluate it
-           or do nothing if the line buffer is empty */
-        case '\r':
-        case '\n':
-        {
-          auto_disp = false;
-          txchar('\r');
-          txchar('\n');
-          linebuffer[wrpos] = '\0';
-          if(strlen(linebuffer) > 0)
-          {
-            status = evaluate;
-          }
-          else
-          {
-            status = prompt;
-          }
-          break;
-        }
-
-        /* a normal character is received, so echo back and add it into
-           the line buffer */
-        default:
-        {
-          /* FIXME: need to check this condition */
-          if(wrpos < MAX_LINELEN-2)
-          {
-            txchar((char)rx);
-            linebuffer[wrpos] = (char)rx;
-            wrpos++;
-          }
-          break;
-        }
+        info(0, NULL);
+        status = prompt;
+        break;
       }
-      break;
-    }
 
-    /* if a command line has been entered, it is processed in this state */
-    case evaluate:
-    {
-      const char* toks[MAX_TOKENS];
-      int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
-      interpreter(ntoks, toks);
-      status = prompt;
-      break;
-    }
-  }
+      /* prints the console prompt character */
+      case prompt:
+      {
+        txchar('#');
+        txchar(' ');
+        status = input;
+        wrpos = 0;
+        break;
+      }
 
-  if(auto_disp)
-  {
-    static uint64_t last = 0;
-    uint64_t now = get_uptime_msec();
-    if(now - last >= 1000ull)
-    {
-      last = now;
+      /* processes the received characters and echoes them back accordingly */
+      case input:
+      {
+        rx = kbhit();
 
-      float i = get_iocxo();
-      float t = get_temperature();
-      extern float e;
-      extern uint16_t dac_value;
-      extern gpsinfo_t pvt_info;
-      extern svindata_t svin_info;
-      extern sv_info_t sat_info;
-      extern double esum;
-      extern const char* cntl_status;
-      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+        switch(rx)
+        {
+          /* no character received, nothing to do */
+          case -1:
+          {
+            break;
+          }
 
-      (void)printf("e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu esum=%f status=%s\n",
-        e, dac_value, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, esum, cntl_status);
+          /* backspace entered: only need to do something if the line buffer is not
+             empty; erase the last character in the terminal by going back one,
+             sending a space and again going back one; also decrease the
+             writing pos into the line buffer */
+          case '\b':
+          {
+            if(wrpos > 0)
+            {
+              txchar('\b');
+              txchar(' ');
+              txchar('\b');
+              wrpos--;
+            }
+            break;
+          }
+
+          /* enter is pressed, terminate the line buffer and evaluate it
+             or do nothing if the line buffer is empty */
+          case '\r':
+          case '\n':
+          {
+            txchar('\r');
+            txchar('\n');
+            linebuffer[wrpos] = '\0';
+            if(strlen(linebuffer) > 0)
+            {
+              status = evaluate;
+            }
+            else
+            {
+              status = prompt;
+            }
+            break;
+          }
+
+          /* a normal character is received, so echo back and add it into
+             the line buffer */
+          default:
+          {
+            /* FIXME: need to check this condition */
+            if(wrpos < MAX_LINELEN-2)
+            {
+              txchar((char)rx);
+              linebuffer[wrpos] = (char)rx;
+              wrpos++;
+            }
+            break;
+          }
+        }
+        break;
+      }
+
+      /* if a command line has been entered, it is processed in this state */
+      case evaluate:
+      {
+        const char* toks[MAX_TOKENS];
+        int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
+        interpreter(ntoks, toks);
+        status = prompt;
+        break;
+      }
     }
   }
 }
@@ -491,7 +473,7 @@ static void showcfg(int argc, const char* const argv[])
 static void enable_disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  enables the auto-display -- currently implemented as an UGLY HACK
+  enables the auto-display
   in:  argc -> number of arguments, see below
        argv -> array of strings; none required
   out: none
@@ -502,7 +484,25 @@ static void enable_disp(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    auto_disp = true;
+    extern bool canread(void);
+    for(;;)
+    {
+      uint64_t now = get_uptime_msec();
+
+      float i = get_iocxo();
+      float t = get_temperature();
+
+      extern const char* cntl_status;
+      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+
+      (void)printf("%-9llu e=%-7.2f D=%-5d I=%.1f T=%.1f sat=%-2d lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu status=%s\n",
+        now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
+      vTaskDelay(1000);
+      if(canread())
+      {
+        return;
+      }
+    }
   }
 }
 
@@ -541,7 +541,6 @@ static void svin(int argc, const char* const argv[])
       uint32_t accuracy = (uint32_t)atoi(argv[1]);
       if((time != 0) && (accuracy != 0))
       {
-        disable_tmode();
         cfg.svin_dur = time;
         cfg.accuracy_limit = accuracy;
         start_svin();
@@ -573,9 +572,6 @@ static void sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    extern sv_info_t sat_info;
-    extern gpsinfo_t pvt_info;
-
     for(int i = 0; i < sat_info.numsv; i++)
     {
       const char* gnss;
@@ -640,27 +636,6 @@ static void sat(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static void restart(int argc, const char* const argv[])
-/*------------------------------------------------------------------------------
-  Function:
-  displays satellite info
-  in:  argc -> number of arguments, see below
-       argv -> array of strings; none required
-  out: none
-==============================================================================*/
-{
-  /* unused */
-  (void)argv;
-
-  if(argc == 0)
-  {
-    gps_restart();
-    cntl_restart();
-  }
-}
-
-
-/*============================================================================*/
 static void auto_svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
@@ -697,8 +672,8 @@ static void conf_timeconst(int argc, const char* const argv[])
 {
   if(argc == 2)
   {
-    uint16_t tau = atoi(argv[0]);
-    uint8_t filt = atoi(argv[1]);
+    uint16_t tau = (uint16_t)atoi(argv[0]);
+    uint8_t filt = (uint8_t)atoi(argv[1]);
 
     if((tau > 10) && (tau < 3600))
     {
@@ -709,7 +684,7 @@ static void conf_timeconst(int argc, const char* const argv[])
       (void)printf("value for tau out of range: 10 < tau < 3600\n");
     }
 
-    if((filt >= 0) && (filt < 100))
+    if((filt > 0) && (filt < 100))
     {
       cfg.filt = filt;
     }
@@ -755,6 +730,7 @@ static void uptime(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
+  (void)argv;
   if(argc == 0)
   {
     uint64_t tm = get_uptime_msec();
@@ -764,9 +740,9 @@ static void uptime(int argc, const char* const argv[])
     uint32_t min = tm % 60;
     tm = tm / 60;
     uint32_t hour = tm % 24;
-    uint32_t day = tm / 24;
+    uint32_t day = (uint32_t)(tm / 24ull);
 
-    printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
+    (void)printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
   }
 }
 
@@ -785,10 +761,24 @@ static void offset(int argc, const char* const argv[])
     /* when the setpoint is changed, then restart the control loop.
        otherwise, it takes too long until the pll locks with the new phase. */
     cfg.timeoffset = atoi(argv[0]);
-    extern float setpoint;
-    setpoint = (float)cfg.timeoffset;
-    cntl_restart();
   }
+}
+
+
+/*============================================================================*/
+static void info(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  show version info
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  (void)argc;
+  (void)argv;
+  (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
+  (void)printf("use \"help\" to see the available commands\n");
+  (void)printf("compiled " __DATE__ " " __TIME__ "\n\n");
 }
 
 /*******************************************************************************

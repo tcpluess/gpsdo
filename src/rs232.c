@@ -13,7 +13,7 @@
  *
  * Filename:       rs232.c
  *
- * Version:        1.1
+ * Version:        2.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -25,12 +25,17 @@
 
    [1.1]    31.03.2020    Tobias Plüss <tpluess@ieee.org>
    - modify the transmit routine to use the tx empty interrupt
+
+   [2.0]    14.05.2021    Tobias Plüss <tpluess@ieee.org>
+   - ported to FreeRTOS.
  ******************************************************************************/
 
 /*******************************************************************************
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "stream_buffer.h"
 #include "rs232.h"
 #include "stm32f407.h"
 #include "misc.h"
@@ -41,11 +46,9 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define TXBUFFERSIZE 512
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
 #define BAUD_FRAC(x) ((uint32_t)((40000000.0/(x)-16.0*BAUD_INT(x))+0.5))
-
-#define RXBUFFERSIZE 10u
+#define RS232_BUFFERSIZE 100u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -67,11 +70,8 @@ static void disable_txempty_irq(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static char txbuffer[TXBUFFERSIZE];
-static volatile uint32_t txlen;
-
-static char rxbuffer[RXBUFFERSIZE];
-static volatile uint32_t rxlen;
+static StreamBufferHandle_t txstream;
+static StreamBufferHandle_t rxstream;
 
 /* not static because from eeprom */
 extern config_t cfg;
@@ -82,8 +82,8 @@ extern config_t cfg;
 
 void rs232_init(void)
 {
-  txlen = 0;
-  rxlen = 0;
+  txstream = xStreamBufferCreate(RS232_BUFFERSIZE, 1);
+  rxstream = xStreamBufferCreate(RS232_BUFFERSIZE, 1);
 
   vic_enableirq(38, irq_handler);
 
@@ -102,54 +102,35 @@ void rs232_init(void)
 }
 
 
-
-
 int kbhit(void)
 {
-  static uint32_t rdpos = 0;
-  if(rxlen > 0)
+  char rx;
+  if(xStreamBufferReceive(rxstream, &rx, 1, portMAX_DELAY) > 0)
   {
-    int ret = rxbuffer[rdpos];
-    __disable_irq();
-    rxlen--;
-    __enable_irq();
-    rdpos++;
-    if(rdpos == RXBUFFERSIZE)
-    {
-      rdpos = 0;
-    }
-    return ret;
+    return rx;
   }
-  return -1;
+  else
+  {
+    return -1;
+  }
+}
+
+bool canread(void)
+{
+  if(xStreamBufferIsEmpty(rxstream))
+  {
+    return false;
+  }
+  else
+  {
+    return true;
+  }
 }
 
 
 void txchar(char c)
 {
-  static int write_ind = 0;
-
-  /* this can only proceed if one of the following conditions is met:
-     a) the buffer is empty - in this case there is nothing in the buffer
-        and it can be used immediately
-     b) read index is not the same as write index - if they are equal it means
-        the buffer is overflowing */
-
-    while(txlen == TXBUFFERSIZE);
-
-  /* put the character into the buffer */
-  txbuffer[write_ind] = c;
-
-  write_ind++;
-  if(write_ind == TXBUFFERSIZE)
-  {
-    write_ind = 0;
-  }
-  __disable_irq();
-  txlen++;
-  __enable_irq();
-
-
-  /* actual transmission is handled only in the interrupt routine */
+  (void)xStreamBufferSend(txstream, &c, 1, portMAX_DELAY);
   enable_txempty_irq();
 }
 
@@ -172,23 +153,14 @@ static void irq_handler(void)
 
   if((sr & cr) == BIT_07) //TXE?
   {
-    static uint32_t read_ind = 0;
-
-    if(txlen == 0)
+    char c;
+    if(xStreamBufferReceiveFromISR(txstream, &c, 1, NULL) > 0)
+    {
+      USART2_DR = c;
+    }
+    else
     {
       disable_txempty_irq();
-      return;
-    }
-
-    txlen--;
-
-    /* send the next character and go to the next read position, take care
-       of wrapping the read index */
-    USART2_DR = txbuffer[read_ind];
-    read_ind++;
-    if(read_ind == TXBUFFERSIZE)
-    {
-      read_ind = 0;
     }
   }
 
@@ -196,15 +168,7 @@ static void irq_handler(void)
   {
     /* DR must be read anyways to acknowledge the interrupt */
     uint8_t tmp = (uint8_t)USART2_DR;
-
-    static uint32_t wrpos = 0;
-    rxbuffer[wrpos] = tmp;
-    wrpos++;
-    rxlen++;
-    if(wrpos == RXBUFFERSIZE)
-    {
-      wrpos = 0;
-    }
+    (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
   }
 
   USART2_SR = 0;

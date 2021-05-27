@@ -67,10 +67,18 @@
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
+static inline void delay(void)
+{
+  for(int i = 0; i<100; i++)
+  {
+    asm volatile ("nop");
+  }
+}
+
 /* macros for easy access to the e2prom */
-#define EEP_SS(x) { GPIOD_BSRR = ((x) ? BIT_14 : BIT_30); }
+#define EEP_SS(x) { GPIOD_BSRR = ((x) ? BIT_14 : BIT_30); delay(); }
 #define EEP_MOSI(x) { GPIOD_BSRR = ((x) ? BIT_12 : BIT_28); }
-#define EEP_SCK(x) { GPIOD_BSRR = ((x) ? BIT_13 : BIT_29); }
+#define EEP_SCK(x) { GPIOD_BSRR = ((x) ? BIT_13 : BIT_29); delay(); }
 #define EEP_MISO() ((GPIOD_IDR & BIT_11) != 0 ? 1u : 0u)
 
 /*******************************************************************************
@@ -233,7 +241,7 @@ void load_config(void)
     cfg.tau = 250u;
     cfg.filt = 50u;
 
-    cfg.elevation_mask = 5; /* 5 degree elevation mask */
+    cfg.elevation_mask = 15; /* 5 degree elevation mask */
 
     cfg.timeoffset = 0;
   }

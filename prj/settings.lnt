@@ -1,13 +1,17 @@
  /* include directories: */
  -i"d:\bin\Lint\include\"
+ -i"include"
+ -i"freertos/include"
+ -i"freertos/portable/GCC/ARM_CM4F"
 
  -d__attribute__(x)
-
 
 -e506 /* constant value boolean my arse */
 -e722 /* semicolon next to while() is deliberate */
 -e835 /* shift count of zero is deliberate */
 -e537 /* repeated include file is no problem */
+-e845 /* right argument to | is 0 */
+-e793 /* some names are longer than 31 characters */
 +fsu /* strings are arrays of unsigned char */
 +fan /* allow anonymous unions */
 +fas /* allow anonymous unions */
@@ -30,3 +34,9 @@ in case of this, append a text to the message that clarifies this a bit. */
 -zero
 
 -esym(522,__disable_irq,__enable_irq)
+
+-esym(773, portRECORD_READY_PRIORITY)
+-esym(773, portRESET_READY_PRIORITY)
+-esym(773, portGET_HIGHEST_PRIORITY)
+-e731
+-esym(522, delay)

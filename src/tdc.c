@@ -13,7 +13,7 @@
  *
  * Filename:       tdc.c
  *
- * Version:        1.1
+ * Version:        1.2
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -25,15 +25,24 @@
 
    [1.1]    01.04.2020    Tobias Plüss <tpluess@ieee.org>
    - use hardware spi interface
+
+   [1.2]    27.05.2021    Tobias Plüss <tpluess@ieee.org>
+   - use external interrupt and semaphores for more efficient access
  ******************************************************************************/
 
 /*******************************************************************************
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
 #include "tdc.h"
 #include "stm32f407.h"
 #include "misc.h"
+#include "vic.h"
+
+#include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -67,12 +76,15 @@
 #define ADDR_CALIB1 0x1bu
 #define ADDR_CALIB2 0x1cu
 #define ADDR_INT_STATUS 0x02u
+#define ADDR_INT_MASK 0x03u
 
 #define NEW_MEAS_INT (1u << 0)
 
 #define DATA_MSK 0xffffffu
 
-#define TDC_SPI_DIVIDER 2u /* apb2 clock is 80 MHz, 2 amounts to divider 8 */
+#define TDC_SPI_DIVIDER 1u /* apb2 clock is 80 MHz, 4 amounts to divider 32 */
+
+#define EXTI9_IRQ 23u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -92,10 +104,16 @@ static void tdc_write(uint8_t addr, uint8_t data);
 static void tdc_hwenable(bool enable);
 static void tdc_ss(bool select);
 static uint16_t spi_trans16(uint16_t txdata);
+static void tdc_config_interrupt(void);
+static void tdc_irqhandler(void);
+static uint8_t tdc_irq_ack(void);
+static void tdc_waitready(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+static SemaphoreHandle_t tdc_irq_pend;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -111,6 +129,9 @@ void setup_tdc(void)
   GPIOA_MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
   GPIOA_PUPDR |= (1u << 18);
   GPIOA_AFRL |= (5u << 20) | (5u << 24) | (5u << 28);
+
+  vSemaphoreCreateBinary(tdc_irq_pend);
+  tdc_config_interrupt();
 
   /* disble the tdc for now */
   tdc_ss(false);
@@ -129,10 +150,13 @@ void setup_tdc(void)
   /* this resets the internal state of the tdc */
   tdc_hwenable(true);
 
-  /* configure the measurement mode and # of average cycles */
+  /* configure the measurement mode, # of average cycles and interrupt when
+     measurements are done */
   tdc_write(ADDR_CONFIG1, CONFIG1);
   tdc_write(ADDR_CONFIG2, CONFIG2);
+  tdc_write(ADDR_INT_MASK, NEW_MEAS_INT);
 }
+
 
 void enable_tdc(void)
 {
@@ -140,58 +164,24 @@ void enable_tdc(void)
   tdc_write(ADDR_CONFIG1, BIT_00);
 }
 
+
 float get_tdc(void)
 {
+  tdc_waitready();
   float calib1 = tdc_read24(ADDR_CALIB1);
   float calib2 = tdc_read24(ADDR_CALIB2);
   float time1 = tdc_read24(ADDR_TIME1);
 
   float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+
+  /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
+  if((ns < 90.0f) || (ns > 220.0f))
+  {
+    (void)printf("wrong tdc value!\n");
+  }
   return ns;
 }
 
-bool tdc_check_irq(void)
-{
-  /* check the logic level of the irq pin */
-  if((GPIOA_IDR & BIT_09) == 0)
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-void tdc_int_ack(void)
-{
-  /* read the pending interrupts */
-  uint8_t irq = tdc_read(ADDR_INT_STATUS);
-
-  /* by writing a 1 to the pending interrupt bits, they are cleared */
-  tdc_write(ADDR_INT_STATUS, irq);
-  do
-  {
-    /* this should also clear the irq pin */
-    if(!tdc_check_irq())
-    {
-      break;
-    }
-  } while(true);
-}
-
-
-void tdc_waitready(void)
-{
-  for(;;)
-  {
-    if(tdc_check_irq())
-    {
-      tdc_int_ack();
-      return;
-    }
-  }
-}
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
@@ -288,6 +278,7 @@ static void tdc_ss(bool select)
 {
   /* wait until not busy */
   while(SPI1_SR & BIT_07);
+  vTaskDelay(pdMS_TO_TICKS(2));
 
   if(select)
   {
@@ -299,10 +290,7 @@ static void tdc_ss(bool select)
   }
 
   /* include a small delay to meet the setup time. */
-  for(int i=0; i<2000; i++)
-  {
-    asm volatile ("nop");
-  }
+  vTaskDelay(pdMS_TO_TICKS(2));
 }
 
 /*============================================================================*/
@@ -335,6 +323,83 @@ static uint16_t spi_trans16(uint16_t txdata)
   } while(true);
 
   return (uint16_t)SPI1_DR;
+}
+
+
+/*============================================================================*/
+static void tdc_config_interrupt(void)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the external interrupt pin. the tdc is connected to pa9, so this
+  is the exti9 interrupt
+  in:  none
+  out: none
+==============================================================================*/
+{
+  vic_enableirq(EXTI9_IRQ, tdc_irqhandler);
+
+  /* configure pa9 as external interrupt */
+  SYSCFG_EXTICR3 = (0u << 4);
+
+  /* unmask pa9 interrupt */
+  EXTI_IMR = BIT_09;
+
+  /* enable falling edge trigger */
+  EXTI_FTSR = BIT_09;
+}
+
+
+/*============================================================================*/
+static void tdc_irqhandler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  interrupt handler for the INTB pin. acknowledge the external interrupt and
+  release a semaphore such that a waiting task is informed.
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* acknowledge the interrupt */
+  EXTI_PR = BIT_09;
+
+  /* signal to waiting tasks */
+  (void)xSemaphoreGiveFromISR(tdc_irq_pend, NULL);
+}
+
+
+/*============================================================================*/
+static uint8_t tdc_irq_ack(void)
+/*------------------------------------------------------------------------------
+  Function:
+  acknowledge the interrupt from the tdc by reading its interrupt status
+  register and acknowledging all pending interrupts.
+  in:  none
+  out: returns the pending interrupts.
+==============================================================================*/
+{
+  /* read the pending interrupts */
+  uint8_t irq = tdc_read(ADDR_INT_STATUS);
+
+  /* by writing a 1 to the pending interrupt bits, they are cleared */
+  tdc_write(ADDR_INT_STATUS, irq);
+  return irq;
+}
+
+
+/*============================================================================*/
+static void tdc_waitready(void)
+/*------------------------------------------------------------------------------
+  Function:
+  wait until the tdc is ready and new measurement data is available.
+  in:  none
+  out: none
+==============================================================================*/
+{
+  (void)xSemaphoreTake(tdc_irq_pend, portMAX_DELAY);
+  if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
+  {
+    (void)printf("something went wrong!\n");
+  }
 }
 
 /*******************************************************************************

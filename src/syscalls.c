@@ -31,7 +31,11 @@
 
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/times.h>
+#include <sys/unistd.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "stm32f407.h"
 #include "misc.h"
 #include "rs232.h"
@@ -60,50 +64,80 @@
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-caddr_t _sbrk_r(struct _reent *r, int incr)
-{
-  /* heap start and end come from the linker script */
-  extern char heapstart asm("heapstart");
-  extern char heapend asm("heapend");
-
-  static char* heap_top = &heapstart;
-  char* prev_heap_top = heap_top;
-  char* new_top = heap_top + incr;
-
-  if(new_top > &heapend)
-  {
-    /* Some of the libstdc++-v3 tests rely upon detecting
-      out of memory errors, so do not abort here.  */
-    errno = ENOMEM;
-    return (caddr_t) -1;
-  }
-
-  heap_top = new_top;
-
-  return (caddr_t)prev_heap_top;
-}
 
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
-  const unsigned char *p = (const unsigned char*)ptr;
-  for(int i = 0; i < len; i++)
+  switch(file)
   {
-    if(*p == '\n')
+    case STDOUT_FILENO:
+    case STDERR_FILENO:
     {
-      txchar('\r');
+      const unsigned char *p = (const unsigned char*)ptr;
+      for(int i = 0; i < len; i++)
+      {
+        if(*p == '\n')
+        {
+          txchar('\r');
+        }
+        txchar(*p++);
+      }
+      return len;
     }
-    txchar(*p++);
+
+    default:
+    {
+      r->_errno = EBADF;
+      return -1;
+    }
   }
-  return len;
 }
 
-int _isatty(int file)
+int
+_isatty(int file)
 {
-  return 1;
+  switch (file)
+  {
+    case STDOUT_FILENO:
+    case STDERR_FILENO:
+    case STDIN_FILENO:
+      return 1;
+
+    default:
+      // errno = ENOTTY;
+      errno = EBADF;
+      return -1;
+  }
 }
+
 
 _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 {
+  if(file == STDIN_FILENO)
+  {
+    extern int kbhit(void);
+    int numread;
+    char* dest = (char*)ptr;
+
+    for(numread = 0; numread < len; numread++)
+    {
+      int rxchar = kbhit();
+      if(rxchar >= 0)
+      {
+        dest[numread] = (char)rxchar;
+      }
+      else
+      {
+        r->_errno = EIO;
+      }
+      break;
+    }
+    return numread;
+  }
+  else
+  {
+    r->_errno = EBADF;
+    return 0;
+  }
 #if 0
   char c;
   int  i;
@@ -130,11 +164,16 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
   return 0;
 }
 
-int _close_r(
-    struct _reent *r,
-    int file)
+int _close_r(struct _reent *r, int file)
 {
   return 0;
+}
+
+int
+_open_r(struct _reent *ptr, const char *file, int flags, int mode)
+{
+  ptr->_errno = ENODEV;
+  return -1;
 }
 
 _off_t _lseek_r(
@@ -145,6 +184,23 @@ _off_t _lseek_r(
 {
   return (_off_t)0; /*  Always indicate we are at file beginning. */
 }
+
+
+//int _stat_r(
+//    struct _reent *r,
+//    int file,
+//    struct stat *st)
+int _stat_r(struct _reent *ptr, const char *file, struct stat *st)
+{
+  /*  Always set as character device.       */
+  st->st_mode = S_IFCHR;
+    /* assigned to strong type with implicit  */
+    /* signed/unsigned conversion.  Required by   */
+    /* newlib.          */
+
+  return 0;
+}
+
 
 int _fstat_r(
     struct _reent *r,
@@ -164,17 +220,16 @@ int _fstat_r(
 int
 _getpid(void)
 {
-  return 1;
+  TaskHandle_t current = xTaskGetCurrentTaskHandle();
+  return uxTaskGetTaskNumber(current);
 }
 
 
-int
-_kill(int pid, int sig)
+int _kill(int pid, int sig)
 {
-  errno = EINVAL;
-  return (-1);
+  errno = ENOTSUP;
+  return -1;
 }
-
 
 void
 _exit(int status)
@@ -183,6 +238,8 @@ _exit(int status)
     ;
   }
 }
+
+
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)

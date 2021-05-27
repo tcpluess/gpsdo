@@ -52,6 +52,14 @@
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+static inline void delay(void)
+{
+  for(int i = 0; i < 1000; i++)
+  {
+    asm volatile ("nop");
+  }
+}
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -74,9 +82,13 @@ float get_temperature(void)
 
   /* ss active */
   GPIOB_BSRR = BIT_21;
+  delay();
   for(int i = 0; i < 16; i++)
   {
+    delay();
     GPIOB_BSRR = BIT_23;
+    delay();
+
     ret = ret << 1;
     if(GPIOB_IDR & BIT_06)
     {
@@ -84,6 +96,7 @@ float get_temperature(void)
     }
     GPIOB_BSRR = BIT_07;
   }
+  delay();
   GPIOB_BSRR = BIT_05;
 
   return ((float)ret)/32.0f;

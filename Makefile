@@ -106,7 +106,7 @@ ULIBS =
 
 # Define optimisation level here
 ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3
+OPT = -O1 -g3
 else
 OPT = -O0 -falign-functions=16 -fno-inline -fomit-frame-pointer
 endif
