@@ -165,7 +165,7 @@ void console_task(void* param)
       /* processes the received characters and echoes them back accordingly */
       case input:
       {
-        rx = getchar();
+        rx = kbhit();
 
         switch(rx)
         {
@@ -485,26 +485,22 @@ static void enable_disp(int argc, const char* const argv[])
   if(argc == 0)
   {
     extern bool canread(void);
-    uint64_t last = 0;
-    uint64_t now = get_uptime_msec();
-    while(canread() == false)
+    for(;;)
     {
-      if(now - last >= 1000ull)
+      uint64_t now = get_uptime_msec();
+
+      float i = get_iocxo();
+      float t = get_temperature();
+
+      extern const char* cntl_status;
+      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+
+      (void)printf("%-9llu e=%-7.2f D=%-5d I=%.1f T=%.1f sat=%-2d lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu status=%s\n",
+        now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
+      vTaskDelay(1000);
+      if(canread())
       {
-        last = now;
-
-        float i = get_iocxo();
-        float t = get_temperature();
-
-        extern const char* cntl_status;
-        uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
-
-        (void)printf("%llu e=%.3f D=%d I=%.0f T=%.1f sat=%d lat=%f lon=%f obs=%lu mv=%lu tacc=%lu status=%s\n",
-          now, stat_e, stat_dac, i, t, sat_info.numsv, pvt_info.lat, pvt_info.lon, svin_info.obs, meanv, pvt_info.tacc, cntl_status);
-      }
-      else
-      {
-        vTaskDelay(10);
+        return;
       }
     }
   }
