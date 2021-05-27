@@ -13,7 +13,7 @@
  *
  * Filename:       tdc.h
  *
- * Version:        1.1
+ * Version:        1.2
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
@@ -25,6 +25,9 @@
 
    [1.1]    01.04.2020    Tobias Plüss <tpluess@ieee.org>
    - use hardware spi interface
+
+   [1.2]    27.05.2021    Tobias Plüss <tpluess@ieee.org>
+   - use external interrupt and semaphores for more efficient access
  ******************************************************************************/
 
 #ifndef __TDC_H__
@@ -71,23 +74,6 @@ extern void enable_tdc(void);
   out: none
 ==============================================================================*/
 
-/*============================================================================*/
-extern bool tdc_check_irq(void);
-/*------------------------------------------------------------------------------
-  Function:
-  check if the tdc has generated an interrupt request
-  in:  none
-  out: none
-==============================================================================*/
-
-/*============================================================================*/
-extern void tdc_int_ack(void);
-/*------------------------------------------------------------------------------
-  Function:
-  acknowledges the pending interrupts
-  in:  none
-  out: none
-==============================================================================*/
 
 /*============================================================================*/
 extern float get_tdc(void);
@@ -97,8 +83,6 @@ extern float get_tdc(void);
   in:  none
   out: measured time interval in ns - should always be between ca. 100 to 200ns
 ==============================================================================*/
-
-extern void tdc_waitready(void);
 
 /*******************************************************************************
  * END OF CODE
