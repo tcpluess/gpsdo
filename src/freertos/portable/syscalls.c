@@ -92,8 +92,8 @@ _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
   }
 }
 
-int
-_isatty(int file)
+
+int _isatty(int file)
 {
   switch (file)
   {
@@ -138,51 +138,26 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
     r->_errno = EBADF;
     return 0;
   }
-#if 0
-  char c;
-  int  i;
-  unsigned char *p;
-
-  p = (unsigned char*)ptr;
-
-  for (i = 0; i < len; i++)
-  {
-    //c = uart0GetchW();
-
-    *p++ = c;
-    //uart0Putch(c);
-
-    if (c == 0x0D && i <= (len - 2))
-    {
-      *p = 0x0A;
-      //uart0Putch(0x0A);
-      return i + 2;
-    }
-  }
-  return i;
-#endif
   return 0;
 }
+
 
 int _close_r(struct _reent *r, int file)
 {
   return 0;
 }
 
-int
-_open_r(struct _reent *ptr, const char *file, int flags, int mode)
+
+int _open_r(struct _reent *ptr, const char *file, int flags, int mode)
 {
   ptr->_errno = ENODEV;
   return -1;
 }
 
-_off_t _lseek_r(
-    struct _reent *r,
-    int file,
-    _off_t ptr,
-    int dir)
+_off_t _lseek_r(struct _reent *r, int file, _off_t ptr, int dir)
 {
-  return (_off_t)0; /*  Always indicate we are at file beginning. */
+  /* always indicate we are at file beginning */
+  return (_off_t)0;
 }
 
 
@@ -192,33 +167,21 @@ _off_t _lseek_r(
 //    struct stat *st)
 int _stat_r(struct _reent *ptr, const char *file, struct stat *st)
 {
-  /*  Always set as character device.       */
+  /* always set as character device */
   st->st_mode = S_IFCHR;
-    /* assigned to strong type with implicit  */
-    /* signed/unsigned conversion.  Required by   */
-    /* newlib.          */
-
   return 0;
 }
 
 
-int _fstat_r(
-    struct _reent *r,
-    int file,
-    struct stat *st)
+int _fstat_r(struct _reent *r, int file, struct stat *st)
 {
-  /*  Always set as character device.       */
+  /* always set as character device */
   st->st_mode = S_IFCHR;
-    /* assigned to strong type with implicit  */
-    /* signed/unsigned conversion.  Required by   */
-    /* newlib.          */
-
   return 0;
 }
 
 
-int
-_getpid(void)
+int _getpid(void)
 {
   TaskHandle_t current = xTaskGetCurrentTaskHandle();
   return uxTaskGetTaskNumber(current);
@@ -231,14 +194,12 @@ int _kill(int pid, int sig)
   return -1;
 }
 
-void
-_exit(int status)
+void _exit(int status)
 {
   while (1) {
     ;
   }
 }
-
 
 
 /*******************************************************************************
