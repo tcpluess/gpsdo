@@ -48,7 +48,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define CAL_PERIODS 40u
+#define CAL_PERIODS 20u
 #if CAL_PERIODS == 2u
 #define CONFIG2 (0u << 6)
 #elif CAL_PERIODS == 10u
@@ -252,7 +252,8 @@ static void tdc_write(uint8_t addr, uint8_t data)
 static void tdc_hwenable(bool enable)
 /*------------------------------------------------------------------------------
   Function:
-  controls the enable pin of the tdc which is used to reset internal circuitry
+  controls the enable pin of the tdc which is used to reset internal circuitry.
+  a small delay of 100ms allows internal circuitry to settle.
   in:  enabe -> when true, enables the tdc
   out: none
 ==============================================================================*/
@@ -265,6 +266,7 @@ static void tdc_hwenable(bool enable)
   {
     GPIOA_BSRR = BIT_19;
   }
+  vTaskDelay(pdMS_TO_TICKS(100));
 }
 
 /*============================================================================*/
