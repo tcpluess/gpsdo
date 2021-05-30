@@ -7,11 +7,11 @@
  *
  * Type:           module
  *
- * Description:    helper functions for the vector interrupt controller
+ * Description:    helper functions for the nested vector interrupt controller
  *
  * Compiler:       ANSI-C
  *
- * Filename:       vic.c
+ * Filename:       nvic.c
  *
  * Version:        1.0
  *
@@ -28,7 +28,7 @@
  * INCLUDE FILES
  ******************************************************************************/
 
-#include "vic.h"
+#include "nvic.h"
 #include "stm32f407.h"
 #include "misc.h"
 

@@ -33,7 +33,7 @@
 #include "timebase.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "vic.h"
+#include "nvic.h"
 #include "tdc.h"
 #include "ublox.h"
 #include "eeprom.h"

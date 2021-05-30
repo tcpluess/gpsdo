@@ -37,7 +37,7 @@
 #include "dac.h"
 #include "tdc.h"
 #include "timebase.h"
-#include "vic.h"
+#include "nvic.h"
 #include "adc.h"
 #include "eeprom.h"
 #include "console.h"

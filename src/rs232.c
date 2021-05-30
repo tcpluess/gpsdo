@@ -39,7 +39,7 @@
 #include "rs232.h"
 #include "stm32f407.h"
 #include "misc.h"
-#include "vic.h"
+#include "nvic.h"
 #include "eeprom.h"
 
 /*******************************************************************************

@@ -7,11 +7,11 @@
  *
  * Type:           header file
  *
- * Description:    helper functions for the vector interrupt controller
+ * Description:    helper functions for the nested vector interrupt controller
  *
  * Compiler:       ANSI-C
  *
- * Filename:       vic.h
+ * Filename:       nvic.h
  *
  * Version:        1.0
  *
