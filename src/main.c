@@ -62,9 +62,6 @@
 
 static void led_setup(void);
 
-__attribute__((section(".freertos_heap")))
-uint8_t ucHeap[configTOTAL_HEAP_SIZE];
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
