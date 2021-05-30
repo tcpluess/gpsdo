@@ -777,9 +777,9 @@ static void info(int argc, const char* const argv[])
   (void)argc;
   (void)argv;
   (void)printf("\033[2J\rHB9FSX GNSS Frequency Standard\n");
-  (void)printf("use \"help\" to see the available commands\n");
   (void)printf("compiled " __DATE__ " " __TIME__ "\n");
-  (void)printf("with FreeRTOS " tskKERNEL_VERSION_NUMBER "\n\n");
+  (void)printf("with FreeRTOS " tskKERNEL_VERSION_NUMBER "\n");
+  (void)printf("use \"help\" to see the available commands\n\n");
 }
 
 /*******************************************************************************
