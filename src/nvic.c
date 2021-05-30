@@ -42,6 +42,9 @@ extern uint32_t StackTop; /* defined by the linker */
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
+#define REGISTERS(name, addr) static volatile uint32_t* const name = \
+(volatile uint32_t* const)(addr)
+
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
  ******************************************************************************/
@@ -57,6 +60,15 @@ extern void vPortSVCHandler(void);
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+REGISTERS(NVIC_ISER, 0xE000E100);
+REGISTERS(NVIC_ICER, 0xE000E180);
+REGISTERS(NVIC_ISPR, 0xE000E200);
+REGISTERS(NVIC_ICPR, 0xE000E280);
+REGISTERS(NVIC_IABR, 0xE000E300);
+REGISTERS(NVIC_IPR, 0xE000E400);
+
+static uint8_t default_prio = 0u;
 
 __attribute__((aligned (1024))) static funcptr_t vector_table[] =
 {
@@ -167,8 +179,19 @@ __attribute__((aligned (1024))) static funcptr_t vector_table[] =
 void vic_init(void)
 {
   VTOR = (uint32_t)vector_table;
-  AIRCR = 0x05FA0300;
-  IP0 = 0x60606060u;
+  AIRCR = 0x05FA0000;
+  //AIRCR = 0x05FA0300;
+
+  uint32_t orig = NVIC_IPR[0];
+  NVIC_IPR[0] = 0xffu;
+
+  /* all interrupts use one priority higher than the lowest possible one.
+     the lowest possible interrupt priority should be used by the pendsv and
+     systick etc. */
+  default_prio = NVIC_IPR[0] - 1;
+  NVIC_IPR[0] = orig;
+
+  /*IP0 = 0x60606060u;
   IP1 = 0x60606060u;
   IP2 = 0x60606060u;
   IP3 = 0x60606060u;
@@ -187,28 +210,20 @@ void vic_init(void)
   IP16 = 0x60606060u;
   IP17 = 0x60606060u;
   IP18 = 0x60606060u;
-  IP19 = 0x60606060u;
+  IP19 = 0x60606060u;*/
 }
 
 void vic_enableirq(int32_t intnum, funcptr_t func)
 {
   vector_table[intnum + 16] = func;
+
   if(intnum >= 0)
   {
-    if(intnum < 32)
-    {
-      NVIC_ISER0 = (1u << intnum);
-    }
-    else if(intnum < 64)
-    {
-      intnum -= 32;
-      NVIC_ISER1 = (1u << intnum);
-    }
-    else if(intnum < 96)
-    {
-      intnum -= 64;
-      NVIC_ISER2 = (1u << intnum);
-    }
+    int32_t index = intnum / 32;
+    NVIC_ISER[index] = (1u << intnum);
+
+    index = intnum / 4;
+    NVIC_IPR[index] = default_prio << (intnum % 4);
   }
 }
 
