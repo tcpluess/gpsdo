@@ -40,6 +40,7 @@
 #include "dac.h"
 #include "temperature.h"
 #include "stm32f407.h"
+#include <math.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -265,12 +266,8 @@ static void cntl(void)
 
   /* determine the time interval (phase) error */
   float tic = read_tic();
-
-  /* TODO: read these values from the eeprom */
   e = tic - (float)cfg.timeoffset;
-
-  /* this is somewhat hack-ish, but avoids using fabs() */
-  float abs_err = e > 0 ? e : -e;
+  float abs_err = fabs(e);
 
   /* if the phase error is less than one period, assume the pll is locked and
      switch on the green lock led */
