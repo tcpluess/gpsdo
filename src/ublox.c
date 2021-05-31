@@ -45,6 +45,7 @@
 #include "eeprom.h"
 
 #include <math.h>
+#include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -282,9 +283,16 @@ void gps_task(void* param)
 
 float get_timepulse_error(void)
 {
-  float tmp = qerr;
+  float ret = qerr;
+
+  /* this should never happen */
+  if(ret == 0)
+  {
+    (void)printf("something went wrong: timepulse qerr = 0\n");
+  }
+
   qerr = 0;
-  return tmp;
+  return ret;
 }
 
 
