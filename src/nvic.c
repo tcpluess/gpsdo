@@ -61,18 +61,22 @@ extern void vPortSVCHandler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+/* suppress "unused" warnings for these variables */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-const-variable"
 REGISTERS(NVIC_ISER, 0xE000E100);
 REGISTERS(NVIC_ICER, 0xE000E180);
 REGISTERS(NVIC_ISPR, 0xE000E200);
 REGISTERS(NVIC_ICPR, 0xE000E280);
 REGISTERS(NVIC_IABR, 0xE000E300);
 REGISTERS(NVIC_IPR, 0xE000E400);
+#pragma GCC diagnostic pop
 
 static uint8_t default_prio = 0u;
 
-__attribute__((aligned (1024))) static funcptr_t vector_table[] =
+__attribute__((aligned (1024))) static void* vector_table[] =
 {
-    /* __initial_sp */                      (funcptr_t)&StackTop,
+    /* __initial_sp */                      &StackTop,
     /* Reset_Handler */                     0,
     /* NMI_Handler */                       0,
     /* HardFault_Handler */                 0,
@@ -83,11 +87,11 @@ __attribute__((aligned (1024))) static funcptr_t vector_table[] =
     /* 0 */                                 0,
     /* 0 */                                 0,
     /* 0 */                                 0,
-    /* SVC_Handler */                       (funcptr_t)vPortSVCHandler,
+    /* SVC_Handler */                       vPortSVCHandler,
     /* DebugMon_Handler */                  0,
     /* 0 */                                 0,
-    /* PendSV_Handler */                    (funcptr_t)xPortPendSVHandler,
-    /* SysTick_Handler */                   (funcptr_t)xPortSysTickHandler,
+    /* PendSV_Handler */                    xPortPendSVHandler,
+    /* SysTick_Handler */                   xPortSysTickHandler,
     /* 0: WWDG_IRQHandler */                0,
     /* 1: PVD_IRQHandler */                 0,
     /* 2: TAMPER_STAMP_IRQHandler */        0,
@@ -213,7 +217,7 @@ void vic_init(void)
   IP19 = 0x60606060u;*/
 }
 
-void vic_enableirq(int32_t intnum, funcptr_t func)
+void vic_enableirq(int32_t intnum, void* func)
 {
   vector_table[intnum + 16] = func;
 
