@@ -181,6 +181,7 @@ int _fstat_r(struct _reent *r, int file, struct stat *st)
 }
 
 
+__attribute__((used))
 int _getpid(void)
 {
   TaskHandle_t current = xTaskGetCurrentTaskHandle();
@@ -188,6 +189,7 @@ int _getpid(void)
 }
 
 
+__attribute__((used))
 int _kill(int pid, int sig)
 {
   errno = ENOTSUP;
