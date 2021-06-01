@@ -54,9 +54,6 @@ SECTIONS
 
   .ccmram (NOLOAD) :
   {
-    . = ALIGN(8);
-    *(.freertos_heap);
-    . = ALIGN(8);
     *(.ccmram);
   } > ccmram
 
@@ -70,7 +67,7 @@ SECTIONS
   {
     . = ALIGN(8);
     heapstart = .;
-    . = . + LENGTH(ram) - heapstart + ORIGIN(ram) - __STACK_SIZE;
+    . = . + LENGTH(ccmram) - __STACK_SIZE - (heapstart - ORIGIN(ccmram));
     heapend = .;
     heapsz = heapend - heapstart;
 
@@ -81,6 +78,6 @@ SECTIONS
     . = . + __STACK_SIZE;
     StackTop = .;
 
-    ASSERT(StackTop <= ORIGIN(ram) + LENGTH(ram), "RAM overflowed by stack and heap");
-  } > ram
+    ASSERT(StackTop <= ORIGIN(ccmram) + LENGTH(ccmram), "RAM overflowed by stack and heap");
+  } > ccmram
 }

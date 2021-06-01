@@ -57,9 +57,8 @@ DLIBS = -lm
 # Define project name and Ram/Flash mode here
 PROJECT        = gnssdo
 RUN_FROM_FLASH = 0
-USE_HARD_FPU   = 1
-HEAP_SIZE      = 0
-STACK_SIZE     = 8k
+HEAP_SIZE      = 4k
+STACK_SIZE     = 2k
 
 #
 # Define linker script file here
@@ -73,8 +72,12 @@ FULL_PRJ = $(PROJECT)
 endif
 
 #
-# Define FPU settings here
+# Define FPU settings here. if FPU usage is not defined,
+# default to ENABLE.
 #
+ifeq ($(USE_HARD_FPU),)
+USE_HARD_FPU = 1
+endif
 ifeq ($(USE_HARD_FPU), 0)
 FPU =
 else
