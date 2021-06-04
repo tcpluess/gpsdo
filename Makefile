@@ -56,7 +56,7 @@ DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
 PROJECT        = gnssdo
-RUN_FROM_FLASH = 0
+RUN_FROM_FLASH = 1
 HEAP_SIZE      = 4k
 STACK_SIZE     = 2k
 
@@ -109,7 +109,7 @@ ULIBS =
 
 # Define optimisation level here
 ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3 -flto
+OPT = -O0 -g3
 else
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
 endif
