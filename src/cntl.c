@@ -95,6 +95,7 @@ typedef enum
 } controlstatus_t;
 
 extern volatile float stat_e;
+extern volatile float stat_esum;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
@@ -115,7 +116,7 @@ const char* cntl_status = "";
 
 extern config_t cfg;
 static status_t gpsdostatus;
-static controlstatus_t stat = fast_track;
+static controlstatus_t cntlstat;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -125,17 +126,19 @@ void cntl_task(void* param)
 {
   (void)param;
   gpsdostatus = warmup;
+  cntlstat = fast_track;
+
   esum = cfg.last_dacval;
 
   for(;;)
   {
-    start_conversion();
-
     switch(gpsdostatus)
     {
       /* warmup: wait until the ocxo is ready */
       case warmup:
       {
+        cntl_status = "warmup";
+
         ledon();
 
         /* measure the ocxo current; when the ocxo is warm, the current drops */
@@ -154,6 +157,8 @@ void cntl_task(void* param)
       /* holdover mode: wait until the position is valid */
       case holdover:
       {
+        cntl_status = "holdover";
+
         stat_e = 0.0f;
         ledon();
 
@@ -169,13 +174,15 @@ void cntl_task(void* param)
       /* track/lock mode: control loop is active */
       case track_lock:
       {
+        cntl_status = "track_lock";
+
         /* only look at the 1pps signal if the fix is valid; if fix is invalid,
            go to holdover mode */
         if(pps_elapsed())
         {
             ledon();
             cntl();
-            vTaskDelay(pdMS_TO_TICKS(100));
+            // vTaskDelay(pdMS_TO_TICKS(100));
             ledoff();
         }
         else
@@ -189,7 +196,7 @@ void cntl_task(void* param)
 
 void cntl_restart(void)
 {
-  stat = fast_track;
+  cntlstat = fast_track;
 }
 
 /*******************************************************************************
@@ -286,7 +293,7 @@ static void cntl(void)
     }
   }
 
-  switch(stat)
+  switch(cntlstat)
   {
     /* fast track: is normally used shortly after the ocxo has just
        warmed up. use small time constant such that the phase settles
@@ -313,10 +320,8 @@ static void cntl(void)
       {
         cfg.last_dacval = dacval;
         statuscount = 0;
-        stat = locked;
+        cntlstat = locked;
       }
-
-      cntl_status = "fast_track";
 
       break;
     }
@@ -345,10 +350,8 @@ static void cntl(void)
       {
         cfg.last_dacval = dacval;
         statuscount = 0;
-        stat = stable;
+        cntlstat = stable;
       }
-
-      cntl_status = "locked";
 
       break;
     }
@@ -372,11 +375,11 @@ static void cntl(void)
           /* if the phase error is small, the slow pll mode is sufficient */
           if(abs_err < 200.0f)
           {
-            stat = locked;
+            cntlstat = locked;
           }
           else
           {
-            stat = fast_track;
+            cntlstat = fast_track;
           }
         }
       }
@@ -395,8 +398,6 @@ static void cntl(void)
         dacval = pi_control(kp, ki, prefilter((double)e, filt));
       }
 
-      cntl_status = "stable";
-
       break;
     }
   }
@@ -404,6 +405,7 @@ static void cntl(void)
   set_dac(dacval);
 
   stat_e = e;
+  stat_esum = esum;
 }
 
 /*******************************************************************************
