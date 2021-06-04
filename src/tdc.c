@@ -177,7 +177,7 @@ float get_tdc(void)
   /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
   if((ns < 90.0f) || (ns > 220.0f))
   {
-    (void)printf("wrong tdc value!\n");
+    (void)printf("# error: wrong tdc value %f\n", ns);
   }
   return ns;
 }

@@ -288,7 +288,7 @@ float get_timepulse_error(void)
   /* this should never happen */
   if(ret == 0)
   {
-    (void)printf("something went wrong: timepulse qerr = 0\n");
+    (void)printf("# something went wrong: timepulse qerr = 0!\n");
   }
 
   qerr = 0;
