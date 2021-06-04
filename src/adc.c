@@ -28,9 +28,12 @@
  * INCLUDE FILES
  ******************************************************************************/
 
+#include "FreeRTOS.h"
+#include "semphr.h"
 #include "adc.h"
 #include "stm32f407.h"
 #include "misc.h"
+#include "nvic.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -57,9 +60,13 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void adc1_interrupt(void);
+
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+static SemaphoreHandle_t adc_ready;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -67,6 +74,8 @@
 
 void adc_init(void)
 {
+  vSemaphoreCreateBinary(adc_ready);
+
   /* enable gpio b */
   RCC_AHB1ENR |= BIT_01;
 
@@ -89,34 +98,56 @@ void adc_init(void)
 
   /* convert channels 9 and 17; 9 is the ocxo current, 17 is the reference */
   ADC1_JSQR = (1u << 20) | (17u << 15) | (9u << 10);
+
+  /* timer2 trigger output starts the adc conversion */
+  ADC1_CR2 |= (3u << 16) | (1u << 20);
+
+  /* trigger an interrupt when the adc has finished the conversion */
+  vic_enableirq(18, adc1_interrupt);
+  ADC1_CR1 |= BIT_07;
 }
 
-void start_conversion(void)
-{
-  ADC1_CR2 |= BIT_22;
-}
 
 float get_iocxo(void)
 {
-  do
+  /* wait maximum 10ms for the ADC if, for some reason, the adc has not been
+     properly triggered */
+  if(xSemaphoreTake(adc_ready, portMAX_DELAY))
   {
-    /* check if the injected channel sequence is finished */
-    uint32_t status = ADC1_SR;
-    if(status & BIT_02)
-    {
-      break;
-    }
-  } while(true);
-
-  /* these are the internal reference voltage and the ocxo current */
-  float ichan = ADC1_JDR1;
-  float ref = ADC1_JDR2;
-  return ((VREF/(GAIN*RSHUNT)) * ichan) / ref;
+    /* these are the internal reference voltage and the ocxo current */
+    float ichan = ADC1_JDR1;
+    float ref = ADC1_JDR2;
+    return ((VREF/(GAIN*RSHUNT)) * ichan) / ref;
+  }
+  else
+  {
+    return 0.0f;
+  }
 }
+
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+/*============================================================================*/
+static void adc1_interrupt(void)
+/*------------------------------------------------------------------------------
+  Function:
+  interrupt is triggered when the adc has finished the conversion.
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* acknowledge the interrupt and signal the semaphore to wake waiting tasks */
+  uint32_t sr = ADC1_SR;
+  if(sr & BIT_02)
+  {
+    sr &= ~BIT_02;
+    ADC1_SR = sr;
+    (void)xSemaphoreGiveFromISR(adc_ready, NULL);
+  }
+}
 
 /*******************************************************************************
  * END OF CODE

@@ -311,18 +311,22 @@ static void enable_timer(void)
   TIM2_PSC = (TIMER_DIVISION - 1u);
 
   /* timer wraps after 1 second */
-  TIM2_ARR = 9999999u;
+  TIM2_ARR = 9999999ul;
 
-  /* pwm mode for the pps output, set pulse duration */
+  /* pwm mode for the pps output (channel 2), set pulse duration */
   TIM2_SMCR = 0;
   TIM2_CCER = 0;
   TIM2_CCMR1 = (6u << 12) | BIT_11;
   set_pps_duration(100u);
 
-  /* capture mode for ch3 */
+  /* the 1pps output is also used to trigger the adc */
+  TIM2_CR2 = (5u << 4);
+
+  /* capture mode for ch3 (this is the 1pps input from gps) */
   TIM2_CCMR2 = (1u << 0);
 
-  TIM2_CCER = (BIT_04 | BIT_08);
+  /* enable capture/compare channels 2 and 3 */
+  TIM2_CCER = (BIT_08 | BIT_04);
   TIM2_DIER = BIT_03;
 
   TIM2_CR1 = BIT_00;
