@@ -38,12 +38,13 @@
 
 extern uint32_t StackTop; /* defined by the linker */
 
+/* priority of all interrupts. should be numerically higher than
+   configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY */
+#define LOWEST_IRQ_PRIO 0xe0u
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
-
-#define REGISTERS(name, addr) static volatile uint32_t* const name = \
-(volatile uint32_t* const)(addr)
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -64,15 +65,14 @@ extern void vPortSVCHandler(void);
 /* suppress "unused" warnings for these variables */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
-REGISTERS(NVIC_ISER, 0xE000E100);
-REGISTERS(NVIC_ICER, 0xE000E180);
-REGISTERS(NVIC_ISPR, 0xE000E200);
-REGISTERS(NVIC_ICPR, 0xE000E280);
-REGISTERS(NVIC_IABR, 0xE000E300);
-REGISTERS(NVIC_IPR, 0xE000E400);
+static volatile uint8_t* const NVIC_IPR = (volatile uint8_t* const)0xE000E400u;
+static volatile uint32_t* const NVIC_ISER = (volatile uint32_t* const)0xE000E100;
+static volatile uint32_t* const NVIC_ICER = (volatile uint32_t* const)0xE000E180;
+static volatile uint32_t* const NVIC_ISPR = (volatile uint32_t* const)0xE000E200;
+static volatile uint32_t* const NVIC_ICPR = (volatile uint32_t* const)0xE000E280;
+static volatile uint32_t* const NVIC_IABR = (volatile uint32_t* const)0xE000E300;
 #pragma GCC diagnostic pop
 
-static uint8_t default_prio = 0u;
 
 __attribute__((aligned (1024))) static void* vector_table[] =
 {
@@ -183,51 +183,25 @@ __attribute__((aligned (1024))) static void* vector_table[] =
 void vic_init(void)
 {
   VTOR = (uint32_t)vector_table;
-  AIRCR = 0x05FA0000;
-  //AIRCR = 0x05FA0300;
 
-  uint32_t orig = NVIC_IPR[0];
-  NVIC_IPR[0] = 0xffu;
+  /* use the top four bits for the interrupt priority */
+  AIRCR = 0x05FA0300;
 
-  /* all interrupts use one priority higher than the lowest possible one.
-     the lowest possible interrupt priority should be used by the pendsv and
-     systick etc. */
-  default_prio = NVIC_IPR[0] - 1;
-  NVIC_IPR[0] = orig;
-
-  /*IP0 = 0x60606060u;
-  IP1 = 0x60606060u;
-  IP2 = 0x60606060u;
-  IP3 = 0x60606060u;
-  IP4 = 0x60606060u;
-  IP5 = 0x60606060u;
-  IP6 = 0x60606060u;
-  IP7 = 0x60606060u;
-  IP8 = 0x60606060u;
-  IP9 = 0x60606060u;
-  IP10 = 0x60606060u;
-  IP11 = 0x60606060u;
-  IP12 = 0x60606060u;
-  IP13 = 0x60606060u;
-  IP14 = 0x60606060u;
-  IP15 = 0x60606060u;
-  IP16 = 0x60606060u;
-  IP17 = 0x60606060u;
-  IP18 = 0x60606060u;
-  IP19 = 0x60606060u;*/
+  /* enable the instruction and data cache */
+  CCR |= (BIT_16 | BIT_17);
 }
 
-void vic_enableirq(int32_t intnum, void* func)
+void vic_enableirq(int32_t intnum, funcptr_t func)
 {
   vector_table[intnum + 16] = func;
 
   if(intnum >= 0)
   {
-    int32_t index = intnum / 32;
-    NVIC_ISER[index] = (1u << intnum);
+    uint32_t shift = intnum % 32;
+    uint32_t offset = intnum / 32;
 
-    index = intnum / 4;
-    NVIC_IPR[index] = default_prio << (intnum % 4);
+    NVIC_ISER[offset] = (1u << shift);
+    NVIC_IPR[intnum] = LOWEST_IRQ_PRIO;
   }
 }
 
