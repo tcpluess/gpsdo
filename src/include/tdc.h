@@ -76,7 +76,7 @@ extern void enable_tdc(void);
 
 
 /*============================================================================*/
-extern float get_tdc(void);
+extern bool get_tdc(float* result);
 /*------------------------------------------------------------------------------
   Function:
   reads the measured time interval in nanoseconds
