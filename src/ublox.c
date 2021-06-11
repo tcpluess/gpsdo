@@ -131,11 +131,19 @@ typedef enum
   tmode_fixedpos = 2u
 } tmode_t;
 
+typedef struct
+{
+  float ns;
+  bool valid;
+  uint8_t flags;
+  uint8_t refinfo;
+} qerr_t;
+
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static volatile float qerr;
+static qerr_t qerr;
 gpsinfo_t pvt_info;
 svindata_t svin_info;
 sv_info_t sat_info;
@@ -157,7 +165,7 @@ static void uart_irq_handler(void);
 static bool gps_wait_ack(void);
 static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
-static void unpack_tp(const uint8_t* rdata, volatile float* ret);
+static void unpack_tp(const uint8_t* rdata, qerr_t* ret);
 static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
@@ -201,7 +209,7 @@ void gps_task(void* param)
   txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
   ublox_events = xEventGroupCreate();
   (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
-  qerr = 0.0f;
+  qerr.valid = false;
 
   /* initialise hardware */
   init_pins();
@@ -281,18 +289,21 @@ void gps_task(void* param)
 }
 
 
-float get_timepulse_error(void)
+bool get_timepulse_error(float* result)
 {
-  float ret = qerr;
+  bool valid;
+  vTaskSuspendAll();
+  valid = qerr.valid;
+  *result = qerr.ns;
+  qerr.valid = false;
+  xTaskResumeAll();
 
   /* this should never happen */
-  if(ret == 0)
+  if(valid == false)
   {
     (void)printf("# something went wrong: timepulse qerr = 0!\n");
   }
-
-  qerr = 0;
-  return ret;
+  return valid;
 }
 
 
@@ -964,7 +975,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
 
 
 /*============================================================================*/
-static void unpack_tp(const uint8_t* rdata, volatile float* ret)
+static void unpack_tp(const uint8_t* rdata, qerr_t* ret)
 /*------------------------------------------------------------------------------
   Function:
   unpacks the TIM-TP message
@@ -975,7 +986,10 @@ static void unpack_tp(const uint8_t* rdata, volatile float* ret)
 {
   vTaskSuspendAll();
   int32_t tmp = unpack_i32_le(rdata, 8);
-  *ret = ((float)tmp) / 1000.0f;
+  ret->ns = ((float)tmp) / 1000.0f;
+  ret->flags = unpack_u8_le(rdata, 14);
+  ret->refinfo = unpack_u8_le(rdata, 15);
+  ret->valid = true;
   xTaskResumeAll();
 }
 
