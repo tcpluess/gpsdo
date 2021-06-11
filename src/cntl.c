@@ -182,7 +182,7 @@ void cntl_task(void* param)
         {
             ledon();
             cntl();
-            // vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(50));
             ledoff();
         }
         else
@@ -219,7 +219,6 @@ static float read_tic(void)
 {
   float tic = get_tic();
   float qerr = get_timepulse_error();
-  enable_tdc();
   return (tic - qerr) + TIC_OFFSET;
 }
 

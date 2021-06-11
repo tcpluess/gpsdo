@@ -82,7 +82,7 @@
 
 #define DATA_MSK 0xffffffu
 
-#define TDC_SPI_DIVIDER 1u /* apb2 clock is 80 MHz, 4 amounts to divider 32 */
+#define TDC_SPI_DIVIDER 2u /* apb2 clock is 80 MHz, 4 amounts to divider 32 */
 
 #define EXTI9_IRQ 23u
 
@@ -171,6 +171,7 @@ float get_tdc(void)
   float calib1 = tdc_read24(ADDR_CALIB1);
   float calib2 = tdc_read24(ADDR_CALIB2);
   float time1 = tdc_read24(ADDR_TIME1);
+  enable_tdc();
 
   float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
 
@@ -280,7 +281,6 @@ static void tdc_ss(bool select)
 {
   /* wait until not busy */
   while(SPI1_SR & BIT_07);
-  vTaskDelay(pdMS_TO_TICKS(2));
 
   if(select)
   {
@@ -292,7 +292,6 @@ static void tdc_ss(bool select)
   }
 
   /* include a small delay to meet the setup time. */
-  vTaskDelay(pdMS_TO_TICKS(2));
 }
 
 /*============================================================================*/
