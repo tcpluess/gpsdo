@@ -101,9 +101,9 @@ extern volatile float stat_esum;
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static float read_tic(void);
+static bool read_tic(float* result);
 static uint16_t pi_control(double KP, double TI, double e);
-static void cntl(void);
+static bool cntl(void);
 static void ledon(void);
 static void ledoff(void);
 
@@ -183,7 +183,10 @@ void cntl_task(void* param)
         if(pps_elapsed())
         {
             ledon();
-            cntl();
+            if(cntl() == false)
+            {
+              gpsdostatus = holdover;
+            }
             vTaskDelay(pdMS_TO_TICKS(25));
             ledoff();
         }
@@ -217,11 +220,20 @@ static void ledoff(void)
 }
 
 
-static float read_tic(void)
+static bool read_tic(float* result)
 {
   float tic = get_tic();
-  float qerr = get_timepulse_error();
-  return (tic - qerr) + TIC_OFFSET;
+  float tdc;
+  float qerr;
+  if(get_tdc(&tdc))
+  {
+    if(get_timepulse_error(&qerr))
+    {
+      *result = (tic - qerr + tdc) + TIC_OFFSET;
+      return true;
+    }
+  }
+  return false;
 }
 
 
@@ -264,7 +276,7 @@ static uint16_t pi_control(double KP, double TI, double ee)
 }
 
 
-static void cntl(void)
+static bool cntl(void)
 {
   static uint32_t statuscount = 0;
   static uint32_t outlier_count = 0;
@@ -273,7 +285,12 @@ static void cntl(void)
   uint16_t dacval = 0u;
 
   /* determine the time interval (phase) error */
-  float tic = read_tic();
+  float tic;
+  if(read_tic(&tic) == false)
+  {
+    return false;
+  }
+
   e = tic - (float)cfg.timeoffset;
   float abs_err = fabs(e);
 
@@ -292,7 +309,7 @@ static void cntl(void)
     if(abs_err > 10000)
     {
       timebase_reset();
-      return;
+      return true;
     }
   }
 
@@ -409,6 +426,7 @@ static void cntl(void)
 
   stat_e = e;
   stat_esum = esum;
+  return true;
 }
 
 /*******************************************************************************
