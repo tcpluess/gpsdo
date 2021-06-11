@@ -167,7 +167,7 @@ void enable_tdc(void)
 }
 
 
-float get_tdc(void)
+bool get_tdc(float* result)
 {
   if(tdc_waitready())
   {
@@ -182,10 +182,12 @@ float get_tdc(void)
     if((ns < 90.0f) || (ns > 220.0f))
     {
       (void)printf("# error: wrong tdc value %f\n", ns);
+      return false;
     }
-    return ns;
+    *result = ns;
+    return true;
   }
-  return 0.0f;
+  return false;
 }
 
 
