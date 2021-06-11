@@ -164,6 +164,7 @@ void cntl_task(void* param)
 
         if(gps_waitready() && pps_elapsed())
         {
+          enable_tdc();
           ledoff();
           gpsdostatus = track_lock;
         }
@@ -182,7 +183,7 @@ void cntl_task(void* param)
         {
             ledon();
             cntl();
-            vTaskDelay(pdMS_TO_TICKS(50));
+            vTaskDelay(pdMS_TO_TICKS(25));
             ledoff();
         }
         else
@@ -279,10 +280,12 @@ static void cntl(void)
      switch on the green lock led */
   if(abs_err < MAX_PHASE_ERR)
   {
+    ppsenable(true);
     GPIOE_BSRR = BIT_14;
   }
   else
   {
+    ppsenable(false);
     GPIOE_BSRR = BIT_30;
 
     if(abs_err > 10000)

@@ -87,9 +87,9 @@ void init(void* param)
 
   /* this is for debug only; enable the pps output such that it can be used
      as trigger signal for the scope */
-  ppsenable(true);
+  ppsenable(false);
   timebase_reset();
-  enable_tdc();
+
 
   (void)xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
   (void)xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
