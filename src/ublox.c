@@ -900,6 +900,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   out: info is populated with position, velocity and time
 ==============================================================================*/
 {
+  vTaskSuspendAll();
   info->year = unpack_u16_le(rdata, 4);
   info->month = unpack_u8_le(rdata, 6);
   info->day = unpack_u8_le(rdata, 7);
@@ -920,6 +921,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->vacc = unpack_u32_le(rdata, 44);
   info->pdop = unpack_u16_le(rdata, 76);
   info->time = get_uptime_msec();
+  xTaskResumeAll();
 }
 
 
@@ -933,6 +935,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
   out: info is populated with the survey-in information
 ==============================================================================*/
 {
+  vTaskSuspendAll();
   info->dur = unpack_u32_le(rdata, 0);
   info->x = unpack_i32_le(rdata, 4);
   info->y = unpack_i32_le(rdata, 8);
@@ -956,6 +959,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
     info->active = false;
   }
   info->time = get_uptime_msec();
+  xTaskResumeAll();
 }
 
 
@@ -969,8 +973,10 @@ static void unpack_tp(const uint8_t* rdata, volatile float* ret)
   out: returns the timepulse quantisation error in the ret pointer
 ==============================================================================*/
 {
+  vTaskSuspendAll();
   int32_t tmp = unpack_i32_le(rdata, 8);
   *ret = ((float)tmp) / 1000.0f;
+  xTaskResumeAll();
 }
 
 
@@ -984,6 +990,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
   out: none
 ==============================================================================*/
 {
+  vTaskSuspendAll();
   svi->numsv = unpack_u8_le(rdata, 5);
   if(svi->numsv > MAX_SV)
   {
@@ -998,6 +1005,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
     svi->sats[n].azim = unpack_i16_le(rdata, 12 + 12*n);
   }
   svi->time = get_uptime_msec();
+  xTaskResumeAll();
 }
 
 
