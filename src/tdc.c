@@ -86,6 +86,8 @@
 
 #define EXTI9_IRQ 23u
 
+#define TDC_READY_TIMEOUT pdMS_TO_TICKS(10) /* timeout to wait for the tdc */
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -107,7 +109,7 @@ static uint16_t spi_trans16(uint16_t txdata);
 static void tdc_config_interrupt(void);
 static void tdc_irqhandler(void);
 static uint8_t tdc_irq_ack(void);
-static void tdc_waitready(void);
+static bool tdc_waitready(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -167,20 +169,23 @@ void enable_tdc(void)
 
 float get_tdc(void)
 {
-  tdc_waitready();
-  float calib1 = tdc_read24(ADDR_CALIB1);
-  float calib2 = tdc_read24(ADDR_CALIB2);
-  float time1 = tdc_read24(ADDR_TIME1);
-  enable_tdc();
-
-  float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
-
-  /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
-  if((ns < 90.0f) || (ns > 220.0f))
+  if(tdc_waitready())
   {
-    (void)printf("# error: wrong tdc value %f\n", ns);
+    float calib1 = tdc_read24(ADDR_CALIB1);
+    float calib2 = tdc_read24(ADDR_CALIB2);
+    float time1 = tdc_read24(ADDR_TIME1);
+    enable_tdc();
+
+    float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+
+    /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
+    if((ns < 90.0f) || (ns > 220.0f))
+    {
+      (void)printf("# error: wrong tdc value %f\n", ns);
+    }
+    return ns;
   }
-  return ns;
+  return 0.0f;
 }
 
 
@@ -388,19 +393,25 @@ static uint8_t tdc_irq_ack(void)
 
 
 /*============================================================================*/
-static void tdc_waitready(void)
+static bool tdc_waitready(void)
 /*------------------------------------------------------------------------------
   Function:
   wait until the tdc is ready and new measurement data is available.
   in:  none
-  out: none
+  out: returns true if the tdc was ready, false if something went wrong
 ==============================================================================*/
 {
-  (void)xEventGroupWaitBits(tdc_events, BIT_10, true, true, portMAX_DELAY);
-  if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
+  uint32_t bits = BIT_10;
+  bits = xEventGroupWaitBits(tdc_events, bits, true, true, TDC_READY_TIMEOUT);
+  if(bits & BIT_10)
   {
-    (void)printf("something went wrong!\n");
+    if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
+    {
+      (void)printf("something went wrong!\n");
+      return false;
+    }
   }
+  return true;
 }
 
 /*******************************************************************************
