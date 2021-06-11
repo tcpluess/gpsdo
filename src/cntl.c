@@ -129,6 +129,7 @@ void cntl_task(void* param)
   cntlstat = fast_track;
 
   esum = cfg.last_dacval;
+  stat_esum = esum;
 
   for(;;)
   {
