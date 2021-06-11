@@ -117,7 +117,7 @@ extern void gps_task(void* param);
 
 
 /*============================================================================*/
-extern float get_timepulse_error(void);
+extern bool get_timepulse_error(float* result);
 /*------------------------------------------------------------------------------
   Function:
   the gps mdule worker "thread"
