@@ -157,9 +157,7 @@ void timebase_reset(void)
 
 float get_tic(void)
 {
-  /* get the interpolator value (in periods) and the capture value (in
-     periods) from the tdc and the capture register, respectively */
-  float tdc = get_tdc();
+  /* get the the capture value (in periods) from the and the capture register */
   uint32_t tic = tic_capture;
   tic_capture = 0;
 
@@ -177,7 +175,7 @@ float get_tic(void)
   }
 
   /* to find the exact time interval, the interpolator value must be added */
-  ret = ret*100.0f + tdc;
+  ret = ret*100.0f;
   return ret;
 }
 
