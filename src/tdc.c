@@ -36,7 +36,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "semphr.h"
+#include "event_groups.h"
 #include "tdc.h"
 #include "stm32f407.h"
 #include "misc.h"
@@ -113,7 +113,7 @@ static void tdc_waitready(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static SemaphoreHandle_t tdc_irq_pend;
+static EventGroupHandle_t tdc_events;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -130,7 +130,7 @@ void setup_tdc(void)
   GPIOA_PUPDR |= (1u << 18);
   GPIOA_AFRL |= (5u << 20) | (5u << 24) | (5u << 28);
 
-  vSemaphoreCreateBinary(tdc_irq_pend);
+  tdc_events = xEventGroupCreate();
   tdc_config_interrupt();
 
   /* disble the tdc for now */
@@ -364,7 +364,7 @@ static void tdc_irqhandler(void)
   EXTI_PR = BIT_09;
 
   /* signal to waiting tasks */
-  (void)xSemaphoreGiveFromISR(tdc_irq_pend, NULL);
+  (void)xEventGroupSetBitsFromISR(tdc_events, BIT_10, NULL);
 }
 
 
@@ -396,7 +396,7 @@ static void tdc_waitready(void)
   out: none
 ==============================================================================*/
 {
-  (void)xSemaphoreTake(tdc_irq_pend, portMAX_DELAY);
+  (void)xEventGroupWaitBits(tdc_events, BIT_10, true, true, portMAX_DELAY);
   if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
   {
     (void)printf("something went wrong!\n");
