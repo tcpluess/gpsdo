@@ -86,7 +86,8 @@
 
 #define EXTI9_IRQ 23u
 
-#define TDC_READY_TIMEOUT pdMS_TO_TICKS(10) /* timeout to wait for the tdc */
+/* timeout to wait for the tdc */
+#define TDC_READY_TIMEOUT 10 /* ms */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -404,7 +405,8 @@ static bool tdc_waitready(void)
 ==============================================================================*/
 {
   uint32_t bits = BIT_10;
-  bits = xEventGroupWaitBits(tdc_events, bits, true, true, TDC_READY_TIMEOUT);
+  bits = xEventGroupWaitBits(tdc_events, bits, true, true,
+                             pdMS_TO_TICKS(TDC_READY_TIMEOUT));
   if(bits & BIT_10)
   {
     if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
