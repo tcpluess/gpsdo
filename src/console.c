@@ -372,6 +372,9 @@ static void conf_gnss(int argc, const char* const argv[])
   cfg.use_gps = use_gps;
   cfg.use_galileo = use_galileo;
   cfg.use_glonass = use_glonass;
+
+  /* inform the gps module about the changed configuration */
+  reconfigure_gnss();
 }
 
 

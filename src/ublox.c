@@ -196,6 +196,7 @@ static EventGroupHandle_t ublox_events;
 #define EVENT_TIMEPULSE_OK BIT_08
 #define EVENT_ACK_RECEIVED BIT_09
 #define EVENT_NAK_RECEIVED BIT_10
+#define EVENT_RECONFIG_GNSS BIT_11
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -285,6 +286,11 @@ void gps_task(void* param)
         cfg.fixpos_valid = true;
       }
     }
+
+    if(bits & EVENT_RECONFIG_GNSS)
+    {
+      ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
+    }
   }
 }
 
@@ -318,6 +324,11 @@ void set_fixpos_mode(void)
   (void)xEventGroupSetBits(ublox_events, EVENT_SET_FIXPOS_MODE);
 }
 
+
+void reconfigure_gnss(void)
+{
+  (void)xEventGroupSetBits(ublox_events, EVENT_RECONFIG_GNSS);
+}
 
 void disable_tmode(void)
 {
