@@ -123,9 +123,10 @@ static command_t cmds[] =
 /* not static because it must be globally accessible */
 extern config_t cfg;
 
-volatile float stat_e;
-volatile float stat_esum;
-volatile uint16_t stat_dac;
+volatile float stat_e = 0.0f;
+volatile float stat_esum = 0.0f;
+volatile float stat_efilt = 0.0f;
+volatile uint16_t stat_dac = 0u;
 
 extern volatile gpsinfo_t pvt_info;
 extern volatile svindata_t svin_info;
@@ -497,10 +498,11 @@ static void enable_disp(int argc, const char* const argv[])
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
       (void)printf("%-9llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
-                   "lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu status=%s\n",
+                   "lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu efilt=%-7.2f " \
+                   "status=%s\n",
                    now, stat_e, stat_esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
-                   pvt_info.tacc, cntl_status);
+                   pvt_info.tacc, stat_efilt, cntl_status);
       vTaskDelay(1000);
       if(canread())
       {
