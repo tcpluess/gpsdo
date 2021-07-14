@@ -61,6 +61,7 @@
  ******************************************************************************/
 
 static void led_setup(void);
+static void init(void* param);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -69,37 +70,6 @@ static void led_setup(void);
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
-
-
-
-
-void init(void* param)
-{
-  (void)param;
-  led_setup();
-  eep_init();
-  load_config();
-  timebase_init();
-  dac_setup();
-  tmp_init();
-  setup_tdc();
-  adc_init();
-
-  /* this is for debug only; enable the pps output such that it can be used
-     as trigger signal for the scope */
-  ppsenable(false);
-  timebase_reset();
-
-
-  (void)xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
-  (void)xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
-  (void)xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
-
-  for(;;)
-  {
-    vTaskDelete(NULL);
-  }
-}
 
 int main(void)
 {
@@ -110,17 +80,6 @@ int main(void)
   vTaskStartScheduler();
   /*lint -unreachable */
   return 0;
-}
-
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
-
-static void led_setup(void)
-{
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
 }
 
 
@@ -136,15 +95,78 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
   (void)pcTaskName;
   taskDISABLE_INTERRUPTS();
   / Write your code here … */
+#ifndef DEBUG
+  for(;;);
+#else
   asm volatile ("bkpt #0");
+#endif
 }
+
 
 void vApplicationIdleHook(void)
 {
   static int i = 0;
   i++;
+
+  /* this services the watchdog. if the code hangs for some reason the
+     watchdog will time out after approx. 2 sec. */
+  IWDG_KR = 0xaaaau;
 }
 
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+/*============================================================================*/
+static void led_setup(void)
+/*------------------------------------------------------------------------------
+  Function:
+  configure the leds ... should be possibly placed somewhere else
+  in:  none
+  out: none
+==============================================================================*/
+{
+  RCC_AHB1ENR |= BIT_04;
+  GPIOE_MODER |= (1u << 28) | (1u << 30);
+  GPIOE_BSRR = BIT_30 | BIT_31;
+}
+
+
+/*============================================================================*/
+static void init(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  init task that initialises everything else
+  in:  param -> not used
+  out: none
+==============================================================================*/
+{
+  (void)param;
+  led_setup();
+  eep_init();
+  load_config();
+  timebase_init();
+  dac_setup();
+  tmp_init();
+  setup_tdc();
+  adc_init();
+  ppsenable(false);
+
+  (void)xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
+  (void)xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
+  (void)xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
+
+  /* initialise the watchdog for 2 second timeout */
+  DBGMCU_APB1_FZ |= BIT_12; /* watchdog stopped during debug */
+  IWDG_KR = 0x5555u;
+  IWDG_PR = 4u;
+  IWDG_KR = 0xccccu;
+
+  /* delete the init task */
+  vTaskDelete(NULL);
+
+  for(;;);
+}
 
 /*******************************************************************************
  * END OF CODE
