@@ -63,7 +63,7 @@
 
 /* this is the amount of phase error that is tolerated before the timebase
    (pwm output for the 1pps output) is reset */
-#define MAX_ALLOWED_PHASE_ERR 10000u /* 10000 ns = 10 us */
+#define MAX_ALLOWED_PHASE_ERR 1000u /* 1000 ns = 1 us */
 
 /* if no outliers are detected within this time, the outlier counter is
    reset */
@@ -194,6 +194,9 @@ void cntl_task(void* param)
             {
               timebase_reset();
             }
+
+            /* fast recovery after holdover! */
+            cntlstat = fast_track;
           }
           else
           {
