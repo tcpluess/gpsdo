@@ -358,7 +358,25 @@ bool gps_waitready(void)
   }
 }
 
+bool gps_check_health(void)
+{
+  uint64_t now = get_uptime_msec();
 
+  if((now - sat_info.time > 1000) || (sat_info.best_snr < 25))
+  {
+    return false;
+  }
+  if((now - pvt_info.time > 1000) || (pvt_info.tacc > 100))
+  {
+    return false;
+  }
+  if(qerr.valid == false)
+  {
+    return false;
+  }
+
+  return true;
+}
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
@@ -1016,6 +1034,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
 ==============================================================================*/
 {
   vTaskSuspendAll();
+  svi->best_snr = 0;
   svi->numsv = unpack_u8_le(rdata, 5);
   if(svi->numsv > MAX_SV)
   {
@@ -1028,6 +1047,10 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
     svi->sats[n].cno = unpack_u8_le(rdata, 10 + 12*n);
     svi->sats[n].elev = unpack_i8_le(rdata, 11 + 12*n);
     svi->sats[n].azim = unpack_i16_le(rdata, 12 + 12*n);
+    if(svi->sats[n].cno > svi->best_snr)
+    {
+      svi->best_snr = svi->sats[n].cno;
+    }
   }
   svi->time = get_uptime_msec();
   xTaskResumeAll();

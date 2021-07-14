@@ -99,6 +99,7 @@ typedef struct
     int8_t elev;
     int16_t azim;
   } sats[MAX_SV];
+  uint8_t best_snr;
   uint64_t time;
 } sv_info_t;
 
@@ -206,6 +207,16 @@ extern void gps_timepulse_notify(void);
   wait until all data has been received
   in:  none
   out: none
+==============================================================================*/
+
+
+/*============================================================================*/
+extern bool gps_check_health(void);
+/*------------------------------------------------------------------------------
+  Function:
+  check if the satellite snr, fix and time accuracy are acceptable
+  in:  none
+  out: returns false if the gps reception is unstable/unreliable
 ==============================================================================*/
 
 /*******************************************************************************
