@@ -84,6 +84,10 @@ else
 FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16 -D__FPU_USED=1
 endif
 
+# when running from RAM, assume this is a debug build ...
+ifeq ($(RUN_FROM_FLASH), 0)
+DDEFS += -DDEBUG
+endif
 
 # List all user C define here, like -D_DEBUG=1
 UDEFS =
