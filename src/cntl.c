@@ -177,7 +177,7 @@ void cntl_task(void* param)
         ledon();
 
         /* wait until the gps module is ready. */
-        if(gps_waitready())
+        if(gps_waitready() && gps_check_health())
         {
           /* the gps module is ready, therefore some 1pps pulses should appear
              soon. enable the tdc to monitor these pulses */
@@ -225,7 +225,7 @@ void cntl_task(void* param)
 
         /* only look at the 1pps signal if the fix is valid; if fix is invalid,
            go to holdover mode */
-        if(pps_elapsed())
+        if(pps_elapsed() && gps_check_health())
         {
             ledon();
             if(cntl() == false)
