@@ -48,7 +48,7 @@
 
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
 #define BAUD_FRAC(x) ((uint32_t)((40000000.0/(x)-16.0*BAUD_INT(x))+0.5))
-#define RS232_BUFFERSIZE 100u
+#define RS232_BUFFERSIZE 200u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
