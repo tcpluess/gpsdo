@@ -127,7 +127,15 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  return (bool)xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200));
+  if(xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200)))
+  {
+    return true;
+  }
+  else
+  {
+    (void)printf("# no 1PPS!\n");
+    return false;
+  }
 }
 
 /*============================================================================*/
