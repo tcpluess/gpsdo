@@ -249,8 +249,9 @@ void gps_task(void* param)
      - data received from the gps module
      - request to disable timing mode
      - request to perform a survey-in
-     - request to configure the fixed position mode */
-    uint32_t bits = EVENT_DISABLE_TMODE | EVENT_DO_SVIN | EVENT_SET_FIXPOS_MODE | EVENT_SVIN_RECEIVED;
+     - request to configure the fixed position mode
+     - request to change gnss systems used */
+    uint32_t bits = EVENT_DISABLE_TMODE | EVENT_DO_SVIN | EVENT_SET_FIXPOS_MODE | EVENT_SVIN_RECEIVED | EVENT_RECONFIG_GNSS;
     bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
 
     if(bits & EVENT_DISABLE_TMODE)
@@ -364,14 +365,12 @@ bool gps_check_health(void)
 
   if((now - sat_info.time > 1000) || (sat_info.best_snr < 25))
   {
+    (void)printf("# sat SNR too bad!\n");
     return false;
   }
   if((now - pvt_info.time > 1000) || (pvt_info.tacc > 100))
   {
-    return false;
-  }
-  if(qerr.valid == false)
-  {
+    (void)printf("# time accuracy too bad!\n");
     return false;
   }
 
