@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel V10.4.4
+ * FreeRTOS Kernel V10.4.5
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -1171,5 +1171,19 @@ typedef QueueHandle_t SemaphoreHandle_t;
  *
  */
 #define uxSemaphoreGetCount( xSemaphore )                uxQueueMessagesWaiting( ( QueueHandle_t ) ( xSemaphore ) )
+
+/**
+ * semphr.h
+ * <pre>
+ * UBaseType_t uxSemaphoreGetCountFromISR( SemaphoreHandle_t xSemaphore );
+ * </pre>
+ *
+ * If the semaphore is a counting semaphore then uxSemaphoreGetCountFromISR() returns
+ * its current count value.  If the semaphore is a binary semaphore then
+ * uxSemaphoreGetCountFromISR() returns 1 if the semaphore is available, and 0 if the
+ * semaphore is not available.
+ *
+ */
+#define uxSemaphoreGetCountFromISR( xSemaphore )         uxQueueMessagesWaitingFromISR( ( QueueHandle_t ) ( xSemaphore ) )
 
 #endif /* SEMAPHORE_H */
