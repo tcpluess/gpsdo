@@ -119,6 +119,9 @@ static bool cntl(void);
 static void ledon(void);
 static void ledoff(void);
 static bool get_phase_err(float* ret);
+static status_t warmup_handler(void);
+static status_t holdover_handler(void);
+static status_t track_lock_handler(void);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -128,7 +131,6 @@ static double esum;
 const char* cntl_status = "";
 
 extern config_t cfg;
-static status_t gpsdostatus;
 static controlstatus_t cntlstat;
 
 /*******************************************************************************
@@ -138,7 +140,7 @@ static controlstatus_t cntlstat;
 void cntl_task(void* param)
 {
   (void)param;
-  gpsdostatus = warmup;
+  status_t gpsdostatus = warmup;
   cntlstat = fast_track;
 
   esum = cfg.last_dacval;
@@ -151,20 +153,7 @@ void cntl_task(void* param)
       /* warmup: wait until the ocxo is ready */
       case warmup:
       {
-        cntl_status = "warmup";
-
-        ledon();
-
-        /* measure the ocxo current; when the ocxo is warm, the current drops */
-        float iocxo = get_iocxo();
-        if(iocxo < OCXO_CURRENT_LIM)
-        {
-          gpsdostatus = holdover;
-        }
-        vTaskDelay(pdMS_TO_TICKS(50));
-        ledoff();
-        vTaskDelay(pdMS_TO_TICKS(50));
-
+        gpsdostatus = warmup_handler();
         break;
       }
 
@@ -172,74 +161,15 @@ void cntl_task(void* param)
          minute before switchint back to track/lock mode */
       case holdover:
       {
-        static uint32_t holdover_tic_count = 0u;
-        cntl_status = "holdover";
-        ledon();
-
-        /* wait until the gps module is ready. */
-        if(gps_waitready() && gps_check_health())
-        {
-          /* the gps module is ready, therefore some 1pps pulses should appear
-             soon. enable the tdc to monitor these pulses */
-          enable_tdc();
-          float e;
-          if(pps_elapsed() && get_phase_err(&e))
-          {
-            holdover_tic_count++;
-
-            /* reset the time base (1pps pwm output) if the phase error
-               is too large. otherwise it will take too long until the pll
-               locks! */
-            if(fabs(e) > MAX_ALLOWED_PHASE_ERR)
-            {
-              timebase_reset();
-            }
-
-            /* fast recovery after holdover! */
-            cntlstat = fast_track;
-          }
-          else
-          {
-            holdover_tic_count = 0u;
-          }
-
-          if(holdover_tic_count > 100u)
-          {
-            ledoff();
-            gpsdostatus = track_lock;
-            holdover_tic_count = 0u;
-          }
-        }
-        else
-        {
-          holdover_tic_count = 0u;
-        }
-
+        gpsdostatus = holdover_handler();
         break;
       }
 
       /* track/lock mode: control loop is active */
       case track_lock:
       {
-        cntl_status = "track_lock";
-
-        /* only look at the 1pps signal if the fix is valid; if fix is invalid,
-           go to holdover mode */
-        if(pps_elapsed() && gps_check_health())
-        {
-            ledon();
-            if(cntl() == false)
-            {
-              gpsdostatus = holdover;
-            }
-            vTaskDelay(pdMS_TO_TICKS(25));
-            ledoff();
-        }
-        else
-        {
-          gpsdostatus = holdover;
-          stat_e = 0.0f;
-        }
+        gpsdostatus = track_lock_handler();
+        break;
       }
     }
   }
@@ -253,6 +183,101 @@ void cntl_restart(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+static status_t warmup_handler(void)
+{
+  cntl_status = "warmup";
+
+  for(;;)
+  {
+    /* measure the ocxo current; when the ocxo is warm, the current drops */
+    float iocxo = get_iocxo();
+    if(iocxo < OCXO_CURRENT_LIM)
+    {
+      return holdover;
+    }
+    ledon();
+    vTaskDelay(pdMS_TO_TICKS(50));
+    ledoff();
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+}
+
+
+static status_t holdover_handler(void)
+{
+  uint32_t holdover_tic_count = 0u;
+  cntl_status = "holdover";
+  ledon();
+
+  for(;;)
+  {
+    if(gps_check_health())
+    {
+      float e;
+      if(pps_elapsed() && get_phase_err(&e))
+      {
+        holdover_tic_count++;
+
+        /* reset the time base (1pps pwm output) if the phase error
+           is too large. otherwise it will take too long until the pll
+           locks! */
+        if(fabs(e) > MAX_ALLOWED_PHASE_ERR)
+        {
+          timebase_reset();
+        }
+      }
+      else
+      {
+        holdover_tic_count = 0u;
+      }
+
+      /* 1pps pulses were okay for one minute?
+         then go to track_lock mode */
+      if(holdover_tic_count > 60u)
+      {
+        ledoff();
+        /* fast recovery after holdover! */
+        cntlstat = fast_track;
+        holdover_tic_count = 0u;
+        return track_lock;
+      }
+    }
+    else
+    {
+      holdover_tic_count = 0u;
+      vTaskDelay(pdMS_TO_TICKS(100u));
+    }
+  }
+}
+
+
+static status_t track_lock_handler(void)
+{
+  cntl_status = "track_lock";
+
+  for(;;)
+  {
+    /* only look at the 1pps signal if the fix is valid; if fix is invalid,
+       go to holdover mode */
+    if(pps_elapsed() && gps_check_health())
+    {
+        ledon();
+        if(cntl() == false)
+        {
+          return holdover;
+        }
+        vTaskDelay(pdMS_TO_TICKS(25));
+        ledoff();
+    }
+    else
+    {
+      stat_e = 0.0f;
+      return holdover;
+    }
+  }
+}
+
 
 static bool get_phase_err(float* ret)
 {
