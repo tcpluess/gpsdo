@@ -44,6 +44,8 @@
 #include "cntl.h"
 #include "ublox.h"
 
+#include <stdio.h>
+
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -95,6 +97,7 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
   (void)pcTaskName;
   taskDISABLE_INTERRUPTS();
   / Write your code here … */
+  (void)printf("# stack overflow!\n");
 #ifndef DEBUG
   for(;;);
 #else
@@ -152,9 +155,9 @@ static void init(void* param)
   adc_init();
   ppsenable(false);
 
-  (void)xTaskCreate(gps_task, "gps", 2000, NULL, 1, NULL);
-  (void)xTaskCreate(cntl_task, "control", 1200, NULL, 1, NULL);
-  (void)xTaskCreate(console_task, "console", 1000, NULL, 1, NULL);
+  (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
+  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
+  (void)xTaskCreate(console_task, "console", 1500, NULL, 1, NULL);
 
   /* initialise the watchdog for 2 second timeout */
   DBGMCU_APB1_FZ |= BIT_12; /* watchdog stopped during debug */
