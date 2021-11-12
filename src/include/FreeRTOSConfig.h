@@ -58,7 +58,8 @@ See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
 
 /* Normal assert() semantics without relying on the provision of an assert.h
 header file. */
-#define configASSERT( x ) if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
+#define configASSERT( x ) if( ( x ) == 0 ) { int printf(const char *format, ...); \
+printf("# assertion failure: %s:%d\n", __FILE__, __LINE__); taskDISABLE_INTERRUPTS(); for( ;; ); }
 
 
 #endif /* FREERTOS_CONFIG_H */
