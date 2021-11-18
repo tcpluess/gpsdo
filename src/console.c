@@ -684,7 +684,7 @@ static void conf_timeconst(int argc, const char* const argv[])
     uint16_t tau = (uint16_t)atoi(argv[0]);
     uint8_t filt = (uint8_t)atoi(argv[1]);
 
-    if((tau > 10) && (tau < 3600))
+    if((tau > 10) && (tau <= 7200))
     {
       cfg.tau = tau;
     }
