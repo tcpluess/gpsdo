@@ -501,7 +501,7 @@ static void enable_disp(int argc, const char* const argv[])
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
       (void)printf("%-9llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
-                   "lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu efilt=%-7.2f " \
+                   "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu efilt=%-7.2f " \
                    "status=%s\n",
                    now, stat_e, stat_esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
