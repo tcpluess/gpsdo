@@ -66,8 +66,8 @@ typedef struct
   uint8_t flags;
   uint8_t xflags;
   uint8_t numsv;
-  float lon;
-  float lat;
+  int32_t lon;
+  int32_t lat;
   int32_t height;
   int32_t hmsl;
   uint32_t hacc;
@@ -197,6 +197,16 @@ extern bool gps_waitready(void);
   wait until all data has been received
   in:  none
   out: none
+==============================================================================*/
+
+
+/*============================================================================*/
+extern bool gps_wait_pvt(void);
+/*------------------------------------------------------------------------------
+  Function:
+  wait until position, velocity and time are known
+  in:  none
+  out: returns true when pvt data is available
 ==============================================================================*/
 
 
