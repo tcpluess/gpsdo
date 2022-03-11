@@ -80,6 +80,9 @@ typedef union
 
     /* time offset to pps */
     int32_t timeoffset;
+
+    /* pps duration */
+    uint32_t pps_dur;
   };
   uint8_t bytes[EEP_SZ];
 } config_t;

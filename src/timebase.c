@@ -105,6 +105,8 @@ static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
 static SemaphoreHandle_t timepulse_semaphore;
 
+extern config_t cfg;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -325,7 +327,7 @@ static void enable_timer(void)
   TIM2_SMCR = 0;
   TIM2_CCER = 0;
   TIM2_CCMR1 = (6u << 12) | BIT_11;
-  set_pps_duration(100u);
+  set_pps_duration(cfg.pps_dur);
 
   /* the 1pps output is also used to trigger the adc */
   TIM2_CR2 = (5u << 4);
