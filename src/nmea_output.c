@@ -7,20 +7,20 @@
  *
  * Type:           module
  *
- * Description:    main module
+ * Description:    nmea sentences output
  *
  * Compiler:       ANSI-C
  *
- * Filename:       main.c
+ * Filename:       nmea_output.c
  *
  * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
- * Creation-Date:  03.03.2020
+ * Creation-Date:  17.03.2022
  *******************************************************************************
    Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
+   [1.0]    17.03.2022    Tobias Plüss <tpluess@ieee.org>
    - created
  ******************************************************************************/
 
@@ -30,26 +30,18 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "stm32f407.h"
+#include "semphr.h"
 #include "misc.h"
-#include "temperature.h"
-
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
-#include "nvic.h"
-#include "adc.h"
-#include "eeprom.h"
-#include "console.h"
-#include "cntl.h"
 #include "ublox.h"
-#include "nmea_output.h"
+#include "checksum.h"
 
 #include <stdio.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
+
+#define NMEA_MAX_LEN 90u /* maximum length of nmea sentences should be less */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -63,58 +55,77 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static void led_setup(void);
-static void init(void* param);
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
+
+static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes);
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-int main(void)
+/*============================================================================*/
+void nmea_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  keeps the time and date.
+  in:  none
+  out: none
+==============================================================================*/
 {
-  vic_init();
+  /* unused */
+  (void)param;
+  extern gpsinfo_t pvt_info;
 
-  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
+  for(;;)
+  {
+    /* wait until position, velocity and time are known */
+    if(gps_wait_pvt())
+    {
 
-  vTaskStartScheduler();
-  /*lint -unreachable */
-  return 0;
-}
+      /* if position, velocity and time are known AND valid */
+      if((pvt_info.valid & (BIT_00 | BIT_01)) == (BIT_00 | BIT_01))
+      {
+        char nmea[NMEA_MAX_LEN];
+        int32_t lat_degrees, lon_degrees;
+        float lat_minutes, lon_minutes;
+        uint8_t yr2 = pvt_info.year % 1000u;
 
+        decimal2deg(pvt_info.lat, &lat_degrees, &lat_minutes);
+        decimal2deg(pvt_info.lon, &lon_degrees, &lon_minutes);
 
-void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
-{
-  (void)task;
-  (void)taskname;
-  /* This will get called if a stack overflow is detected during the context
-     switch.  Set configCHECKFORSTACKOVERFLOWS to 2 to also check for stack
-     problems within nested interrupts, but only do this for debug purposes as
-     it will increase the context switch time. /
-  (void)pxTask;
-  (void)pcTaskName;
-  taskDISABLE_INTERRUPTS();
-  / Write your code here … */
-  (void)printf("# stack overflow!\n");
-#ifndef DEBUG
-  for(;;);
-#else
-  asm volatile ("bkpt #0");
-#endif
-}
+        char sn = 'N';
+        if(lat_degrees < 0)
+        {
+          sn = 'S';
+          lat_degrees = -lat_degrees;
+        }
 
+        char we = 'E';
+        if(lon_degrees < 0)
+        {
+          we = 'W';
+          lon_degrees = -lon_degrees;
+        }
 
-void vApplicationIdleHook(void)
-{
-  static int i = 0;
-  i++;
+        /* construct the nmea message in the buffer. heading, speed and so on
+           are constantly set to zero as they are not interesting. */
+        int len = snprintf(nmea, NMEA_MAX_LEN,
+          "GPRMC,%02d%02d%02d,A,%ld%08.5f,%c,%ld%08.5f,%c,000.0,000.0,%02d%02d%02d,000.0,E",
+          pvt_info.hour, pvt_info.min, pvt_info.sec,
+          lat_degrees, lat_minutes, sn,
+          lon_degrees, lon_minutes, we,
+          pvt_info.day, pvt_info.month, yr2);
 
-  /* this services the watchdog. if the code hangs for some reason the
-     watchdog will time out after approx. 2 sec. */
-  IWDG_KR = 0xaaaau;
+        /* calculate the checksum for the message */
+        uint8_t cksum = nmea0183_checksum(nmea, len);
+
+        /* construct the actual message and print it */
+        (void)printf("$%s*%02X\n", nmea, cksum);
+      }
+    }
+  }
 }
 
 /*******************************************************************************
@@ -122,55 +133,18 @@ void vApplicationIdleHook(void)
  ******************************************************************************/
 
 /*============================================================================*/
-static void led_setup(void)
+static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes)
 /*------------------------------------------------------------------------------
   Function:
-  configure the leds ... should be possibly placed somewhere else
-  in:  none
-  out: none
+  convert decimal degrees in the form ddddddd to degrees and minutes, such as
+  dd and mm.mmmmmm.
+  in:  decimal -> decimal degrees with scaling factor 1e7 (according to ublox)
+  out: degrees -> integer part, degrees
+       minutes -> minutes and fractions of minutes
 ==============================================================================*/
 {
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
-}
-
-
-/*============================================================================*/
-static void init(void* param)
-/*------------------------------------------------------------------------------
-  Function:
-  init task that initialises everything else
-  in:  param -> not used
-  out: none
-==============================================================================*/
-{
-  (void)param;
-  led_setup();
-  eep_init();
-  load_config();
-  timebase_init();
-  dac_setup();
-  tmp_init();
-  setup_tdc();
-  adc_init();
-  ppsenable(false);
-
-  (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
-  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
-  (void)xTaskCreate(console_task, "console", 1500, NULL, 1, NULL);
-  (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 1, NULL);
-
-  /* initialise the watchdog for 2 second timeout */
-  DBGMCU_APB1_FZ |= BIT_12; /* watchdog stopped during debug */
-  IWDG_KR = 0x5555u;
-  IWDG_PR = 4u;
-  IWDG_KR = 0xccccu;
-
-  /* delete the init task */
-  vTaskDelete(NULL);
-
-  for(;;);
+    *degrees = decimal / 10000000;
+    *minutes = (((float)(decimal % 10000000)) * 60.0) / 1e7;
 }
 
 /*******************************************************************************
