@@ -34,6 +34,7 @@
 #include "misc.h"
 #include "ublox.h"
 #include "checksum.h"
+#include "nmea_output.h"
 
 #include <stdio.h>
 
@@ -69,7 +70,7 @@ static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes);
 void nmea_task(void* param)
 /*------------------------------------------------------------------------------
   Function:
-  keeps the time and date.
+  outputs the nmea sentences.
   in:  none
   out: none
 ==============================================================================*/
@@ -77,6 +78,9 @@ void nmea_task(void* param)
   /* unused */
   (void)param;
   extern gpsinfo_t pvt_info;
+
+  FILE* nmeaout = fdopen(NMEA_FD, "w");
+  (void)setvbuf(nmeaout, NULL, _IOLBF, NMEA_MAX_LEN);
 
   for(;;)
   {
@@ -122,7 +126,7 @@ void nmea_task(void* param)
         uint8_t cksum = nmea0183_checksum(nmea, len);
 
         /* construct the actual message and print it */
-        (void)printf("$%s*%02X\n", nmea, cksum);
+        (void)fprintf(nmeaout, "$%s*%02X\n", nmea, cksum);
       }
     }
   }

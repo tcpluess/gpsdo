@@ -35,6 +35,10 @@
  * CONSTANT DEFINITIONS
  ******************************************************************************/
 
+/* file descriptor for the nmea output such that it can be routed to a different
+   uart but we can still use printf() and friends */
+#define NMEA_FD 10
+
 /*******************************************************************************
  * MACRO DEFINITIONS
  ******************************************************************************/
