@@ -7,35 +7,37 @@
  *
  * Type:           header file
  *
- * Description:    checksum functions
+ * Description:    nmea sentences output
  *
  * Compiler:       ANSI-C
  *
- * Filename:       checksum.h
+ * Filename:       nmea_output.h
  *
  * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
- * Creation-Date:  20.04.2020
+ * Creation-Date:  17.03.2022
  *******************************************************************************
    Modification History:
-   [1.0]    20.04.2020    Tobias Plüss <tpluess@ieee.org>
+   [1.0]    17.03.2022    Tobias Plüss <tpluess@ieee.org>
    - created
  ******************************************************************************/
 
-#ifndef __CHECKSUM_H__
-#define __CHECKSUM_H__
+#ifndef __NMEA_H__
+#define __NMEA_H__
 
 /*******************************************************************************
  * INCLUDE FILES
  ******************************************************************************/
 
-#include <stdint.h>
-
 /*******************************************************************************
  * CONSTANT DEFINITIONS
  ******************************************************************************/
+
+/* file descriptor for the nmea output such that it can be routed to a different
+   uart but we can still use printf() and friends */
+#define NMEA_FD 10
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -50,45 +52,12 @@
  ******************************************************************************/
 
 /*============================================================================*/
-uint16_t fletcher16(const void* data, uint32_t len);
+extern void nmea_task(void* param);
 /*------------------------------------------------------------------------------
   Function:
-  calculate the fletcher16 checksum over some data
-  in:  data -> data of which the checksum is calculated
-       len -> number of bytes
-  out: fletcher16 checksum
-==============================================================================*/
-
-
-/*============================================================================*/
-uint16_t crc16(const void* data, uint32_t len);
-/*------------------------------------------------------------------------------
-  Function:
-  calculate the crc16 (polynomial 0xa001)
-  in:  data -> data over which the checksum is calculated
-       len -> number of bytes
-  out: crc ccitt
-==============================================================================*/
-
-
-/*============================================================================*/
-uint32_t crc32(const void* data, uint32_t len);
-/*------------------------------------------------------------------------------
-  Function:
-  calculate the crc16 (polynomial 0xedb88320)
-  in:  data -> data over which the checksum is calculated
-       len -> number of bytes
-  out: crc ccitt
-==============================================================================*/
-
-/*============================================================================*/
-uint8_t nmea0183_checksum(const char* data, uint32_t len);
-/*------------------------------------------------------------------------------
-  Function:
-  calculate the nmea0183 checksum
-  in:  data -> data over which the checksum is calculated
-       len -> number of bytes
-  out: nmea0183 checksum
+  the task handles the output of nmea messages.
+  in:  param -> not used
+  out: none
 ==============================================================================*/
 
 /*******************************************************************************
@@ -96,3 +65,4 @@ uint8_t nmea0183_checksum(const char* data, uint32_t len);
  ******************************************************************************/
 
 #endif
+

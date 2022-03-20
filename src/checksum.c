@@ -105,6 +105,18 @@ uint32_t crc32(const void* data, uint32_t len)
   return crc;
 }
 
+
+uint8_t nmea0183_checksum(const char* data, uint32_t len)
+{
+  uint8_t checksum = 0;
+  for(int i = 0; i < len; i++)
+  {
+    checksum ^= data[i];
+  }
+  return checksum;
+}
+
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/

@@ -43,6 +43,7 @@
 #include "console.h"
 #include "cntl.h"
 #include "ublox.h"
+#include "nmea_output.h"
 
 #include <stdio.h>
 
@@ -158,6 +159,7 @@ static void init(void* param)
   (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
   (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
   (void)xTaskCreate(console_task, "console", 1500, NULL, 1, NULL);
+  (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 1, NULL);
 
   /* initialise the watchdog for 2 second timeout */
   DBGMCU_APB1_FZ |= BIT_12; /* watchdog stopped during debug */

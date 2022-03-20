@@ -94,6 +94,7 @@ static void man_hold(int argc, const char* const argv[]);
 static void uptime(int argc, const char* const argv[]);
 static void offset(int argc, const char* const argv[]);
 static void info(int argc, const char* const argv[]);
+static void set_pps_dur(int argc, const char* const argv[]);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -118,6 +119,7 @@ static command_t cmds[] =
   {uptime,          "uptime",     "shows the current uptime"},
   {offset,          "offset",     "sets the offset of the pps output"},
   {info,            "info",       "show version information"},
+  {set_pps_dur,     "pps_dur",    "pps_dur <ms> configures the duration of the PPS pulse"},
 };
 
 /* not static because it must be globally accessible */
@@ -466,6 +468,7 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("tau: %d sec\n", cfg.tau);
     (void)printf("prefilter: %d%%\n", cfg.filt);
     (void)printf("time offset: %ld ns\n", cfg.timeoffset);
+    (void)printf("pps duration: %ld ms\n", cfg.pps_dur);
   }
   else
   {
@@ -501,7 +504,7 @@ static void enable_disp(int argc, const char* const argv[])
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
       (void)printf("%-9llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
-                   "lat=%f lon=%f obs=%-5lu mv=%-5lu tacc=%-3lu efilt=%-7.2f " \
+                   "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu efilt=%-7.2f " \
                    "status=%s\n",
                    now, stat_e, stat_esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
@@ -789,6 +792,31 @@ static void info(int argc, const char* const argv[])
   (void)printf("compiled " __DATE__ " " __TIME__ "\n");
   (void)printf("with FreeRTOS " tskKERNEL_VERSION_NUMBER "\n");
   (void)printf("use \"help\" to see the available commands\n\n");
+}
+
+
+/*============================================================================*/
+static void set_pps_dur(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(argc == 1)
+  {
+    uint32_t dur = (uint32_t)atoi(argv[0]);
+
+    if((dur > 0) && (dur < 1000))
+    {
+      cfg.pps_dur = dur;
+      set_pps_duration(dur);
+      return;
+    }
+  }
+
+  (void)printf("invalid parameter\n");
 }
 
 /*******************************************************************************

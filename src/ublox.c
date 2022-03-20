@@ -359,6 +359,20 @@ bool gps_waitready(void)
   }
 }
 
+
+bool gps_wait_pvt(void)
+{
+  uint32_t bits = EVENT_PVT_RECEIVED;
+  if(xEventGroupWaitBits(ublox_events, bits, true, true, portMAX_DELAY))
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
 bool gps_check_health(void)
 {
   uint64_t now = get_uptime_msec();
@@ -952,8 +966,8 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->flags = unpack_u8_le(rdata, 21);
   info->xflags = unpack_u8_le(rdata, 22);
   info->numsv = unpack_u8_le(rdata, 23);
-  info->lon = ((float)unpack_i32_le(rdata, 24))/1e7f;
-  info->lat = ((float)unpack_i32_le(rdata, 28))/1e7f;
+  info->lon = unpack_i32_le(rdata, 24);
+  info->lat = unpack_i32_le(rdata, 28);
   info->height = unpack_i32_le(rdata, 32);
   info->hmsl = unpack_i32_le(rdata, 36);
   info->hacc = unpack_u32_le(rdata, 40);

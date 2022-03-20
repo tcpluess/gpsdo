@@ -39,6 +39,7 @@
 #include "stm32f407.h"
 #include "misc.h"
 #include "rs232.h"
+#include "nmea_output.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -71,6 +72,7 @@ _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
   {
     case STDOUT_FILENO:
     case STDERR_FILENO:
+    case NMEA_FD:
     {
       const unsigned char *p = (const unsigned char*)ptr;
       for(int i = 0; i < len; i++)
@@ -112,31 +114,40 @@ int _isatty(int file)
 
 _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 {
-  if(file == STDIN_FILENO)
+  switch(file)
   {
-    extern int kbhit(void);
-    int numread;
-    char* dest = (char*)ptr;
-
-    for(numread = 0; numread < len; numread++)
+    case STDIN_FILENO:
     {
-      int rxchar = kbhit();
-      if(rxchar >= 0)
+      extern int kbhit(void);
+      int numread;
+      char* dest = (char*)ptr;
+
+      for(numread = 0; numread < len; numread++)
       {
-        dest[numread] = (char)rxchar;
+        int rxchar = kbhit();
+        if(rxchar >= 0)
+        {
+          dest[numread] = (char)rxchar;
+        }
+        else
+        {
+          r->_errno = EIO;
+        }
+        break;
       }
-      else
-      {
-        r->_errno = EIO;
-      }
-      break;
+      return numread;
     }
-    return numread;
-  }
-  else
-  {
-    r->_errno = EBADF;
-    return 0;
+
+    case NMEA_FD:
+    {
+      return 0;
+    }
+
+    default:
+    {
+      r->_errno = EBADF;
+      return -1;
+    }
   }
   return 0;
 }
