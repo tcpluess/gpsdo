@@ -53,32 +53,25 @@ SECTIONS
     _ebss = .;
   } > ram
 
-  .ccmram (NOLOAD) :
-  {
-    *(.ccmram);
-  } > ccmram
-
   .bkpram (NOLOAD) :
   {
     . = ALIGN(8);
     *(.nvram);
   } > bkpram
 
-  .ram_heap :
+  .ccmram (NOLOAD) :
   {
+    *(.ccmram);
     . = ALIGN(8);
-    heapstart = .;
-    . = . + LENGTH(ccmram) - __STACK_SIZE - (heapstart - ORIGIN(ccmram));
-    heapend = .;
+    eccm = .;
+
+    StackTop = ORIGIN(ccmram) + LENGTH(ccmram);
+    stackstart = StackTop - __STACK_SIZE;
+    heapstart = eccm;
+    heapend = stackstart;
     heapsz = heapend - heapstart;
-
-    ASSERT(heapsz >= __HEAP_SIZE, "Heap does not fit into RAM");
-
-    . = ALIGN(8);
-    stackstart = .;
-    . = . + __STACK_SIZE;
-    StackTop = .;
-
-    ASSERT(StackTop <= ORIGIN(ccmram) + LENGTH(ccmram), "RAM overflowed by stack and heap");
+    ASSERT(StackTop - stackstart <= LENGTH(ccmram), "Stack does not fit into RAM");
+    ASSERT((heapstart - heapend) > 0, "No space left for heap");
+    ASSERT(heapsz >= __HEAP_SIZE, "Heap is too small");
   } > ccmram
 }
