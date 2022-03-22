@@ -2,7 +2,7 @@ MEMORY
 {
   ram (rwx)    : ORIGIN = 0x20000000, LENGTH = 128K
   bkpram (rw)  : ORIGIN = 0x40024000, LENGTH = 4K
-  ccmram (rwx) : ORIGIN = 0x10000000, LENGTH = 64K
+  ccmram (rwx) : ORIGIN = 0x10000000, LENGTH = 64k
 }
 
 SECTIONS
@@ -12,6 +12,12 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.vectors*))
     *(.text*)
+    KEEP(*(.init))
+    KEEP(*(.fini))
+    *(SORT(.ctors.*))
+    *(.ctors)
+    *(SORT(.dtors.*))
+    *(.dtors)
     *(.rodata)
     *(.rodata*)
     . = ALIGN(4);
@@ -31,12 +37,35 @@ SECTIONS
     __exidx_end = .;
   } > ram
 
+  .preinit_array :
+  {
+      PROVIDE_HIDDEN(__preinit_array_start = .);
+      KEEP(*(.preinit_array*))
+      PROVIDE_HIDDEN(__preinit_array_end = .);
+  } > ram
+
+  .init_array :
+  {
+      PROVIDE_HIDDEN(__init_array_start = .);
+      KEEP(*(SORT(.init_array.*)))
+      KEEP(*(.init_array*))
+      PROVIDE_HIDDEN(__init_array_end = .);
+  } > ram
+
+  .fini_array :
+  {
+      PROVIDE_HIDDEN(__fini_array_start = .);
+      KEEP(*(SORT(.fini_array.*)))
+      KEEP(*(.fini_array*))
+      PROVIDE_HIDDEN(__fini_array_end = .);
+  } > ram
+
   _etext = .;
 
   .data : AT (_etext)
   {
-    . = ALIGN(4);
     _sdata = .;
+    . = ALIGN(4);
     *(.data*)
     . = ALIGN(4);
     _edata = .;
@@ -63,21 +92,17 @@ SECTIONS
     *(.nvram);
   } > bkpram
 
-  .ram_heap (COPY) :
+  .stack_heap (COPY) :
   {
     . = ALIGN(8);
     PROVIDE(heapstart = .);
-    . = . + LENGTH(ccmram) - __STACK_SIZE;
+    . = ORIGIN(ccmram) + LENGTH(ccmram) - __STACK_SIZE;
     PROVIDE(heapend = .);
     PROVIDE(heapsz = heapend - heapstart);
-
     ASSERT(heapsz >= __HEAP_SIZE, "Heap does not fit into RAM");
-
-    . = ALIGN(8);
     PROVIDE(stackstart = .);
     . = . + __STACK_SIZE;
     PROVIDE(StackTop = .);
-
-    ASSERT(StackTop <= ORIGIN(ccmram) + LENGTH(ccmram), "RAM overflowed by stack and heap");
+    ASSERT(StackTop - stackstart <= LENGTH(ccmram), "Stack does not fit into RAM");
   } > ccmram
 }

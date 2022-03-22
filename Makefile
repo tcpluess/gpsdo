@@ -26,6 +26,8 @@
 # [1.1]    22.03.2022    Tobias Plüss <tpluess@ieee.org>
 # - added makefile itself to the dependencies
 # - added linkerscript to the dependencies
+# - added c++ support
+# - improved assembly support
 ################################################################################
 
 MAKEFLAGS := --jobs=8
@@ -35,8 +37,9 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 TRGT = arm-none-eabi-
 CC   = $(TRGT)gcc
+CXX  = $(TRGT)g++
 CP   = $(TRGT)objcopy
-AS   = $(TRGT)gcc -x assembler-with-cpp
+AS   = $(TRGT)as
 SZ   = $(TRGT)size
 GDB  = $(TRGT)gdb
 DUMP = $(TRGT)objdump
@@ -102,6 +105,9 @@ UADEFS =
 # List C source files here
 SRC = $(call rwildcard,src/,*.c)
 
+# List C++ source files here
+CXXSRC = $(call rwildcard,src/,*.cpp)
+
 # List ASM source files here
 ASRC = $(call rwildcard,src/,*.s)
 
@@ -138,20 +144,23 @@ DEFS    = $(DDEFS) $(UDEFS) -DRUN_FROM_FLASH=1
 endif
 
 ADEFS   = $(DADEFS) $(UADEFS)
-OBJS    = $(addsuffix .o, $(ASRC) $(SRC))
-LIST    = $(addsuffix .lss, $(ASRC) $(SRC))
-DEP     = $(addsuffix .d, $(ASRC) $(SRC))
+OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
+LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
+DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
-ASFLAGS  = $(MCFLAGS) $(OPT) $(ADEFS)
+ASFLAGS  = -g -c
 
 CPFLAGS  = $(MCFLAGS) $(OPT) -Wall -Wstrict-prototypes -fverbose-asm
 CPFLAGS += -ffunction-sections -fdata-sections
 CPFLAGS += $(DEFS)
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-LDFLAGS  = $(MCFLAGS) -nostartfiles -T$(LDSCRIPT) -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE) -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
+CXXFLAGS = -c $(MCFLAGS) $(OPT) $(DEFS) -std=c++17 -fno-rtti -fno-exceptions
+CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit
+
+LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT) -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE) -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
 LDFLAGS += -Wl,-Map=lst/$(FULL_PRJ).map,--cref,--gc-sections,--no-warn-mismatch $(LIBDIR)
 
 .PHONY: all
@@ -164,14 +173,19 @@ bin/$(FULL_PRJ).bin lst/$(FULL_PRJ).lss $(LDSCRIPT) Makefile
 	@$(CC) -c $(CPFLAGS) $(INCDIR) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
+%.cpp.o : %.cpp $(LDSCRIPT) Makefile
+	@echo "CXX     $<"
+	@$(CXX) -c $(CXXFLAGS) $(INCDIR) $< -o $@
+	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
+
 %.s.o : %.s $(LDSCRIPT) Makefile
 	@echo "AS      $<"
-	@$(AS) -c $(ASFLAGS) $< -o $@
+	@$(AS) $(ASFLAGS) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 bin/$(FULL_PRJ).elf: $(OBJS) $(LDSCRIPT) Makefile
 	@echo "LD      $@"
-	@$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
+	@$(CXX) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
 bin/$(FULL_PRJ).hex: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"

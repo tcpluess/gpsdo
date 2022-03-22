@@ -22,6 +22,9 @@
    Modification History:
    [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
    - created
+
+   [1.1]    22.03.2022    Tobias Plüss <tpluess@ieee.org>
+   - add __libc_init_array initialisation for c++
  ******************************************************************************/
 
 .syntax unified
@@ -92,6 +95,8 @@ ResetHandler:
     str    r0, [r1], #4
     b      1b
 1:
+
+    bl     __libc_init_array
 
     bl     main
     b      .
