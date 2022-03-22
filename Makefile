@@ -22,6 +22,10 @@
 # Modification History:
 # [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
 # - created
+#
+# [1.1]    22.03.2022    Tobias Plüss <tpluess@ieee.org>
+# - added makefile itself to the dependencies
+# - added linkerscript to the dependencies
 ################################################################################
 
 MAKEFLAGS := --jobs=8
@@ -152,36 +156,36 @@ LDFLAGS += -Wl,-Map=lst/$(FULL_PRJ).map,--cref,--gc-sections,--no-warn-mismatch 
 
 .PHONY: all
 all: $(OBJS) bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).s19 \
-bin/$(FULL_PRJ).bin lst/disassembly.lss
-	@$(SZ) -d bin/$(FULL_PRJ).elf
+bin/$(FULL_PRJ).bin lst/$(FULL_PRJ).lss $(LDSCRIPT) Makefile
+	@$(SZ) --format=Berkeley -d bin/$(FULL_PRJ).elf
 
-%.c.o : %.c
+%.c.o : %.c $(LDSCRIPT) Makefile
 	@echo "CC      $<"
 	@$(CC) -c $(CPFLAGS) $(INCDIR) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
-%.s.o : %.s
+%.s.o : %.s $(LDSCRIPT) Makefile
 	@echo "AS      $<"
 	@$(AS) -c $(ASFLAGS) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
-bin/$(FULL_PRJ).elf: $(OBJS)
+bin/$(FULL_PRJ).elf: $(OBJS) $(LDSCRIPT) Makefile
 	@echo "LD      $@"
 	@$(CC) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
-bin/$(FULL_PRJ).hex: bin/$(FULL_PRJ).elf
+bin/$(FULL_PRJ).hex: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O ihex $< $@
 
-bin/$(FULL_PRJ).s19: bin/$(FULL_PRJ).elf
+bin/$(FULL_PRJ).s19: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O srec $< $@
 
-bin/$(FULL_PRJ).bin:  bin/$(FULL_PRJ).elf
+bin/$(FULL_PRJ).bin:  bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O binary $< $@
 
-lst/disassembly.lss: bin/$(FULL_PRJ).elf
+lst/$(FULL_PRJ).lss: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
 	@echo "OBJDUMP $(FULL_PRJ).elf"
 	@$(DUMP) -S -d bin/$(FULL_PRJ).elf > $@
 
@@ -194,6 +198,6 @@ doc:
 clean:
 	@rm -rfv $(OBJS) $(LIST) $(DEP)
 	@rm -rfv bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).bin bin/$(FULL_PRJ).s19
-	@rm -rfv lst/disassembly.lss
+	@rm -rfv lst/$(FULL_PRJ).lss lst/$(FULL_PRJ).map
 
 -include $(DEP)

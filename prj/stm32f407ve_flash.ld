@@ -43,7 +43,7 @@ SECTIONS
     _edata = .;
   } > ram
 
-  .bss :
+  .bss (NOLOAD) :
   {
     . = ALIGN(4);
     _sbss = .;
@@ -64,20 +64,20 @@ SECTIONS
     *(.nvram);
   } > bkpram
 
-  .ram_heap :
+  .ram_heap (COPY) :
   {
     . = ALIGN(8);
-    heapstart = .;
-    . = . + LENGTH(ccmram) - __STACK_SIZE - (heapstart - ORIGIN(ccmram));
-    heapend = .;
-    heapsz = heapend - heapstart;
+    PROVIDE(heapstart = .);
+    . = . + LENGTH(ccmram) - __STACK_SIZE;
+    PROVIDE(heapend = .);
+    PROVIDE(heapsz = heapend - heapstart);
 
     ASSERT(heapsz >= __HEAP_SIZE, "Heap does not fit into RAM");
 
     . = ALIGN(8);
-    stackstart = .;
+    PROVIDE(stackstart = .);
     . = . + __STACK_SIZE;
-    StackTop = .;
+    PROVIDE(StackTop = .);
 
     ASSERT(StackTop <= ORIGIN(ccmram) + LENGTH(ccmram), "RAM overflowed by stack and heap");
   } > ccmram
