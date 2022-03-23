@@ -29,8 +29,6 @@
  ******************************************************************************/
 
 #include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
 #include "misc.h"
 #include "ublox.h"
 #include "checksum.h"
@@ -94,7 +92,7 @@ void nmea_task(void* param)
         char nmea[NMEA_MAX_LEN];
         int32_t lat_degrees, lon_degrees;
         float lat_minutes, lon_minutes;
-        uint8_t yr2 = pvt_info.year % 1000u;
+        uint8_t yr2 = (uint8_t)(pvt_info.year % 1000u);
 
         decimal2deg(pvt_info.lat, &lat_degrees, &lat_minutes);
         decimal2deg(pvt_info.lon, &lon_degrees, &lon_minutes);
@@ -148,7 +146,7 @@ static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes)
 ==============================================================================*/
 {
     *degrees = decimal / 10000000;
-    *minutes = (((float)(decimal % 10000000)) * 60.0) / 1e7;
+    *minutes = (float)((((float)(decimal % 10000000)) * 60.0) / 1e7);
 }
 
 /*******************************************************************************
