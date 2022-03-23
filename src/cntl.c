@@ -106,7 +106,7 @@ typedef enum
 } controlstatus_t;
 
 extern volatile float stat_e;
-extern volatile float stat_esum;
+extern volatile double stat_esum;
 extern volatile float stat_efilt;
 
 /*******************************************************************************

@@ -126,7 +126,7 @@ static command_t cmds[] =
 extern config_t cfg;
 
 volatile float stat_e = 0.0f;
-volatile float stat_esum = 0.0f;
+volatile double stat_esum = 0.0f;
 volatile float stat_efilt = 0.0f;
 volatile uint16_t stat_dac = 0u;
 
@@ -468,7 +468,7 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("tau: %d sec\n", cfg.tau);
     (void)printf("prefilter: %d%%\n", cfg.filt);
     (void)printf("time offset: %ld ns\n", cfg.timeoffset);
-    (void)printf("pps duration: %ld ms\n", cfg.pps_dur);
+    (void)printf("pps duration: %lu ms\n", cfg.pps_dur);
   }
   else
   {
@@ -696,7 +696,8 @@ static void conf_timeconst(int argc, const char* const argv[])
       (void)printf("value for tau out of range: 10 < tau < 3600\n");
     }
 
-    if((filt >= 0) && (filt < 100))
+    /* filt is uint8, i.e. it can only be positive */
+    if(filt < 100)
     {
       cfg.filt = filt;
     }
