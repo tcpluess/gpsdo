@@ -240,6 +240,8 @@ static status_t holdover_handler(void)
         /* fast recovery after holdover! */
         cntlstat = fast_track;
         holdover_tic_count = 0u;
+
+        /*lint -e438 last value assigned to holdover_tic_count not used */
         return track_lock;
       }
     }
@@ -319,6 +321,7 @@ static bool read_tic(float* result)
   {
     if(get_timepulse_error(&qerr))
     {
+      /*lint -e834 operator order is ok */
       *result = (tic - qerr + tdc) + TIC_OFFSET;
       return true;
     }
@@ -384,7 +387,7 @@ static bool cntl(void)
   }
   else
   {
-    float abs_err = fabs(e);
+    float abs_err = fabsf(e);
 
     /* if the phase error is less than one period, assume the pll is locked and
        switch on the green lock led */
