@@ -303,7 +303,7 @@ bool get_timepulse_error(float* result)
   valid = qerr.valid;
   *result = qerr.ns;
   qerr.valid = false;
-  xTaskResumeAll();
+  (void)xTaskResumeAll();
 
   /* this should never happen */
   if(valid == false)
@@ -974,7 +974,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
   info->vacc = unpack_u32_le(rdata, 44);
   info->pdop = unpack_u16_le(rdata, 76);
   info->time = get_uptime_msec();
-  xTaskResumeAll();
+  (void)xTaskResumeAll();
 }
 
 
@@ -1012,7 +1012,7 @@ static void unpack_svin(const uint8_t* rdata, svindata_t* info)
     info->active = false;
   }
   info->time = get_uptime_msec();
-  xTaskResumeAll();
+  (void)xTaskResumeAll();
 }
 
 
@@ -1032,7 +1032,7 @@ static void unpack_tp(const uint8_t* rdata, qerr_t* ret)
   ret->flags = unpack_u8_le(rdata, 14);
   ret->refinfo = unpack_u8_le(rdata, 15);
   ret->valid = true;
-  xTaskResumeAll();
+  (void)xTaskResumeAll();
 }
 
 
@@ -1066,7 +1066,7 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
     }
   }
   svi->time = get_uptime_msec();
-  xTaskResumeAll();
+  (void)xTaskResumeAll();
 }
 
 
