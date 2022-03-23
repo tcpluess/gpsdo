@@ -13,6 +13,12 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.vectors*))
     *(.text*)
+    KEEP(*(.init))
+    KEEP(*(.fini))
+    *(SORT(.ctors.*))
+    *(.ctors)
+    *(SORT(.dtors.*))
+    *(.dtors)
     *(.rodata)
     *(.rodata*)
     . = ALIGN(4);
@@ -32,18 +38,41 @@ SECTIONS
     __exidx_end = .;
   } > flash
 
+  .preinit_array :
+  {
+      PROVIDE_HIDDEN(__preinit_array_start = .);
+      KEEP(*(.preinit_array*))
+      PROVIDE_HIDDEN(__preinit_array_end = .);
+  } > flash
+
+  .init_array :
+  {
+      PROVIDE_HIDDEN(__init_array_start = .);
+      KEEP(*(SORT(.init_array.*)))
+      KEEP(*(.init_array*))
+      PROVIDE_HIDDEN(__init_array_end = .);
+  } > flash
+
+  .fini_array :
+  {
+      PROVIDE_HIDDEN(__fini_array_start = .);
+      KEEP(*(SORT(.fini_array.*)))
+      KEEP(*(.fini_array*))
+      PROVIDE_HIDDEN(__fini_array_end = .);
+  } > flash
+
   _etext = .;
 
   .data : AT (_etext)
   {
-    . = ALIGN(4);
     _sdata = .;
+    . = ALIGN(4);
     *(.data*)
     . = ALIGN(4);
     _edata = .;
   } > ram
 
-  .bss :
+  .bss (NOLOAD) :
   {
     . = ALIGN(4);
     _sbss = .;
@@ -59,19 +88,17 @@ SECTIONS
     *(.nvram);
   } > bkpram
 
-  .ccmram (NOLOAD) :
+  .stack_heap (COPY) :
   {
-    *(.ccmram);
     . = ALIGN(8);
-    eccm = .;
-
-    StackTop = ORIGIN(ccmram) + LENGTH(ccmram);
-    stackstart = StackTop - __STACK_SIZE;
-    heapstart = eccm;
-    heapend = stackstart;
-    heapsz = heapend - heapstart;
+    PROVIDE(heapstart = .);
+    . = ORIGIN(ccmram) + LENGTH(ccmram) - __STACK_SIZE;
+    PROVIDE(heapend = .);
+    PROVIDE(heapsz = heapend - heapstart);
+    ASSERT(heapsz >= __HEAP_SIZE, "Heap does not fit into RAM");
+    PROVIDE(stackstart = .);
+    . = . + __STACK_SIZE;
+    PROVIDE(StackTop = .);
     ASSERT(StackTop - stackstart <= LENGTH(ccmram), "Stack does not fit into RAM");
-    ASSERT((heapstart - heapend) > 0, "No space left for heap");
-    ASSERT(heapsz >= __HEAP_SIZE, "Heap is too small");
   } > ccmram
 }
