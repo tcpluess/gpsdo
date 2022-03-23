@@ -82,7 +82,7 @@ uint32_t crc32(const void* data, uint32_t len);
 ==============================================================================*/
 
 /*============================================================================*/
-uint8_t nmea0183_checksum(const char* data, uint32_t len);
+uint8_t nmea0183_checksum(const char* data, int len);
 /*------------------------------------------------------------------------------
   Function:
   calculate the nmea0183 checksum
