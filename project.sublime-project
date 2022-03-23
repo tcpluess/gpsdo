@@ -10,8 +10,8 @@
   [
     {
       "name": "Lint",
-      "shell_cmd": "lint-nt -u -v \"${project_path}/settings.lnt\" \"${file_name}\"",
-      "working_dir": "${project_path}/../src",
+      "shell_cmd": "/opt/lint/lint-nt -u -v \"${project_path}/prj/settings.lnt\" \"${file_name}\"",
+      "working_dir": "${project_path}/src/",
       "file_regex": "^(.*):(\\d+):(\\d+):\\s(.*)"
     }
   ]

@@ -1,11 +1,14 @@
  /* include directories: */
  -i"d:\bin\Lint\include\"
+ -i"/opt/lint/include"
  -i"include"
  -i"freertos/include"
  -i"freertos/portable/GCC/ARM_CM4F"
 
  -d__attribute__(x)
 
+-e620 /* suspicious constant L or one */
+-e747 /* significant prototype coercion */
 -e506 /* constant value boolean my arse */
 -e722 /* semicolon next to while() is deliberate */
 -e835 /* shift count of zero is deliberate */
