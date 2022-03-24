@@ -37,7 +37,7 @@
 #include "event_groups.h"
 #include "task.h"
 #include "ublox.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "nvic.h"
 #include "timebase.h"
@@ -509,9 +509,9 @@ static void init_uart(void)
 ==============================================================================*/
 {
   /* enable usart 3 and install the irq handler */
-  RCC_APB1ENR |= BIT_18;
-  USART3_BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
-  USART3_CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
+  RCC->APB1ENR |= BIT_18;
+  USART3->BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
+  USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
   //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
 }
@@ -527,15 +527,15 @@ static void init_pins(void)
 ==============================================================================*/
 {
   /* enable port d */
-  RCC_AHB1ENR |= BIT_03;
+  RCC->AHB1ENR |= BIT_03;
 
   /* configure the reset pin */
-  GPIOD_MODER |= (1u << 20);
-  GPIOD_OTYPER |= (1u << 10);
+  GPIOD->MODER |= (1u << 20);
+  GPIOD->OTYPER |= (1u << 10);
 
   /* enable gpio d and configure the uart pins */
-  GPIOD_MODER |= (2u << 16) | (2u << 18);
-  GPIOD_AFRH |= (7u << 0) | (7u << 4);
+  GPIOD->MODER |= (2u << 16) | (2u << 18);
+  GPIOD->AFR[1] |= (7u << 0) | (7u << 4);
 }
 
 
@@ -551,12 +551,12 @@ static void gps_reset(bool do_reset)
   if(do_reset)
   {
     /* reset pin low */
-    GPIOD_BSRR = BIT_26;
+    GPIOD->BSRR = BIT_26;
   }
   else
   {
     /* reset pin high */
-    GPIOD_BSRR = BIT_10;
+    GPIOD->BSRR = BIT_10;
   }
 }
 
@@ -573,13 +573,13 @@ static void uart_config_baudrate(uint32_t baud)
   /* wait until tx done before the baudrate is changed */
   do
   {
-    if(USART3_SR & BIT_06)
+    if(USART3->SR & BIT_06)
     {
       break;
     }
   } while(true);
 
-  USART3_BRR = (BAUD_FRAC(baud) << 0) | (BAUD_INT(baud) << 4);
+  USART3->BRR = (BAUD_FRAC(baud) << 0) | (BAUD_INT(baud) << 4);
 }
 
 
@@ -594,7 +594,7 @@ static void enable_txempty_irq(void)
   out: none
 ==============================================================================*/
 {
-  USART3_CR1 |= BIT_07;
+  USART3->CR1 |= BIT_07;
 }
 
 
@@ -607,7 +607,7 @@ static void disable_txempty_irq(void)
   out: none
 ==============================================================================*/
 {
-  USART3_CR1 &= ~BIT_07;
+  USART3->CR1 &= ~BIT_07;
 }
 
 
@@ -895,13 +895,13 @@ static void uart_irq_handler(void)
   out: none
 ==============================================================================*/
 {
-  uint32_t sr = USART3_SR;
-  uint32_t cr = USART3_CR1;
+  uint32_t sr = USART3->SR;
+  uint32_t cr = USART3->CR1;
 
   /* rx buffer not empty? */
   if(sr & BIT_05)
   {
-    uint8_t tmp = (uint8_t)USART3_DR;
+    uint8_t tmp = (uint8_t)USART3->DR;
     (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
   }
 
@@ -911,7 +911,7 @@ static void uart_irq_handler(void)
     char tx;
     if(xStreamBufferReceiveFromISR(txstream, &tx, 1, NULL) > 0)
     {
-      USART3_DR = tx;
+      USART3->DR = tx;
     }
     else
     {

@@ -31,7 +31,7 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "timebase.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "nvic.h"
 #include "tdc.h"
@@ -153,11 +153,11 @@ void ppsenable(bool enable)
 {
   if(enable)
   {
-    GPIOB_BSRR = BIT_25;
+    GPIOB->BSRR = BIT_25;
   }
   else
   {
-    GPIOB_BSRR = BIT_09;
+    GPIOB->BSRR = BIT_09;
   }
 }
 
@@ -195,7 +195,7 @@ void set_pps_duration(uint32_t ms)
 {
   /* convert milliseconds to 100ns */
   ms = ms*10000;
-  TIM2_CCR2 = ms;
+  TIM2->CCR2 = ms;
 }
 
 uint64_t get_uptime_msec(void)
@@ -221,46 +221,46 @@ static void enable_osc(void)
 ==============================================================================*/
 {
   /* enable the external oscillator and wait until it is ready */
-  RCC_CR |= BIT_16;
+  RCC->CR |= BIT_16;
   do
   {
-    if(RCC_CR & BIT_17)
+    if(RCC->CR & BIT_17)
     {
       break;
     }
   } while(true);
 
   /* enable the i and d caches, prefetch and use high latency for the flash */
-  FLASH_ACR = BIT_10 | BIT_09 | BIT_08 | 7u;
+  FLASH->ACR = BIT_10 | BIT_09 | BIT_08 | 7u;
 
   /* configure the clock dividers */
-  RCC_CFGR = (PPRE2 << 13) | (PPRE1 << 10) | (HPRE << 4);
+  RCC->CFGR = (PPRE2 << 13) | (PPRE1 << 10) | (HPRE << 4);
 
   /* configure the pll for 160MHz ahb clock */
-  RCC_PLLCFGR = (PLLQ << 24) | BIT_22 | (PLLP << 16) | (PLLN << 6) | PLLM;
+  RCC->PLLCFGR = (PLLQ << 24) | BIT_22 | (PLLP << 16) | (PLLN << 6) | PLLM;
 
   /* enable the pll and wait until it is ready */
-  RCC_CR |= BIT_24;
+  RCC->CR |= BIT_24;
   do
   {
-    if(RCC_CR & BIT_25)
+    if(RCC->CR & BIT_25)
     {
       break;
     }
   } while(true);
 
   /* switch to the pll clock */
-  RCC_CFGR |= BIT_01;
+  RCC->CFGR |= BIT_01;
   do
   {
-    if((RCC_CFGR & (BIT_03 | BIT_02)) == BIT_03)
+    if((RCC->CFGR & (BIT_03 | BIT_02)) == BIT_03)
     {
       break;
     }
   } while(true);
 
   /* disable internal osc. */
-  RCC_CR &= ~BIT_00;
+  RCC->CR &= ~BIT_00;
 }
 
 /*============================================================================*/
@@ -273,11 +273,11 @@ static void enable_mco(void)
 ==============================================================================*/
 {
   /* configure the mco1 to output hse clock */
-  RCC_CFGR |= BIT_22;
+  RCC->CFGR |= BIT_22;
 
   /* enable gpio port a */
-  RCC_AHB1ENR |= BIT_00;
-  GPIOA_MODER |= (2u << 16);
+  RCC->AHB1ENR |= BIT_00;
+  GPIOA->MODER |= (2u << 16);
 }
 
 /*============================================================================*/
@@ -290,10 +290,10 @@ static void configure_ppsenable(void)
 ==============================================================================*/
 {
   /* enable gpio b */
-  RCC_AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= BIT_01;
 
   /* set ppsen as output and set it to high */
-  GPIOB_MODER |= (1u << 18);
+  GPIOB->MODER |= (1u << 18);
   ppsenable(false);
 }
 
@@ -309,37 +309,37 @@ static void enable_timer(void)
   vic_enableirq(TIM2_VECTOR, capture_irq);
 
   /* enable gpio a */
-  RCC_AHB1ENR |= BIT_00;
-  GPIOA_MODER |= (2u << 2) | (2u << 4);
-  GPIOA_AFRL |= (1u << 4) | (1u << 8);
+  RCC->AHB1ENR |= BIT_00;
+  GPIOA->MODER |= (2u << 2) | (2u << 4);
+  GPIOA->AFR[0] |= (1u << 4) | (1u << 8);
 
   /* enable timer */
-  RCC_APB1ENR |= BIT_00;
+  RCC->APB1ENR |= BIT_00;
 
   /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 40 MHz.
      a prescaler of N divides by N+1. the timer shall run at 10 MHz */
-  TIM2_PSC = (TIMER_DIVISION - 1u);
+  TIM2->PSC = (TIMER_DIVISION - 1u);
 
   /* timer wraps after 1 second */
-  TIM2_ARR = 9999999ul;
+  TIM2->ARR = 9999999ul;
 
   /* pwm mode for the pps output (channel 2), set pulse duration */
-  TIM2_SMCR = 0;
-  TIM2_CCER = 0;
-  TIM2_CCMR1 = (6u << 12) | BIT_11;
+  TIM2->SMCR = 0;
+  TIM2->CCER = 0;
+  TIM2->CCMR1 = (6u << 12) | BIT_11;
   set_pps_duration(cfg.pps_dur);
 
   /* the 1pps output is also used to trigger the adc */
-  TIM2_CR2 = (5u << 4);
+  TIM2->CR2 = (5u << 4);
 
   /* capture mode for ch3 (this is the 1pps input from gps) */
-  TIM2_CCMR2 = (1u << 0);
+  TIM2->CCMR2 = (1u << 0);
 
   /* enable capture/compare channels 2 and 3 */
-  TIM2_CCER = (BIT_08 | BIT_04);
-  TIM2_DIER = BIT_03;
+  TIM2->CCER = (BIT_08 | BIT_04);
+  TIM2->DIER = BIT_03;
 
-  TIM2_CR1 = BIT_00;
+  TIM2->CR1 = BIT_00;
 }
 
 /*============================================================================*/
@@ -356,18 +356,18 @@ static void capture_irq(void)
   if(res)
   {
     /* timebase reset requested */
-    TIM2_CNT = 5;
+    TIM2->CNT = 5;
     res = false;
   }
   else
   {
     /* read out the captured value and notify waiting tasks */
-    tic_capture = TIM2_CCR3;
+    tic_capture = TIM2->CCR3;
     (void)xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
   }
 
   /* acknowledge */
-  TIM2_SR = 0;
+  TIM2->SR = 0;
 }
 
 

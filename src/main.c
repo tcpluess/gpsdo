@@ -30,7 +30,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "temperature.h"
 
@@ -114,7 +114,7 @@ void vApplicationIdleHook(void)
 
   /* this services the watchdog. if the code hangs for some reason the
      watchdog will time out after approx. 2 sec. */
-  IWDG_KR = 0xaaaau;
+  IWDG->KR = 0xaaaau;
 }
 
 /*******************************************************************************
@@ -130,9 +130,9 @@ static void led_setup(void)
   out: none
 ==============================================================================*/
 {
-  RCC_AHB1ENR |= BIT_04;
-  GPIOE_MODER |= (1u << 28) | (1u << 30);
-  GPIOE_BSRR = BIT_30 | BIT_31;
+  RCC->AHB1ENR |= BIT_04;
+  GPIOE->MODER |= (1u << 28) | (1u << 30);
+  GPIOE->BSRR = BIT_30 | BIT_31;
 }
 
 
@@ -162,10 +162,10 @@ static void init(void* param)
   (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 1, NULL);
 
   /* initialise the watchdog for 2 second timeout */
-  DBGMCU_APB1_FZ |= BIT_12; /* watchdog stopped during debug */
-  IWDG_KR = 0x5555u;
-  IWDG_PR = 4u;
-  IWDG_KR = 0xccccu;
+  DBGMCU->APB1FZ |= BIT_12; /* watchdog stopped during debug */
+  IWDG->KR = 0x5555u;
+  IWDG->PR = 4u;
+  IWDG->KR = 0xccccu;
 
   /* delete the init task */
   vTaskDelete(NULL);

@@ -31,7 +31,7 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "adc.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "nvic.h"
 
@@ -80,34 +80,34 @@ void adc_init(void)
   vSemaphoreCreateBinary(adc_ready);
 
   /* enable gpio b */
-  RCC_AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= BIT_01;
 
   /* configure analog input for pb1 */
-  GPIOB_MODER |= (3u << 2);
+  GPIOB->MODER |= (3u << 2);
 
   /* enable the adc */
-  RCC_APB2ENR |= BIT_08;
-  ADC1_CR2 = BIT_00;
+  RCC->APB2ENR |= BIT_08;
+  ADC1->CR2 = BIT_00;
 
   /* enable the internal voltage reference */
-  ADC_CCR = BIT_23;
+  ADC->CCR = BIT_23;
 
   /* scan the injected channels */
-  ADC1_CR1 = BIT_08;
+  ADC1->CR1 = BIT_08;
 
   /* use the slowest sampling rate for both channels */
-  ADC1_SMPR1 = (7u << 21);
-  ADC1_SMPR2 = (7u << 27);
+  ADC1->SMPR1 = (7u << 21);
+  ADC1->SMPR2 = (7u << 27);
 
   /* convert channels 9 and 17; 9 is the ocxo current, 17 is the reference */
-  ADC1_JSQR = (1u << 20) | (17u << 15) | (9u << 10);
+  ADC1->JSQR = (1u << 20) | (17u << 15) | (9u << 10);
 
   /* timer2 trigger output starts the adc conversion */
-  ADC1_CR2 |= (3u << 16) | (1u << 20);
+  ADC1->CR2 |= (3u << 16) | (1u << 20);
 
   /* trigger an interrupt when the adc has finished the conversion */
   vic_enableirq(18, adc1_interrupt);
-  ADC1_CR1 |= BIT_07;
+  ADC1->CR1 |= BIT_07;
 }
 
 
@@ -118,8 +118,8 @@ float get_iocxo(void)
   if(xSemaphoreTake(adc_ready, pdMS_TO_TICKS(ADC_MAX_WAITDELAY)))
   {
     /* these are the internal reference voltage and the ocxo current */
-    float ichan = ADC1_JDR1;
-    float ref = ADC1_JDR2;
+    float ichan = ADC1->JDR1;
+    float ref = ADC1->JDR2;
     return ((VREF/(GAIN*RSHUNT)) * ichan) / ref;
   }
   else
@@ -143,11 +143,11 @@ static void adc1_interrupt(void)
 ==============================================================================*/
 {
   /* acknowledge the interrupt and signal the semaphore to wake waiting tasks */
-  uint32_t sr = ADC1_SR;
+  uint32_t sr = ADC1->SR;
   if(sr & BIT_02)
   {
     sr &= ~BIT_02;
-    ADC1_SR = sr;
+    ADC1->SR = sr;
     (void)xSemaphoreGiveFromISR(adc_ready, NULL);
   }
 }

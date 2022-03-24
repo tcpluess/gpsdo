@@ -29,7 +29,7 @@
  ******************************************************************************/
 
 #include "eeprom.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "convert.h"
 #include "checksum.h"
@@ -76,10 +76,10 @@ static inline void delay(void)
 }
 
 /* macros for easy access to the e2prom */
-#define EEP_SS(x) { GPIOD_BSRR = ((x) ? BIT_14 : BIT_30); delay(); }
-#define EEP_MOSI(x) { GPIOD_BSRR = ((x) ? BIT_12 : BIT_28); }
-#define EEP_SCK(x) { GPIOD_BSRR = ((x) ? BIT_13 : BIT_29); delay(); }
-#define EEP_MISO() ((GPIOD_IDR & BIT_11) != 0 ? 1u : 0u)
+#define EEP_SS(x) { GPIOD->BSRR = ((x) ? BIT_14 : BIT_30); delay(); }
+#define EEP_MOSI(x) { GPIOD->BSRR = ((x) ? BIT_12 : BIT_28); }
+#define EEP_SCK(x) { GPIOD->BSRR = ((x) ? BIT_13 : BIT_29); delay(); }
+#define EEP_MISO() ((GPIOD->IDR & BIT_11) != 0 ? 1u : 0u)
 
 /*******************************************************************************
  * PRIVATE TYPE DEFINITIONS
@@ -109,10 +109,10 @@ config_t cfg;
 void eep_init(void)
 {
   /* enable gpio port d */
-  RCC_AHB1ENR |= BIT_03;
+  RCC->AHB1ENR |= BIT_03;
 
   /* configure pins */
-  GPIOD_MODER |= (1u << 24) | (1u << 26) | (1u << 28);
+  GPIOD->MODER |= (1u << 24) | (1u << 26) | (1u << 28);
 
   /* default levels of the signals */
   EEP_MOSI(0);

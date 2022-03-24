@@ -29,7 +29,7 @@
  ******************************************************************************/
 
 #include "nvic.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 
 /*******************************************************************************
@@ -182,13 +182,13 @@ __attribute__((aligned (1024))) static void* vector_table[] =
 
 void vic_init(void)
 {
-  VTOR = (uint32_t)vector_table;
+  SCB->VTOR = (uint32_t)vector_table;
 
   /* use the top four bits for the interrupt priority */
-  AIRCR = 0x05FA0300;
+  SCB->AIRCR = 0x05FA0300;
 
   /* enable the instruction and data cache */
-  CCR |= (BIT_16 | BIT_17);
+  SCB->CCR |= (BIT_16 | BIT_17);
 }
 
 void vic_enableirq(int32_t intnum, funcptr_t func)

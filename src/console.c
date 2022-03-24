@@ -549,8 +549,8 @@ static void svin(int argc, const char* const argv[])
     /* svin <duration> <accuracy> */
     case 2:
     {
-      uint32_t time = (uint32_t)atoi(argv[0]);
-      uint32_t accuracy = (uint32_t)atoi(argv[1]);
+      uint32_t time = (unsigned)atoi(argv[0]);
+      uint32_t accuracy = (unsigned)atoi(argv[1]);
       if((time != 0) && (accuracy != 0))
       {
         cfg.svin_dur = time;
@@ -807,7 +807,7 @@ static void set_pps_dur(int argc, const char* const argv[])
 {
   if(argc == 1)
   {
-    uint32_t dur = (uint32_t)atoi(argv[0]);
+    uint32_t dur = (unsigned)atoi(argv[0]);
 
     if((dur > 0) && (dur < 1000))
     {

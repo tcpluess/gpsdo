@@ -38,7 +38,7 @@
 #include "task.h"
 #include "event_groups.h"
 #include "tdc.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "nvic.h"
 
@@ -125,13 +125,13 @@ static EventGroupHandle_t tdc_events;
 void setup_tdc(void)
 {
   /* enable port a */
-  RCC_AHB1ENR |= BIT_00;
+  RCC->AHB1ENR |= BIT_00;
 
   /* ss and enable are gpios; mosi, miso and sck belong to spi1.
      use a internal pullup for the irq pin */
-  GPIOA_MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
-  GPIOA_PUPDR |= (1u << 18);
-  GPIOA_AFRL |= (5u << 20) | (5u << 24) | (5u << 28);
+  GPIOA->MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
+  GPIOA->PUPDR |= (1u << 18);
+  GPIOA->AFR[0] |= (5u << 20) | (5u << 24) | (5u << 28);
 
   tdc_events = xEventGroupCreate();
   tdc_config_interrupt();
@@ -141,14 +141,14 @@ void setup_tdc(void)
   tdc_hwenable(false);
 
   /* enable spi1 */
-  RCC_APB2ENR |= BIT_12;
+  RCC->APB2ENR |= BIT_12;
 
   /* configure spi1 */
-  SPI1_CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
-  SPI1_CR2 = 0;
+  SPI1->CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
+  SPI1->CR2 = 0;
 
   /* enable spi2 */
-  SPI1_CR1 |= BIT_06;
+  SPI1->CR1 |= BIT_06;
 
   /* this resets the internal state of the tdc */
   tdc_hwenable(true);
@@ -269,11 +269,11 @@ static void tdc_hwenable(bool enable)
 {
   if(enable)
   {
-    GPIOA_BSRR = BIT_03;
+    GPIOA->BSRR = BIT_03;
   }
   else
   {
-    GPIOA_BSRR = BIT_19;
+    GPIOA->BSRR = BIT_19;
   }
   vTaskDelay(pdMS_TO_TICKS(100));
 }
@@ -288,15 +288,15 @@ static void tdc_ss(bool select)
 ==============================================================================*/
 {
   /* wait until not busy */
-  while(SPI1_SR & BIT_07);
+  while(SPI1->SR & BIT_07);
 
   if(select)
   {
-    GPIOA_BSRR = BIT_20;
+    GPIOA->BSRR = BIT_20;
   }
   else
   {
-    GPIOA_BSRR = BIT_04;
+    GPIOA->BSRR = BIT_04;
   }
 
   /* include a small delay to meet the setup time. */
@@ -314,24 +314,24 @@ static uint16_t spi_trans16(uint16_t txdata)
   /* wait until tx buffer empty */
   do
   {
-    if(SPI1_SR & BIT_01)
+    if(SPI1->SR & BIT_01)
     {
       break;
     }
   } while(true);
 
-  SPI1_DR = txdata;
+  SPI1->DR = txdata;
 
   /* wait until rx buffer not empty */
   do
   {
-    if(SPI1_SR & BIT_00)
+    if(SPI1->SR & BIT_00)
     {
       break;
     }
   } while(true);
 
-  return (uint16_t)SPI1_DR;
+  return (uint16_t)SPI1->DR;
 }
 
 
@@ -348,13 +348,13 @@ static void tdc_config_interrupt(void)
   vic_enableirq(EXTI9_IRQ, tdc_irqhandler);
 
   /* configure pa9 as external interrupt */
-  SYSCFG_EXTICR3 = (0u << 4);
+  SYSCFG->EXTICR[2] = (0u << 4);
 
   /* unmask pa9 interrupt */
-  EXTI_IMR = BIT_09;
+  EXTI->IMR = BIT_09;
 
   /* enable falling edge trigger */
-  EXTI_FTSR = BIT_09;
+  EXTI->FTSR = BIT_09;
 }
 
 
@@ -369,7 +369,7 @@ static void tdc_irqhandler(void)
 ==============================================================================*/
 {
   /* acknowledge the interrupt */
-  EXTI_PR = BIT_09;
+  EXTI->PR = BIT_09;
 
   /* signal to waiting tasks */
   (void)xEventGroupSetBitsFromISR(tdc_events, BIT_10, NULL);

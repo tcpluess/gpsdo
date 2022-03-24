@@ -37,7 +37,7 @@
 #include "FreeRTOS.h"
 #include "stream_buffer.h"
 #include "rs232.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "nvic.h"
 #include "eeprom.h"
@@ -88,17 +88,17 @@ void rs232_init(void)
   vic_enableirq(38, irq_handler);
 
   /* enable port d */
-  RCC_AHB1ENR |= BIT_03;
+  RCC->AHB1ENR |= BIT_03;
 
   /* select uart pins for pd5 and pd6 */
-  GPIOD_MODER |= (2u << 10) | (2u << 12);
-  GPIOD_AFRL |= (7u << 20) | (7u << 24);
+  GPIOD->MODER |= (2u << 10) | (2u << 12);
+  GPIOD->AFR[0] |= (7u << 20) | (7u << 24);
 
   /* enable and configure usart2 */
-  RCC_APB1ENR |= BIT_17;
-  USART2_BRR = (BAUD_FRAC(cfg.rs232_baudrate) << 0) |
+  RCC->APB1ENR |= BIT_17;
+  USART2->BRR = (BAUD_FRAC(cfg.rs232_baudrate) << 0) |
     (BAUD_INT(cfg.rs232_baudrate) << 4);
-  USART2_CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
+  USART2->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
 }
 
 
@@ -148,15 +148,15 @@ static void irq_handler(void)
   out: none
 ==============================================================================*/
 {
-  uint32_t sr = USART2_SR;
-  uint32_t cr = USART2_CR1;
+  uint32_t sr = USART2->SR;
+  uint32_t cr = USART2->CR1;
 
   if((sr & cr) == BIT_07) //TXE?
   {
     char c;
     if(xStreamBufferReceiveFromISR(txstream, &c, 1, NULL) > 0)
     {
-      USART2_DR = c;
+      USART2->DR = c;
     }
     else
     {
@@ -167,11 +167,11 @@ static void irq_handler(void)
   if((sr & cr) == BIT_05)
   {
     /* DR must be read anyways to acknowledge the interrupt */
-    uint8_t tmp = (uint8_t)USART2_DR;
+    uint8_t tmp = (uint8_t)USART2->DR;
     (void)xStreamBufferSendFromISR(rxstream, &tmp, 1, NULL);
   }
 
-  USART2_SR = 0;
+  USART2->SR = 0;
 }
 
 /*============================================================================*/
@@ -185,7 +185,7 @@ static void enable_txempty_irq(void)
   out: none
 ==============================================================================*/
 {
-  USART2_CR1 |= BIT_07;
+  USART2->CR1 |= BIT_07;
 }
 
 /*============================================================================*/
@@ -197,7 +197,7 @@ static void disable_txempty_irq(void)
   out: none
 ==============================================================================*/
 {
-  USART2_CR1 &= ~BIT_07;
+  USART2->CR1 &= ~BIT_07;
 }
 
 /*******************************************************************************

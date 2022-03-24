@@ -36,7 +36,6 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "stm32f407.h"
 #include "misc.h"
 #include "rs232.h"
 #include "nmea_output.h"

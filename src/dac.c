@@ -29,7 +29,7 @@
  ******************************************************************************/
 
 #include "dac.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 #include "eeprom.h"
 
@@ -70,24 +70,24 @@ bool dac_hold;
 void dac_setup(void)
 {
   /* enable gpio b */
-  RCC_AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= BIT_01;
 
   /* enable spi2 */
-  RCC_APB1ENR |= BIT_14;
+  RCC->APB1ENR |= BIT_14;
 
   /* ss gpio, mosi and sck: spi2 (alt. func. 5) */
-  GPIOB_MODER |= (2u << 30) | (2u << 26) | (1u << 24);
-  GPIOB_AFRH |= (5u << 20) | (5u << 28);
+  GPIOB->MODER |= (2u << 30) | (2u << 26) | (1u << 24);
+  GPIOB->AFR[1] |= (5u << 20) | (5u << 28);
 
   /* configure the spi2: cpol=0, cpha=1, msb first, use highest baud rate.
      the 8 bits data format must be used because the dac expects a frame of
      24 bits but the spi can only transmit 8 or 16 bits at a time. so, one
      24 bit transfer will be split up into 3 transfers of 8 bit each */
-  SPI2_CR1 = BIT_14 | BIT_09 | BIT_08 | BIT_02 | BIT_00;
-  SPI2_CR2 = 0;
+  SPI2->CR1 = BIT_14 | BIT_09 | BIT_08 | BIT_02 | BIT_00;
+  SPI2->CR2 = 0;
 
   /* enable spi2 */
-  SPI2_CR1 |= BIT_06;
+  SPI2->CR1 |= BIT_06;
 
   /* default state: chip select not active; set dac to initial value; dac hold
      is disabled */
@@ -140,15 +140,15 @@ static void spi_ss(bool enable)
 ==============================================================================*/
 {
   /* wait until not busy */
-  while(SPI2_SR & BIT_07);
+  while(SPI2->SR & BIT_07);
 
   if(enable)
   {
-    GPIOB_BSRR = BIT_28;
+    GPIOB->BSRR = BIT_28;
   }
   else
   {
-    GPIOB_BSRR = BIT_12;
+    GPIOB->BSRR = BIT_12;
   }
 }
 
@@ -163,13 +163,13 @@ static void spi_transmit(uint8_t data)
 {
   do
   {
-    if(SPI2_SR & BIT_01)
+    if(SPI2->SR & BIT_01)
     {
       break;
     }
   } while(true);
 
-  SPI2_DR = data;
+  SPI2->DR = data;
 }
 
 /*******************************************************************************

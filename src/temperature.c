@@ -29,7 +29,7 @@
  ******************************************************************************/
 
 #include "temperature.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include "misc.h"
 
 /*******************************************************************************
@@ -67,13 +67,13 @@ static inline void delay(void)
 void tmp_init(void)
 {
   /* enable gpio port b and configure the spi pins */
-  RCC_AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= BIT_01;
 
-  GPIOB_MODER &= ~((3u << 13) | (3u << 12) |(3u << 10));
-  GPIOB_MODER |= (1u << 10) | (1u << 14);
+  GPIOB->MODER &= ~((3u << 13) | (3u << 12) |(3u << 10));
+  GPIOB->MODER |= (1u << 10) | (1u << 14);
 
   /* ss and clk to inactive state */
-  GPIOB_BSRR = BIT_05 | BIT_07;
+  GPIOB->BSRR = BIT_05 | BIT_07;
 }
 
 float get_temperature(void)
@@ -81,23 +81,23 @@ float get_temperature(void)
   uint32_t ret = 0;
 
   /* ss active */
-  GPIOB_BSRR = BIT_21;
+  GPIOB->BSRR = BIT_21;
   delay();
   for(int i = 0; i < 16; i++)
   {
     delay();
-    GPIOB_BSRR = BIT_23;
+    GPIOB->BSRR = BIT_23;
     delay();
 
     ret = ret << 1;
-    if(GPIOB_IDR & BIT_06)
+    if(GPIOB->IDR & BIT_06)
     {
       ret |= BIT_00;
     }
-    GPIOB_BSRR = BIT_07;
+    GPIOB->BSRR = BIT_07;
   }
   delay();
-  GPIOB_BSRR = BIT_05;
+  GPIOB->BSRR = BIT_05;
 
   return ((float)ret)/32.0f;
 }

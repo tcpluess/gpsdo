@@ -39,7 +39,7 @@
 #include "tdc.h"
 #include "dac.h"
 #include "temperature.h"
-#include "stm32f407.h"
+#include "stm32f407xx.h"
 #include <math.h>
 
 /*******************************************************************************
@@ -79,8 +79,6 @@
 #define KI_FASTTRACK (TAU_FASTTRACK)
 #define KP_LOCKED (1.0/(OSCGAIN * TAU_LOCKED))
 #define KI_LOCKED (TAU_LOCKED)
-#define KP_STABLE (1.0/(OSCGAIN * cfg.tau))
-#define KI_STABLE (cfg.tau)
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -302,13 +300,13 @@ static bool get_phase_err(float* ret)
 
 static void ledon(void)
 {
-  GPIOE_BSRR = BIT_15;
+  GPIOE->BSRR = BIT_15;
 }
 
 
 static void ledoff(void)
 {
-  GPIOE_BSRR = BIT_31;
+  GPIOE->BSRR = BIT_31;
 }
 
 
@@ -394,12 +392,12 @@ static bool cntl(void)
     if(abs_err < MAX_PHASE_ERR)
     {
       ppsenable(true);
-      GPIOE_BSRR = BIT_14;
+      GPIOE->BSRR = BIT_14;
     }
     else
     {
       ppsenable(false);
-      GPIOE_BSRR = BIT_30;
+      GPIOE->BSRR = BIT_30;
     }
 
     switch(cntlstat)
