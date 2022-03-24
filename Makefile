@@ -88,7 +88,7 @@ endif
 ifeq ($(USE_HARD_FPU), 0)
 FPU =
 else
-FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16 -D__FPU_USED=1
+FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16
 endif
 
 # when running from RAM, assume this is a debug build ...
