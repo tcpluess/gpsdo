@@ -2,10 +2,12 @@
  -i"d:\bin\Lint\include\"
  -i"/opt/lint/include"
  -i"include"
+ -i"include/cmsis"
  -i"freertos/include"
  -i"freertos/portable/GCC/ARM_CM4F"
 
  -d__attribute__(x)
+ -d__GNUC__
 
 -e620 /* suspicious constant L or one */
 -e747 /* significant prototype coercion */
@@ -43,3 +45,9 @@ in case of this, append a text to the message that clarifies this a bit. */
 -esym(773, portGET_HIGHEST_PRIORITY)
 -e731
 -esym(522, delay)
+
+-elib(607)
+-elib(46)
+-elib(10)
+-elib(49)
+-elib(760)
