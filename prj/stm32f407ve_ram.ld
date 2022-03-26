@@ -92,12 +92,6 @@ SECTIONS
     *(.ccmram);
   } > ccmram
 
-  .bkpram (NOLOAD) :
-  {
-    . = ALIGN(8);
-    *(.nvram);
-  } > bkpram
-
   .stack_heap (COPY) :
   {
     . = ALIGN(8);
