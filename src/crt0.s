@@ -96,9 +96,13 @@ ResetHandler:
     b      1b
 1:
 
+    ldr    r0, =__libc_fini_array
+    bl     atexit
     bl     __libc_init_array
 
+    mov    r0, #0
+    mov    r1, #0
     bl     main
-    b      .
+    bl     exit
 
     .end
