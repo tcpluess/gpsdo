@@ -88,6 +88,11 @@ SECTIONS
     *(.nvram);
   } > bkpram
 
+  .ccmram (NOLOAD) :
+  {
+    *(.ccmram);
+  } > ccmram
+
   .stack_heap (COPY) :
   {
     . = ALIGN(8);
