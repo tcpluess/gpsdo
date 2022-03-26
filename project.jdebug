@@ -29,8 +29,7 @@ void OnProjectLoad (void) {
   //
   // User settings
   //
-  Project.SetOSPlugin ("FreeRTOSPlugin");
-  File.Open ("./bin/gnssdo.elf");
+  File.Open ("./bin/gas.elf");
 }
 
 /*********************************************************************
@@ -144,8 +143,12 @@ void OnProjectLoad (void) {
 void AfterTargetReset (void) {
   unsigned int SP;
   unsigned int PC;
-  SP = Target.ReadU32(0x20000000);
-  PC = Target.ReadU32(0x20000004);
+  unsigned int BaseAddr;
+  BaseAddr = Elf.GetBaseAddr();
+  unsigned int SP;
+  SP = Target.ReadU32(BaseAddr);
+  unsigned int PC;
+  PC = Target.ReadU32(BaseAddr + 4);
   Target.SetReg("PC", PC);
   Target.SetReg("SP", SP);
 }
@@ -235,9 +238,12 @@ void AfterTargetReset (void) {
 */
 void AfterTargetDownload (void) {
   unsigned int SP;
+  unsigned int BaseAddr;
+  BaseAddr = Elf.GetBaseAddr();
+  unsigned int SP;
+  SP = Target.ReadU32(BaseAddr);
   unsigned int PC;
-  SP = Target.ReadU32(0x20000000);
-  PC = Target.ReadU32(0x20000004);
+  PC = Target.ReadU32(BaseAddr + 4);
   Target.SetReg("PC", PC);
   Target.SetReg("SP", SP);
 }
