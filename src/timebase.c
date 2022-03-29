@@ -356,7 +356,7 @@ static void capture_irq(void)
   if(res)
   {
     /* timebase reset requested */
-    TIM2->CNT = 5;
+    TIM2->CNT = 0;
     res = false;
   }
   else
