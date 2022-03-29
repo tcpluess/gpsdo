@@ -253,7 +253,7 @@ static status_t holdover_handler(void)
 
 static status_t track_lock_handler(void)
 {
-  cntl_status = "track_lock";
+
 
   for(;;)
   {
@@ -394,6 +394,7 @@ static bool cntl(void)
          more quickly */
       case fast_track:
       {
+        cntl_status = "fast_track";
         dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, (double)e);
 
         /* if the phase error stays below MAX_PHASE_ERR for the time
@@ -424,6 +425,7 @@ static bool cntl(void)
          settled for a while. */
       case locked:
       {
+        cntl_status = "locked";
         dacval = pi_control(KP_LOCKED, KI_LOCKED, (double)e);
 
         /* if the phase error stays below MAX_PHASE_ERR for the time
@@ -455,6 +457,7 @@ static bool cntl(void)
       /* this should be the normal operating state. */
       case stable:
       {
+        cntl_status = "stable";
         /* if the phase error increases above the threshold MAX_PHASE_ERR, then
            the ocxo is perhaps not stable enough and the control loop switches
            its constants such that it becomes faster */
