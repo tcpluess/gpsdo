@@ -29,7 +29,8 @@ void OnProjectLoad (void) {
   //
   // User settings
   //
-  File.Open ("./bin/gas.elf");
+  Project.SetOSPlugin ("FreeRTOSPlugin");
+  File.Open ("./bin/gnssdo.elf");
 }
 
 /*********************************************************************
