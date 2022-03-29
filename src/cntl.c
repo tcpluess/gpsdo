@@ -105,7 +105,6 @@ typedef enum
 
 extern volatile float stat_e;
 extern volatile double stat_esum;
-extern volatile float stat_efilt;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
@@ -328,18 +327,6 @@ static bool read_tic(float* result)
 }
 
 
-static double prefilter(double u, double alpha)
-{
-  static double yold = 0.0;
-  static double yoldold = 0.0;
-  alpha = alpha / 100.0;
-  double y = (1.0-2.0*alpha+alpha*alpha)*u + 2*alpha*yold - alpha*alpha*yoldold;
-  yoldold = yold;
-  yold = y;
-  return y;
-}
-
-
 static uint16_t pi_control(double KP, double TI, double ee)
 {
 
@@ -500,9 +487,9 @@ static bool cntl(void)
           }
 
           /* kp, ki and prefilter are stored in the eeprom */
-          double e_filt = prefilter((double)e, (double)cfg.filt);
-          stat_efilt = e_filt;
-          dacval = pi_control(KP_LOCKED, KI_LOCKED, e_filt);
+          double kp = (1.0/(OSCGAIN * (double)cfg.tau));
+          double ki = (double)cfg.tau;
+          dacval = pi_control(kp, ki, e);
         }
 
         break;
