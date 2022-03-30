@@ -110,7 +110,6 @@ extern volatile double stat_esum;
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static bool read_tic(float* result);
 static uint16_t pi_control(double KP, double TI, double e);
 static bool cntl(void);
 static void ledon(void);
@@ -289,53 +288,37 @@ static status_t track_lock_handler(void)
 
 
 /*============================================================================*/
-static bool read_tic(float* ret)
-/*------------------------------------------------------------------------------
-  Function:
-  reads the time interval error between "our own" and the gps 1pps pulse.
-  in:  ret -> this is where the phase error will be stored
-  out: returns true if phase error is valid.
-==============================================================================*/
-{
-  float tdc;
-  float qerr;
-  float tic = get_tic();
-  if(get_tdc(&tdc))
-  {
-    if(get_timepulse_error(&qerr))
-    {
-      /*lint -e834 operator order is ok */
-      *ret = (tic + qerr - tdc);
-      return true;
-    }
-  }
-  return false;
-}
-
-
-/*============================================================================*/
 static bool get_phase_err(float* ret)
 /*------------------------------------------------------------------------------
   Function:
   determines the phase error in nanoseconds.
-  in:  ret -> this is where the phase error will be stored
-  out: returns true if phase error is valid.
+  in:  ret -> this is where the phase error will be stored, is not NULL checked
+       because this seems not to be necessary here
+  out: returns true if phase error is valid, false otherwise
 ==============================================================================*/
 {
-  /* determine the time interval (phase) error */
-  float tic;
-  if(read_tic(&tic) == false)
+  /* determine the time interval (phase) error from the input capture */
+  float tic = get_tic();
+
+  /* obtain the interpolator value */
+  float tdc;
+  if(get_tdc(&tdc) == false)
   {
     return false;
   }
 
-  /* determine the controller error */
-  float e = (float)cfg.timeoffset - tic;
-  if(ret != NULL)
+  /* obtain the sawtooth correction value from the gps module */
+  float qerr;
+  if(get_timepulse_error(&qerr) == false)
   {
-    *ret = e;
+    return false;
   }
-  stat_e = e;
+
+  /* calculate the actual phase error */
+  float result = (float)cfg.timeoffset - (tic + qerr - tdc);
+
+  *ret = result;
+  stat_e = result;
   return true;
 }
 
