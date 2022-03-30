@@ -61,6 +61,9 @@
 /* allowed maximum number of outliers. */
 #define MAX_ALLOWED_OUTLIERS 20u
 
+/* minimum time the 1pps pulses must be present to switch out from holdover */
+#define HOLDOVER_PPS_LIMIT 60u
+
 /* this is the amount of phase error that is tolerated before the timebase
    (pwm output for the 1pps output) is reset */
 #define MAX_ALLOWED_PHASE_ERR 1000u /* 1000 ns = 1 us */
@@ -216,34 +219,27 @@ static status_t holdover_handler(void)
         /* reset the time base (1pps pwm output) if the phase error
            is too large. otherwise it will take too long until the pll
            locks! */
-        if(fabs(e) > MAX_ALLOWED_PHASE_ERR)
+        if(fabsf(e) > MAX_ALLOWED_PHASE_ERR)
         {
           timebase_reset();
         }
-      }
-      else
-      {
-        holdover_tic_count = 0u;
-      }
 
-      /* 1pps pulses were okay for one minute?
-         then go to track_lock mode */
-      if(holdover_tic_count > 60u)
-      {
-        ledoff();
-        /* fast recovery after holdover! */
-        cntlstat = fast_track;
-        holdover_tic_count = 0u;
-
-        /*lint -e438 last value assigned to holdover_tic_count not used */
-        return track_lock;
+        /* if 1pps pulses were properly arriving for a certain time,
+           switch on the pll */
+        if(holdover_tic_count > HOLDOVER_PPS_LIMIT)
+        {
+          /* fast recovery after holdover! */
+          cntlstat = fast_track;
+          ledoff();
+          return track_lock;
+        }
+        /* go back, check again the gps status, 1pps pulses and phase error */
+        continue;
       }
     }
-    else
-    {
-      holdover_tic_count = 0u;
-      vTaskDelay(pdMS_TO_TICKS(100u));
-    }
+
+    holdover_tic_count = 0u;
+    vTaskDelay(pdMS_TO_TICKS(100u));
   }
 }
 
