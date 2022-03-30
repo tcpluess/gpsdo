@@ -289,6 +289,31 @@ static status_t track_lock_handler(void)
 
 
 /*============================================================================*/
+static bool read_tic(float* ret)
+/*------------------------------------------------------------------------------
+  Function:
+  reads the time interval error between "our own" and the gps 1pps pulse.
+  in:  ret -> this is where the phase error will be stored
+  out: returns true if phase error is valid.
+==============================================================================*/
+{
+  float tdc;
+  float qerr;
+  float tic = get_tic();
+  if(get_tdc(&tdc))
+  {
+    if(get_timepulse_error(&qerr))
+    {
+      /*lint -e834 operator order is ok */
+      *ret = (tic + qerr - tdc);
+      return true;
+    }
+  }
+  return false;
+}
+
+
+/*============================================================================*/
 static bool get_phase_err(float* ret)
 /*------------------------------------------------------------------------------
   Function:
@@ -326,22 +351,7 @@ static void ledoff(void)
 }
 
 
-static bool read_tic(float* result)
-{
-  float tic = get_tic();
-  float tdc;
-  float qerr;
-  if(get_tdc(&tdc))
-  {
-    if(get_timepulse_error(&qerr))
-    {
-      /*lint -e834 operator order is ok */
-      *result = (tic + qerr - tdc);
-      return true;
-    }
-  }
-  return false;
-}
+
 
 
 static uint16_t pi_control(double KP, double TI, double ee)
