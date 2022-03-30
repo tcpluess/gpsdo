@@ -268,16 +268,19 @@ static status_t track_lock_handler(void)
        go to holdover mode */
     if(pps_elapsed() && gps_check_health())
     {
-        ledon();
-        if(cntl() == false)
-        {
-          return holdover;
-        }
-        vTaskDelay(pdMS_TO_TICKS(25));
-        ledoff();
+      ledon();
+
+      /* if errors occur in the control loop, switch to holdover mode */
+      if(cntl() == false)
+      {
+        return holdover;
+      }
+      vTaskDelay(pdMS_TO_TICKS(25));
+      ledoff();
     }
     else
     {
+      /* no 1pps pulses or gps fix is invalid, switch to holdover */
       stat_e = 0.0f;
       return holdover;
     }
