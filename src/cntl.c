@@ -58,19 +58,12 @@
 /* allowed phase error to change the control loop constants */
 #define MAX_PHASE_ERR 100.0f /* ns */
 
-/* allowed maximum number of outliers. */
-#define MAX_ALLOWED_OUTLIERS 20u
-
 /* minimum time the 1pps pulses must be present to switch out from holdover */
 #define HOLDOVER_PPS_LIMIT 60u
 
 /* this is the amount of phase error that is tolerated before the timebase
    (pwm output for the 1pps output) is reset */
 #define MAX_ALLOWED_PHASE_ERR 1000u /* 1000 ns = 1 us */
-
-/* if no outliers are detected within this time, the outlier counter is
-   reset */
-#define OUTLIER_DURATION (5u * (60u * 1000u)) /* 5 min in msec */
 
 #define TAU_FASTTRACK 5.0
 #define TAU_LOCKED 100.0
@@ -351,6 +344,7 @@ static uint16_t pi_control(double KP, double TI, double ee)
      converted to the below difference equation. */
   esum = esum + 0.5*(ee + eold)/TI;
   eold = ee;
+  stat_esum = esum;
 
   /* limit the integrator ("anti windup") */
   if(esum > 65535.0)
@@ -379,153 +373,128 @@ static uint16_t pi_control(double KP, double TI, double ee)
 }
 
 
+/*============================================================================*/
 static bool cntl(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this calls the pi controller and steers the ocxo.
+  in:  none
+  out: returns true if all good, false if the phase error could not be
+       determined or if another error occured.
+==============================================================================*/
 {
-  static uint32_t lock_counter = 0u;
-  static uint32_t outlier_count = 0;
-  static uint64_t last_outlier_time = 0;
-  float e;
-  uint16_t dacval = 0u;
-
   /* phase error cannot be determined properly? then bail out */
+  float e;
   if(get_phase_err(&e) == false)
   {
     return false;
   }
+
+  /* if the phase error is less than one period, assume the pll is locked and
+     switch on the green lock led */
+  float abs_err = fabsf(e);
+  if(abs_err < MAX_PHASE_ERR)
+  {
+    ppsenable(true);
+  }
   else
   {
-    float abs_err = fabsf(e);
-
-    /* if the phase error is less than one period, assume the pll is locked and
-       switch on the green lock led */
-    if(abs_err < MAX_PHASE_ERR)
-    {
-      ppsenable(true);
-      GPIOE->BSRR = BIT_14;
-    }
-    else
-    {
-      ppsenable(false);
-      GPIOE->BSRR = BIT_30;
-    }
-
-    switch(cntlstat)
-    {
-      /* fast track: is normally used shortly after the ocxo has just
-         warmed up. use small time constant such that the phase settles
-         more quickly */
-      case fast_track:
-      {
-        cntl_status = "fast_track";
-        dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, (double)e);
-
-        /* if the phase error stays below MAX_PHASE_ERR for the time
-           FASTTRACK_TIME_LIMIT, the control loop constants can be changed
-           because we assume that the ocxo is now locked */
-        if(abs_err < MAX_PHASE_ERR)
-        {
-          lock_counter++;
-        }
-        else
-        {
-          lock_counter = 0;
-        }
-
-        /* if locked successfully for a certain time, go to the next
-           slower control mode */
-        if(lock_counter >= (FASTTRACK_TIME_LIMIT * 60u))
-        {
-          cfg.last_dacval = dacval;
-          lock_counter = 0;
-          cntlstat = locked;
-        }
-
-        break;
-      }
-
-      /* locked: use an intermediate time constant after the ocxo has
-         settled for a while. */
-      case locked:
-      {
-        cntl_status = "locked";
-        dacval = pi_control(KP_LOCKED, KI_LOCKED, (double)e);
-
-        /* if the phase error stays below MAX_PHASE_ERR for the time
-           LOCKED_TIME_LIMIT, the control loop constants are changed again,
-           because the ocxo is stable enough. if not stable enough, go back
-           to the fast_track mode */
-        if(abs_err < MAX_PHASE_ERR)
-        {
-          lock_counter++;
-        }
-        else
-        {
-          lock_counter = 0;
-          cntlstat = fast_track;
-        }
-
-        /* if locked successfully for a certain time, go to the slowest
-           (adjustable) control mode */
-        if(lock_counter >= (LOCKED_TIME_LIMIT * 60u))
-        {
-          cfg.last_dacval = dacval;
-          lock_counter = 0;
-          cntlstat = stable;
-        }
-
-        break;
-      }
-
-      /* this should be the normal operating state. */
-      case stable:
-      {
-        cntl_status = "stable";
-        /* if the phase error increases above the threshold MAX_PHASE_ERR, then
-           the ocxo is perhaps not stable enough and the control loop switches
-           its constants such that it becomes faster */
-        if(abs_err > MAX_PHASE_ERR)
-        {
-          /* count the outliers */
-          outlier_count++;
-
-          /* remember the time when the last outlier occured */
-          last_outlier_time = get_uptime_msec();
-
-          /* if the number of outliers becomes too large, switch to a faster
-             control mode */
-          if(outlier_count > MAX_ALLOWED_OUTLIERS)
-          {
-            outlier_count = 0u;
-            lock_counter = 0u;
-
-            /* go to the fast_track mode */
-            cntlstat = fast_track;
-          }
-        }
-        else
-        {
-          /* if no outliers for more than 5 minutes, reset the outlier counter */
-          uint64_t now = get_uptime_msec();
-          if(now - last_outlier_time >= OUTLIER_DURATION)
-          {
-            outlier_count = 0;
-          }
-
-          /* kp, ki and prefilter are stored in the eeprom */
-          double kp = (1.0/(OSCGAIN * (double)cfg.tau));
-          double ki = (double)cfg.tau;
-          dacval = pi_control(kp, ki, e);
-        }
-
-        break;
-      }
-    }
-
-    set_dac(dacval);
-
-    stat_esum = esum;
-    return true;
+    ppsenable(false);
   }
+
+  static uint32_t lock_counter = 0u;
+  uint16_t dacval = 0u;
+  switch(cntlstat)
+  {
+    /* fast track: is normally used shortly after the ocxo has just
+       warmed up. use small time constant such that the phase settles
+       more quickly */
+    case fast_track:
+    {
+      cntl_status = "fast_track";
+      dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, (double)e);
+
+      if(abs_err < MAX_PHASE_ERR)
+      {
+        lock_counter++;
+      }
+      else
+      {
+        lock_counter = 0u;
+      }
+
+      /* if locked successfully for a certain time, go to the next
+         slower control mode */
+      if(lock_counter >= (FASTTRACK_TIME_LIMIT * 60u))
+      {
+        cfg.last_dacval = dacval;
+        lock_counter = 0;
+        cntlstat = locked;
+      }
+
+      break;
+    }
+
+    /* locked: use an intermediate time constant after the ocxo has
+       settled for a while. */
+    case locked:
+    {
+      cntl_status = "locked";
+      dacval = pi_control(KP_LOCKED, KI_LOCKED, (double)e);
+
+      if(abs_err < MAX_PHASE_ERR)
+      {
+        lock_counter++;
+      }
+      else
+      {
+        lock_counter = 0u;
+      }
+
+      /* if locked successfully for a certain time, go to the slowest
+         (adjustable) control mode */
+      if(lock_counter >= (LOCKED_TIME_LIMIT * 60u))
+      {
+        cfg.last_dacval = dacval;
+        lock_counter = 0;
+        cntlstat = stable;
+      }
+      else if(lock_counter == 0u)
+      {
+        cntlstat = fast_track;
+      }
+
+      break;
+    }
+
+    /* this should be the normal operating state. */
+    case stable:
+    {
+      cntl_status = "stable";
+
+      /* kp, ki and prefilter are stored in the eeprom */
+      double kp = (1.0/(OSCGAIN * (double)cfg.tau));
+      double ki = (double)cfg.tau;
+      dacval = pi_control(kp, ki, e);
+
+      /* if the phase error increases above the threshold MAX_PHASE_ERR, then
+         the ocxo is perhaps not stable enough and the control loop switches
+         its constants such that it becomes faster */
+      if(abs_err > 2*MAX_PHASE_ERR)
+      {
+        cntlstat = fast_track;
+      }
+      else if(abs_err > MAX_PHASE_ERR)
+      {
+        cntlstat = locked;
+      }
+
+      break;
+    }
+  }
+
+  set_dac(dacval);
+  return true;
 }
 
 /*******************************************************************************
