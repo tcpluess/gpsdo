@@ -288,7 +288,14 @@ static status_t track_lock_handler(void)
 }
 
 
+/*============================================================================*/
 static bool get_phase_err(float* ret)
+/*------------------------------------------------------------------------------
+  Function:
+  determines the phase error in nanoseconds.
+  in:  ret -> this is where the phase error will be stored
+  out: returns true if phase error is valid.
+==============================================================================*/
 {
   /* determine the time interval (phase) error */
   float tic;
@@ -297,13 +304,13 @@ static bool get_phase_err(float* ret)
     return false;
   }
 
+  /* determine the controller error */
   float e = (float)cfg.timeoffset - tic;
   if(ret != NULL)
   {
     *ret = e;
   }
   stat_e = e;
-
   return true;
 }
 
