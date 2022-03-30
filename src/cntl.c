@@ -173,7 +173,14 @@ void cntl_restart(void)
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
 
+/*============================================================================*/
 static status_t warmup_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this is called while the ocxo needs to warm up to stabilise.
+  in:  none
+  out: returns the next status of the controller.
+==============================================================================*/
 {
   cntl_status = "warmup";
 
@@ -191,6 +198,7 @@ static status_t warmup_handler(void)
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
+
 
 /*============================================================================*/
 static status_t holdover_handler(void)
