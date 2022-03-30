@@ -69,7 +69,7 @@
    reset */
 #define OUTLIER_DURATION (5u * (60u * 1000u)) /* 5 min in msec */
 
-#define TAU_FASTTRACK 10.0
+#define TAU_FASTTRACK 5.0
 #define TAU_LOCKED 100.0
 
 #define KP_FASTTRACK (1.0/(OSCGAIN * TAU_FASTTRACK))
