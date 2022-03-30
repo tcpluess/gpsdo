@@ -69,9 +69,6 @@
    reset */
 #define OUTLIER_DURATION (5u * (60u * 1000u)) /* 5 min in msec */
 
-/* used to add a constant offset to the tic values. */
-#define TIC_OFFSET 0u
-
 #define TAU_FASTTRACK 10.0
 #define TAU_LOCKED 100.0
 
@@ -287,7 +284,7 @@ static bool get_phase_err(float* ret)
     return false;
   }
 
-  float e = tic - (float)cfg.timeoffset;
+  float e = (float)cfg.timeoffset - tic;
   if(ret != NULL)
   {
     *ret = e;
@@ -319,7 +316,7 @@ static bool read_tic(float* result)
     if(get_timepulse_error(&qerr))
     {
       /*lint -e834 operator order is ok */
-      *result = (tic - qerr + tdc) + TIC_OFFSET;
+      *result = (tic + qerr - tdc);
       return true;
     }
   }
