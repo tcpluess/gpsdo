@@ -124,8 +124,10 @@ ULIBS =
 # Define optimisation level here
 ifeq ($(RUN_FROM_FLASH), 0)
 OPT = -O0 -g3
+ASOPT = -g
 else
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+ASOPT =
 endif
 
 #
@@ -150,7 +152,8 @@ DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
-ASFLAGS  = -g -c
+ASFLAGS  = -c
+ASFLAGS += $(ASOPT)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) -Wall -Wstrict-prototypes -fverbose-asm
 CPFLAGS += -ffunction-sections -fdata-sections
