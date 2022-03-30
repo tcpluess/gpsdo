@@ -155,11 +155,19 @@ void ppsenable(bool enable)
 {
   if(enable)
   {
+    /* enable signal */
     GPIOB->BSRR = BIT_25;
+
+    /* lock led */
+    GPIOE->BSRR = BIT_14;
   }
   else
   {
+    /* enable signal */
     GPIOB->BSRR = BIT_09;
+
+    /* lock led */
+    GPIOE->BSRR = BIT_30;
   }
 }
 
