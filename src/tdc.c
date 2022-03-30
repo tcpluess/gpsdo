@@ -413,7 +413,9 @@ static bool tdc_waitready(void)
   {
     if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
     {
+#ifdef DEBUG_MESSAGES
       (void)printf("something went wrong!\n");
+#endif
       return false;
     }
   }
