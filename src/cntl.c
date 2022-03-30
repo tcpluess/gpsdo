@@ -200,8 +200,15 @@ static status_t warmup_handler(void)
   }
 }
 
-
+/*============================================================================*/
 static status_t holdover_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  checks the gpsdo status during holdover and determines when to switch
+  on the pll.
+  in:  none
+  out: returns the next status of the controller.
+==============================================================================*/
 {
   uint32_t holdover_tic_count = 0u;
   cntl_status = "holdover";
