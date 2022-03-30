@@ -251,10 +251,17 @@ static status_t holdover_handler(void)
 }
 
 
+/*============================================================================*/
 static status_t track_lock_handler(void)
+/*------------------------------------------------------------------------------
+  Function:
+  this is called when the gpsdo enters the tracking state. checks the gpsdo
+  status and, depending on the outcome, calls the control loop or switches to
+  the holdover mode.
+  in:  none
+  out: returns the next status of the controller.
+==============================================================================*/
 {
-
-
   for(;;)
   {
     /* only look at the 1pps signal if the fix is valid; if fix is invalid,
