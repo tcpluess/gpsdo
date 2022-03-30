@@ -112,8 +112,8 @@ extern volatile double stat_esum;
 
 static uint16_t pi_control(double KP, double TI, double e);
 static bool cntl(void);
-static void ledon(void);
-static void ledoff(void);
+static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
+static inline void ledoff(void) { GPIOE->BSRR = BIT_31; }
 static bool get_phase_err(float* ret);
 static status_t warmup_handler(void);
 static status_t holdover_handler(void);
@@ -322,27 +322,37 @@ static bool get_phase_err(float* ret)
   return true;
 }
 
-static void ledon(void)
-{
-  GPIOE->BSRR = BIT_15;
-}
 
-
-static void ledoff(void)
-{
-  GPIOE->BSRR = BIT_31;
-}
-
-
-
-
-
+/*============================================================================*/
 static uint16_t pi_control(double KP, double TI, double ee)
+/*------------------------------------------------------------------------------
+  Function:
+  this is the actual pi controller.
+  in:  KP -> proportional gain
+       TI -> integration time
+       ee -> error signal
+  out: returns the controller output signal
+==============================================================================*/
 {
-
   static double eold = 0.0f;
-  esum = esum + 0.5*KP*(ee + eold)/TI;
+
+  /* this is actually a bilinear transform: the integral part is
+          1                                     2  z-1
+     I = ----   with the bilinear transform s = -  --- this becomes:
+         Ti*s                                   T  z+1
+
+          T    z+1
+     I = ----  --- . note the sampling time T is 1 (second), and by converting
+         2*Ti  z-1
+                                       1   1+z^-1
+     all z to z^-1, this becomes: I = ---- ------
+                                      2*Ti 1-z^-1
+     now this is the z-transfer function of the integrator which is then
+     converted to the below difference equation. */
+  esum = esum + 0.5*(ee + eold)/TI;
   eold = ee;
+
+  /* limit the integrator ("anti windup") */
   if(esum > 65535.0)
   {
     esum = 65535.0;
@@ -351,7 +361,9 @@ static uint16_t pi_control(double KP, double TI, double ee)
   {
     esum = 0.0;
   }
-  float efc = (float)(KP*ee + esum);
+
+  /* calculate the output signal and limit it ("output saturation") */
+  float efc = (float)(KP*(ee + esum));
   if(efc > 65535.0f)
   {
     return 65535u;
