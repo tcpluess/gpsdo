@@ -239,7 +239,6 @@ void load_config(void)
     cfg.auto_svin = false;
 
     cfg.tau = 250u;
-    cfg.filt = 50u;
 
     cfg.elevation_mask = 15; /* 5 degree elevation mask */
 

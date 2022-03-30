@@ -465,7 +465,6 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("elevation mask: %d\n", cfg.elevation_mask);
     (void)printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
     (void)printf("tau: %d sec\n", cfg.tau);
-    (void)printf("prefilter: %d%%\n", cfg.filt);
     (void)printf("time offset: %ld ns\n", cfg.timeoffset);
     (void)printf("pps duration: %lu ms\n", cfg.pps_dur);
   }
@@ -681,28 +680,17 @@ static void conf_timeconst(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
-  if(argc == 2)
+  if(argc == 1)
   {
     uint16_t tau = (uint16_t)atoi(argv[0]);
-    uint8_t filt = (uint8_t)atoi(argv[1]);
 
-    if((tau > 10) && (tau <= 7200))
+    if((tau >= 10) && (tau <= 7200))
     {
       cfg.tau = tau;
     }
     else
     {
-      (void)printf("value for tau out of range: 10 < tau < 3600\n");
-    }
-
-    /* filt is uint8, i.e. it can only be positive */
-    if(filt < 100)
-    {
-      cfg.filt = filt;
-    }
-    else
-    {
-      (void)printf("value for the prefilter out of range: prefilter must be less than 100%%\n");
+      (void)printf("value for tau out of range: 10 <= tau <= 7200\n");
     }
   }
 }

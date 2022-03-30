@@ -76,7 +76,6 @@ typedef union
 
     /* control loop time constants */
     uint16_t tau;
-    uint8_t filt;
 
     /* time offset to pps */
     int32_t timeoffset;
