@@ -306,10 +306,12 @@ bool get_timepulse_error(float* result)
   (void)xTaskResumeAll();
 
   /* this should never happen */
+#ifdef DEBUG_MESSAGES
   if(valid == false)
   {
     (void)printf("# something went wrong: timepulse qerr = 0!\n");
   }
+#endif
   return valid;
 }
 
@@ -379,12 +381,16 @@ bool gps_check_health(void)
 
   if((now - sat_info.time > 1000) || (sat_info.best_snr < 25))
   {
+#ifdef DEBUG_MESSAGES
     (void)printf("# sat SNR too bad!\n");
+#endif
     return false;
   }
   if((now - pvt_info.time > 1000) || (pvt_info.tacc > 100))
   {
+#ifdef DEBUG_MESSAGES
     (void)printf("# time accuracy too bad!\n");
+#endif
     return false;
   }
 

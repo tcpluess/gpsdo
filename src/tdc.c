@@ -182,7 +182,9 @@ bool get_tdc(float* result)
     /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
     if((ns < 90.0f) || (ns > 220.0f))
     {
+#ifdef DEBUG_MESSAGES
       (void)printf("# error: wrong tdc value %f\n", ns);
+#endif
       return false;
     }
     *result = ns;
