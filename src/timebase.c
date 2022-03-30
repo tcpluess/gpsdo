@@ -170,20 +170,18 @@ void timebase_reset(void)
 float get_tic(void)
 {
   /* get the the capture value (in periods) from the and the capture register */
-  uint32_t tic = tic_capture;
+  float ti = (float)tic_capture;
   tic_capture = 0;
-
-  float ti = tic;
 
   /* this brings the time interval into the range -0.5sec to +0.5sec */
   float ret;
   if(ti > 5e6f)
   {
-    ret = (10e6f - ti);
+    ret = (ti - 10e6f);
   }
   else
   {
-    ret = -ti;
+    ret = ti;
   }
 
   /* to find the exact time interval, the interpolator value must be added */
