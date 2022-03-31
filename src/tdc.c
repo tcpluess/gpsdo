@@ -42,7 +42,9 @@
 #include "misc.h"
 #include "nvic.h"
 
+#ifdef DEBUG_MESSAGES
 #include <stdio.h>
+#endif
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
