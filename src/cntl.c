@@ -59,7 +59,7 @@
 #define MAX_PHASE_ERR 100.0f /* ns */
 
 /* minimum time the 1pps pulses must be present to switch out from holdover */
-#define HOLDOVER_PPS_LIMIT 60u
+#define HOLDOVER_PPS_LIMIT 10u
 
 /* this is the amount of phase error that is tolerated before the timebase
    (pwm output for the 1pps output) is reset */
@@ -350,9 +350,8 @@ static uint16_t pi_control(double KP, double TI, double ee)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  esum = esum + 0.5*(ee + eold)/TI;
+  esum = esum + 0.5*KP*(ee + eold)/TI;
   eold = ee;
-  stat_esum = esum;
 
   /* limit the integrator ("anti windup") */
   if(esum > 65535.0)
@@ -363,9 +362,10 @@ static uint16_t pi_control(double KP, double TI, double ee)
   {
     esum = 0.0;
   }
+  stat_esum = esum;
 
   /* calculate the output signal and limit it ("output saturation") */
-  float efc = (float)(KP*(ee + esum));
+  float efc = (float)(KP*ee + esum);
   if(efc > 65535.0f)
   {
     return 65535u;
