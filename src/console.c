@@ -493,24 +493,23 @@ static void enable_disp(int argc, const char* const argv[])
     extern bool canread(void);
     for(;;)
     {
-      uint64_t now = get_uptime_msec();
+      /* wait until the 1pps pulse arrives, this precisely synchronises the
+         console output with the controller task */
+      (void)pps_elapsed();
 
+      uint64_t now = get_uptime_msec();
       float i = get_iocxo();
       float t = get_temperature();
 
       extern const char* cntl_status;
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
-      (void)printf("%-9llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
+      (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
                    now, stat_e, stat_esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
                    pvt_info.tacc, cntl_status);
-
-      /* wait until the 1pps pulse arrives, this precisely synchronises the
-         console output with the controller task */
-      (void)pps_elapsed();
       if(canread())
       {
         return;
