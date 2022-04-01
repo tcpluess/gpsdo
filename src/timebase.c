@@ -29,7 +29,7 @@
  ******************************************************************************/
 
 #include "FreeRTOS.h"
-#include "semphr.h"
+#include "event_groups.h"
 #include "timebase.h"
 #include "stm32f407xx.h"
 #include "misc.h"
@@ -103,7 +103,7 @@ static void capture_irq(void);
 static volatile bool res;
 static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
-static SemaphoreHandle_t timepulse_semaphore;
+static EventGroupHandle_t timepulse_event;
 
 extern config_t cfg;
 
@@ -117,7 +117,7 @@ void timebase_init(void)
   tic_capture = 0;
   uptime_msec = 0ull;
 
-  vSemaphoreCreateBinary(timepulse_semaphore);
+  timepulse_event = xEventGroupCreate();
 
   /* enable the external oscillator and the mco output and start the timer */
   enable_osc();
@@ -131,7 +131,7 @@ void timebase_init(void)
 
 bool pps_elapsed(void)
 {
-  if(xSemaphoreTake(timepulse_semaphore, pdMS_TO_TICKS(1200)))
+  if(xEventGroupWaitBits(timepulse_event, BIT_00, true, true, pdMS_TO_TICKS(1200)))
   {
     return true;
   }
@@ -371,7 +371,7 @@ static void capture_irq(void)
   {
     /* read out the captured value and notify waiting tasks */
     tic_capture = TIM2->CCR3;
-    (void)xSemaphoreGiveFromISR(timepulse_semaphore, NULL);
+    (void)xEventGroupSetBitsFromISR(timepulse_event, BIT_00, NULL);
   }
 
   /* acknowledge */
