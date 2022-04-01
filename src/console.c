@@ -613,7 +613,7 @@ static void sat(int argc, const char* const argv[])
           break;
         }
       }
-      (void)printf("%s ID: %2d; C/N0: %2d dB; Azimuth: %3d deg; Elevation: %3d deg\n",
+      (void)printf("%s ID: %2d; C/N0: %2d dB; Az: %3d deg; El: %3d deg\n",
         gnss, sat_info.sats[i].svid, sat_info.sats[i].cno,
         sat_info.sats[i].azim, sat_info.sats[i].elev);
     }
