@@ -507,7 +507,10 @@ static void enable_disp(int argc, const char* const argv[])
                    now, stat_e, stat_esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
                    pvt_info.tacc, cntl_status);
-      vTaskDelay(1000);
+
+      /* wait until the 1pps pulse arrives, this precisely synchronises the
+         console output with the controller task */
+      (void)pps_elapsed();
       if(canread())
       {
         return;
