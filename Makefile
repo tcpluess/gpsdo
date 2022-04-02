@@ -121,9 +121,9 @@ endif
 INCDIR  = $(patsubst %,-I%,$(DINCDIR) $(UINCDIR))
 LIBDIR  = $(patsubst %,-L%,$(DLIBDIR) $(ULIBDIR))
 
-OBJS    = $(addsuffix .o, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
-LIST    = $(addsuffix .lss, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
-DEP     = $(addsuffix .d, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
+OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
+LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
+DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
