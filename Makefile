@@ -133,7 +133,7 @@ CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose
 CPFLAGS += -ffunction-sections -fdata-sections
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-CXXFLAGS = -c $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
+CXXFLAGS = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
 CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
 CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
