@@ -137,7 +137,7 @@ bool pps_elapsed(void)
   }
   else
   {
-#ifdef DEBUG_MESSAGES
+#ifdef DEBUG
     (void)printf("# no 1PPS!\n");
 #endif
     return false;
