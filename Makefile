@@ -127,7 +127,7 @@ DEP     = $(addsuffix .d, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
-ASFLAGS  = -c $(MCFLAGS) $(OPT) $(DEFS)
+ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
 CPFLAGS += -ffunction-sections -fdata-sections
@@ -159,12 +159,12 @@ bin/$(PROJECT).bin lst/$(PROJECT).lss $(LDSCRIPT) Makefile
 
 %.s.o : %.s $(LDSCRIPT) Makefile
 	@echo "AS      $<"
-	@$(AS) $(ASFLAGS) $< -o $@
+	@$(AS) -c $(ASFLAGS) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 %.S.o : %.S $(LDSCRIPT) Makefile
 	@echo "AS      $<"
-	@$(AS) $(ASFLAGS) $< -o $@
+	@$(AS) -c $(ASFLAGS) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 bin/$(PROJECT).elf: $(OBJS) $(LDSCRIPT) Makefile
