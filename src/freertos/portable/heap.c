@@ -87,6 +87,7 @@ void __env_unlock(void)
 
 void __malloc_lock(struct _reent* r)
 {
+  (void)r;
   bool insideAnISR = xPortIsInsideInterrupt();
 
   /* no malloc inside isr! */
@@ -97,6 +98,7 @@ void __malloc_lock(struct _reent* r)
 
 void __malloc_unlock(struct _reent* r)
 {
+  (void)r;
   (void)xTaskResumeAll();
 }
 
