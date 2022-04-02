@@ -39,18 +39,15 @@ TRGT = arm-none-eabi-
 CC   = $(TRGT)gcc
 CXX  = $(TRGT)g++
 CP   = $(TRGT)objcopy
-AS   = $(TRGT)as
+AS   = $(TRGT)gcc -x assembler-with-cpp
 SZ   = $(TRGT)size
 GDB  = $(TRGT)gdb
 DUMP = $(TRGT)objdump
 
 MCU  = cortex-m4
 
-# List all default C defines here, like -D_DEBUG=1
-DDEFS =
-
-# List all default ASM defines here, like -D_DEBUG=1
-DADEFS =
+# List all defines here, like -D_DEBUG=1
+DEFS =
 
 # List all default directories to look for include files here
 DINCDIR = $(sort $(dir $(call rwildcard,src/include/,*)))
@@ -63,28 +60,23 @@ DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
 PROJECT        = gnssdo
-RUN_FROM_FLASH = 1
+RUN_FROM_FLASH = 0
 HEAP_SIZE      = 4k
 STACK_SIZE     = 2k
+USE_HARD_FPU   = 1
 
 #
 # Define linker script file here
 #
 ifeq ($(RUN_FROM_FLASH), 0)
 LDSCRIPT = ./prj/stm32f407ve_ram.ld
-FULL_PRJ = $(PROJECT)
 else
 LDSCRIPT = ./prj/stm32f407ve_flash.ld
-FULL_PRJ = $(PROJECT)
 endif
 
 #
-# Define FPU settings here. if FPU usage is not defined,
-# default to ENABLE.
+# Define FPU settings here.
 #
-ifeq ($(USE_HARD_FPU),)
-USE_HARD_FPU = 1
-endif
 ifeq ($(USE_HARD_FPU), 0)
 FPU =
 else
@@ -93,14 +85,8 @@ endif
 
 # when running from RAM, assume this is a debug build ...
 ifeq ($(RUN_FROM_FLASH), 0)
-DDEFS += -DDEBUG
+DEFS += -DDEBUG
 endif
-
-# List all user C define here, like -D_DEBUG=1
-UDEFS =
-
-# Define ASM defines here
-UADEFS =
 
 # List C source files here
 SRC = $(call rwildcard,src/,*.c)
@@ -110,6 +96,7 @@ CXXSRC = $(call rwildcard,src/,*.cpp)
 
 # List ASM source files here
 ASRC = $(call rwildcard,src/,*.s)
+ASRC += $(call rwildcard,src/,*.S)
 
 # List all user directories here
 UINCDIR = src/freertos/include \
@@ -123,11 +110,9 @@ ULIBS =
 
 # Define optimisation level here
 ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3
-ASOPT = -g
+OPT = -O0 -g3 -Wa,-g
 else
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
-ASOPT =
 endif
 
 #
@@ -137,39 +122,31 @@ endif
 INCDIR  = $(patsubst %,-I%,$(DINCDIR) $(UINCDIR))
 LIBDIR  = $(patsubst %,-L%,$(DLIBDIR) $(ULIBDIR))
 
-ifeq ($(RUN_FROM_FLASH), 0)
-
-DEFS    = $(DDEFS) $(UDEFS) -DRUN_FROM_FLASH=0 -DVECT_TAB_SRAM
-else
-
-DEFS    = $(DDEFS) $(UDEFS) -DRUN_FROM_FLASH=1
-endif
-
-ADEFS   = $(DADEFS) $(UADEFS)
-OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
-LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
-DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
+OBJS    = $(addsuffix .o, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
+LIST    = $(addsuffix .lss, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
+DEP     = $(addsuffix .d, $(CASRC) $(ASRC) $(SRC) $(CXXSRC))
 LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
-ASFLAGS  = -c
-ASFLAGS += $(ASOPT)
+ASFLAGS  = -c $(MCFLAGS) $(OPT) $(DEFS)
 
-CPFLAGS  = $(MCFLAGS) $(OPT) -Wall -Wstrict-prototypes -fverbose-asm
+CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
 CPFLAGS += -ffunction-sections -fdata-sections
-CPFLAGS += $(DEFS)
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-CXXFLAGS = -c $(MCFLAGS) $(OPT) $(DEFS) -std=c++17 -fno-rtti -fno-exceptions
-CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit
+CXXFLAGS = -c $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
+CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
+CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
-LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT) -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE) -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
-LDFLAGS += -Wl,-Map=lst/$(FULL_PRJ).map,--cref,--gc-sections,--no-warn-mismatch $(LIBDIR)
+LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT)
+LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
+LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
+LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch $(LIBDIR)
 
 .PHONY: all
-all: $(OBJS) bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).s19 \
-bin/$(FULL_PRJ).bin lst/$(FULL_PRJ).lss $(LDSCRIPT) Makefile
-	@$(SZ) --format=Berkeley -d bin/$(FULL_PRJ).elf
+all: $(OBJS) bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).s19 \
+bin/$(PROJECT).bin lst/$(PROJECT).lss $(LDSCRIPT) Makefile
+	@$(SZ) --format=Berkeley -d bin/$(PROJECT).elf
 
 %.c.o : %.c $(LDSCRIPT) Makefile
 	@echo "CC      $<"
@@ -186,25 +163,30 @@ bin/$(FULL_PRJ).bin lst/$(FULL_PRJ).lss $(LDSCRIPT) Makefile
 	@$(AS) $(ASFLAGS) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
-bin/$(FULL_PRJ).elf: $(OBJS) $(LDSCRIPT) Makefile
+%.S.o : %.S $(LDSCRIPT) Makefile
+	@echo "AS      $<"
+	@$(AS) $(ASFLAGS) $< -o $@
+	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
+
+bin/$(PROJECT).elf: $(OBJS) $(LDSCRIPT) Makefile
 	@echo "LD      $@"
 	@$(CXX) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
-bin/$(FULL_PRJ).hex: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
+bin/$(PROJECT).hex: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O ihex $< $@
 
-bin/$(FULL_PRJ).s19: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
+bin/$(PROJECT).s19: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O srec $< $@
 
-bin/$(FULL_PRJ).bin:  bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
+bin/$(PROJECT).bin:  bin/$(PROJECT).elf $(LDSCRIPT) Makefile
 	@echo "OBJCOPY $@"
 	@$(CP) -O binary $< $@
 
-lst/$(FULL_PRJ).lss: bin/$(FULL_PRJ).elf $(LDSCRIPT) Makefile
-	@echo "OBJDUMP $(FULL_PRJ).elf"
-	@$(DUMP) -S -d bin/$(FULL_PRJ).elf > $@
+lst/$(PROJECT).lss: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
+	@echo "OBJDUMP $(PROJECT).elf"
+	@$(DUMP) -S -d bin/$(PROJECT).elf > $@
 
 .PHONY: doc
 doc:
@@ -214,7 +196,7 @@ doc:
 .PHONY: clean
 clean:
 	@rm -rfv $(OBJS) $(LIST) $(DEP)
-	@rm -rfv bin/$(FULL_PRJ).elf bin/$(FULL_PRJ).hex bin/$(FULL_PRJ).bin bin/$(FULL_PRJ).s19
-	@rm -rfv lst/$(FULL_PRJ).lss lst/$(FULL_PRJ).map
+	@rm -rfv bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).bin bin/$(PROJECT).s19
+	@rm -rfv lst/$(PROJECT).lss lst/$(PROJECT).map
 
 -include $(DEP)
