@@ -35,14 +35,13 @@ MAKEFLAGS += --output-sync=target
 
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
-TRGT = arm-none-eabi-
-CC   = $(TRGT)gcc
-CXX  = $(TRGT)g++
-CP   = $(TRGT)objcopy
-AS   = $(TRGT)gcc -x assembler-with-cpp
-SZ   = $(TRGT)size
-GDB  = $(TRGT)gdb
-DUMP = $(TRGT)objdump
+CC   = arm-none-eabi-gcc
+CXX  = arm-none-eabi-g++
+CP   = arm-none-eabi-objcopy
+AS   = arm-none-eabi-gcc -x assembler-with-cpp
+SZ   = arm-none-eabi-size
+GDB  = arm-none-eabi-gdb
+DUMP = arm-none-eabi-objdump
 
 MCU  = cortex-m4
 
