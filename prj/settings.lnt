@@ -8,7 +8,7 @@
 
  -d__attribute__(x)
  -d__GNUC__
- -dDEBUG_MESSAGES
+ -dDEBUG
 
 -e620 /* suspicious constant L or one */
 -e747 /* significant prototype coercion */

@@ -42,7 +42,7 @@
 #include "misc.h"
 #include "nvic.h"
 
-#ifdef DEBUG_MESSAGES
+#ifdef DEBUG
 #include <stdio.h>
 #endif
 
@@ -184,7 +184,7 @@ bool get_tdc(float* result)
     /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
     if((ns < 90.0f) || (ns > 220.0f))
     {
-#ifdef DEBUG_MESSAGES
+#ifdef DEBUG
       (void)printf("# error: wrong tdc value %f\n", ns);
 #endif
       return false;
@@ -415,7 +415,7 @@ static bool tdc_waitready(void)
   {
     if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
     {
-#ifdef DEBUG_MESSAGES
+#ifdef DEBUG
       (void)printf("something went wrong!\n");
 #endif
       return false;

@@ -74,7 +74,7 @@ _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
     case NMEA_FD:
     {
       const unsigned char *p = (const unsigned char*)ptr;
-      for(int i = 0; i < len; i++)
+      for(size_t i = 0; i < len; i++)
       {
         if(*p == '\n')
         {
@@ -118,7 +118,7 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
     case STDIN_FILENO:
     {
       extern int kbhit(void);
-      int numread;
+      size_t numread;
       char* dest = (char*)ptr;
 
       for(numread = 0; numread < len; numread++)
@@ -154,18 +154,27 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
 
 int _close_r(struct _reent *r, int file)
 {
+  (void)r;
+  (void)file;
   return 0;
 }
 
 
 int _open_r(struct _reent *ptr, const char *file, int flags, int mode)
 {
+  (void)file;
+  (void)flags;
+  (void)mode;
   ptr->_errno = ENODEV;
   return -1;
 }
 
 _off_t _lseek_r(struct _reent *r, int file, _off_t ptr, int dir)
 {
+  (void)r;
+  (void)file;
+  (void)ptr;
+  (void)dir;
   /* always indicate we are at file beginning */
   return (_off_t)0;
 }
@@ -175,8 +184,10 @@ _off_t _lseek_r(struct _reent *r, int file, _off_t ptr, int dir)
 //    struct _reent *r,
 //    int file,
 //    struct stat *st)
-int _stat_r(struct _reent *ptr, const char *file, struct stat *st)
+int _stat_r(struct _reent *r, const char *file, struct stat *st)
 {
+  (void)r;
+  (void)file;
   /* always set as character device */
   st->st_mode = S_IFCHR;
   return 0;
@@ -185,6 +196,8 @@ int _stat_r(struct _reent *ptr, const char *file, struct stat *st)
 
 int _fstat_r(struct _reent *r, int file, struct stat *st)
 {
+  (void)r;
+  (void)file;
   /* always set as character device */
   st->st_mode = S_IFCHR;
   return 0;
@@ -202,15 +215,16 @@ int _getpid(void)
 __attribute__((used))
 int _kill(int pid, int sig)
 {
+  (void)pid;
+  (void)sig;
   errno = ENOTSUP;
   return -1;
 }
 
 void _exit(int status)
 {
-  while (1) {
-    ;
-  }
+  (void)status;
+  for(;;);
 }
 
 
