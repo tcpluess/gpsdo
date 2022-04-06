@@ -38,6 +38,7 @@
 #include "temperature.h"
 #include "adc.h"
 
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -95,6 +96,7 @@ static void uptime(int argc, const char* const argv[]);
 static void offset(int argc, const char* const argv[]);
 static void info(int argc, const char* const argv[]);
 static void set_pps_dur(int argc, const char* const argv[]);
+static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -106,20 +108,20 @@ static uint32_t wrpos = 0;
 static command_t cmds[] =
 {
   {help,            "help",       "display this screen"},
-  {showcfg,         "show_cfg",   "display all configuration items"},
-  {savecfg,         "save_cfg",   "save the configuration to EEPROM"},
-  {conf_gnss,       "gnss",       "[gps|glonass|galileo] - enables the selected GNSS"},
-  {conf_elev_mask,  "elev_mask",  "configures an elevation mask"},
+  {showcfg,         "conf",       "display all configuration items"},
+  {savecfg,         "save",       "save the configuration to EEPROM"},
+  {conf_gnss,       "gnss",       "[gps|glonass|galileo] - select GNSS to use"},
+  {conf_elev_mask,  "elev_mask",  "configures an elevation mask, must be between 0deg and 90deg"},
   {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
   {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
   {sat,             "sat",        "display satellite info"},
   {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
-  {conf_timeconst,  "timeconst",  "<tau> <prefilter> - sets the time constant (sec) and the prefilter (%)"},
-  {man_hold,        "hold",       "on|off - holds the DAC value"},
+  {conf_timeconst,  "timeconst",  "<tau> - sets the time constant (sec) between 10s and 7200s"},
+  {man_hold,        "hold",       "<number> | off - holds the DAC value to <number>, disabling the control loop, or sets the DAC automatically"},
   {uptime,          "uptime",     "shows the current uptime"},
-  {offset,          "offset",     "sets the offset of the pps output"},
+  {offset,          "offset",     "sets the offset of the pps output in ns, must be between -0.5s to 0.5s"},
   {info,            "info",       "show version information"},
-  {set_pps_dur,     "pps_dur",    "pps_dur <ms> configures the duration of the PPS pulse"},
+  {set_pps_dur,     "pps_dur",    "<ms> configures the duration of the PPS pulse"},
 };
 
 /* not static because it must be globally accessible */
@@ -390,21 +392,12 @@ static void conf_elev_mask(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
-  if(argc != 1)
+  if(argc == 1)
   {
-    (void)printf("unknown syntax\n");
-  }
-  else
-  {
-    int elevmask = atoi(argv[0]);
-    if((elevmask < 0) || (elevmask > 90))
-    {
-      (void)printf("elevation mask %d deg out of range!\n", elevmask);
-    }
-    else
+    int32_t elevmask;
+    if(str2num(argv[0], &elevmask, 0, 90))
     {
       cfg.elevation_mask = (int8_t)elevmask;
-      (void)printf("set the elevation mask to %d deg\n", elevmask);
     }
   }
 }
@@ -549,11 +542,12 @@ static void svin(int argc, const char* const argv[])
     /* svin <duration> <accuracy> */
     case 2:
     {
-      uint32_t time = (unsigned)atoi(argv[0]);
-      uint32_t accuracy = (unsigned)atoi(argv[1]);
-      if((time != 0) && (accuracy != 0))
+      int32_t tm;
+      int32_t accuracy;
+      if(str2num(argv[0], &tm, 1, UINT32_MAX) &&
+         str2num(argv[1], &accuracy, 0, UINT32_MAX))
       {
-        cfg.svin_dur = time;
+        cfg.svin_dur = tm;
         cfg.accuracy_limit = accuracy;
         start_svin();
       }
@@ -684,15 +678,10 @@ static void conf_timeconst(int argc, const char* const argv[])
 {
   if(argc == 1)
   {
-    uint16_t tau = (uint16_t)atoi(argv[0]);
-
-    if((tau >= 10) && (tau <= 7200))
+    int32_t tau;
+    if(str2num(argv[0], &tau, 10, 7200))
     {
       cfg.tau = tau;
-    }
-    else
-    {
-      (void)printf("value for tau out of range: 10 <= tau <= 7200\n");
     }
   }
 }
@@ -711,13 +700,19 @@ static void man_hold(int argc, const char* const argv[])
   extern bool dac_hold;
   if(argc == 1)
   {
-    if(!strcmp(argv[0], "on"))
-    {
-      dac_hold = true;
-    }
-    else if(!strcmp(argv[0], "off"))
+    /* command given is "hold off" ? */
+    if(!strcmp(argv[0], "off"))
     {
       dac_hold = false;
+    }
+    else
+    {
+      int32_t dac;
+      if(str2num(argv[0], &dac, 0, INT16_MAX))
+      {
+        //TODO: SET DAC
+        (void)dac;
+      }
     }
   }
 }
@@ -762,7 +757,11 @@ static void offset(int argc, const char* const argv[])
   {
     /* when the setpoint is changed, then restart the control loop.
        otherwise, it takes too long until the pll locks with the new phase. */
-    cfg.timeoffset = atoi(argv[0]);
+    int32_t off;
+    if(str2num(argv[0], &off, -500000000, 500000000))
+    {
+      cfg.timeoffset = off;
+    }
   }
 }
 
@@ -796,17 +795,39 @@ static void set_pps_dur(int argc, const char* const argv[])
 {
   if(argc == 1)
   {
-    uint32_t dur = (unsigned)atoi(argv[0]);
-
-    if((dur > 0) && (dur < 1000))
+    int32_t dur;
+    if(str2num(argv[0], &dur, 1, 999))
     {
       cfg.pps_dur = dur;
       set_pps_duration(dur);
-      return;
     }
   }
+}
 
-  (void)printf("invalid parameter\n");
+
+/*============================================================================*/
+static bool str2num(const char* str, int32_t* value, int32_t min, int32_t max)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  char* end = NULL;
+  int32_t num = strtol(str, &end, 10);
+  if(end == str)
+  {
+    (void)printf("cannot convert string");
+    return false;
+  }
+  if((errno == ERANGE) || (num > max) || (num < min))
+  {
+    (void)printf("value out of range");
+    return false;
+  }
+  *value = num;
+  return true;
 }
 
 /*******************************************************************************
