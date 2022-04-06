@@ -547,8 +547,8 @@ static void svin(int argc, const char* const argv[])
       if(str2num(argv[0], &tm, 1, UINT32_MAX) &&
          str2num(argv[1], &accuracy, 0, UINT32_MAX))
       {
-        cfg.svin_dur = tm;
-        cfg.accuracy_limit = accuracy;
+        cfg.svin_dur = (uint32_t)tm;
+        cfg.accuracy_limit = (uint32_t)accuracy;
         start_svin();
       }
       break;
@@ -681,7 +681,7 @@ static void conf_timeconst(int argc, const char* const argv[])
     int32_t tau;
     if(str2num(argv[0], &tau, 10, 7200))
     {
-      cfg.tau = tau;
+      cfg.tau = (uint16_t)tau;
     }
   }
 }
@@ -798,8 +798,8 @@ static void set_pps_dur(int argc, const char* const argv[])
     int32_t dur;
     if(str2num(argv[0], &dur, 1, 999))
     {
-      cfg.pps_dur = dur;
-      set_pps_duration(dur);
+      cfg.pps_dur = (uint32_t)dur;
+      set_pps_duration(cfg.pps_dur);
     }
   }
 }
@@ -809,25 +809,38 @@ static void set_pps_dur(int argc, const char* const argv[])
 static bool str2num(const char* str, int32_t* value, int32_t min, int32_t max)
 /*------------------------------------------------------------------------------
   Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
+  convert string to number, but more safely than atoi().
+  in:  str -> string
+       value -> pointer to the result
+       min -> minimum (inclusive)
+       max -> maximum (inclusive)
+  out: returns true if the conversion succeeds, otherwise sets errno, prints an
+       error message and returns false.
 ==============================================================================*/
 {
   char* end = NULL;
+  errno = 0;
   int32_t num = strtol(str, &end, 10);
-  if(end == str)
+  if((end == str) || (*end != '\0'))
   {
-    (void)printf("cannot convert string");
-    return false;
+    errno = EINVAL;
+    goto error;
   }
-  if((errno == ERANGE) || (num > max) || (num < min))
+  if(errno == ERANGE)
   {
-    (void)printf("value out of range");
-    return false;
+    goto error;
+  }
+  if((num < min) || (num > max))
+  {
+    errno = ERANGE;
+    goto error;
   }
   *value = num;
   return true;
+
+error:
+  (void)printf("invalid value or value out of range: %s\n", str);
+  return false;
 }
 
 /*******************************************************************************
