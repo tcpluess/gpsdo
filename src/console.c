@@ -37,6 +37,7 @@
 #include "timebase.h"
 #include "temperature.h"
 #include "adc.h"
+#include "dac.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -544,8 +545,8 @@ static void svin(int argc, const char* const argv[])
     {
       int32_t tm;
       int32_t accuracy;
-      if(str2num(argv[0], &tm, 1, UINT32_MAX) &&
-         str2num(argv[1], &accuracy, 0, UINT32_MAX))
+      if(str2num(argv[0], &tm, 1, INT32_MAX) &&
+         str2num(argv[1], &accuracy, 0, INT32_MAX))
       {
         cfg.svin_dur = (uint32_t)tm;
         cfg.accuracy_limit = (uint32_t)accuracy;
@@ -708,10 +709,10 @@ static void man_hold(int argc, const char* const argv[])
     else
     {
       int32_t dac;
-      if(str2num(argv[0], &dac, 0, INT16_MAX))
+      if(str2num(argv[0], &dac, 0, UINT16_MAX))
       {
-        //TODO: SET DAC
-        (void)dac;
+        dac_hold = true;
+        set_dac((uint16_t)dac);
       }
     }
   }
