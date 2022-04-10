@@ -65,11 +65,11 @@
    (pwm output for the 1pps output) is reset */
 #define MAX_ALLOWED_PHASE_ERR 1000u /* 1000 ns = 1 us */
 
-#define TAU_FASTTRACK 5.0
+#define TAU_FASTTRACK 10.0
 #define TAU_LOCKED 100.0
 
 #define KP_FASTTRACK (1.0/(OSCGAIN * TAU_FASTTRACK))
-#define KI_FASTTRACK (TAU_FASTTRACK)
+#define KI_FASTTRACK (1.0*TAU_FASTTRACK)
 #define KP_LOCKED (1.0/(OSCGAIN * TAU_LOCKED))
 #define KI_LOCKED (TAU_LOCKED)
 
@@ -111,6 +111,7 @@ static bool get_phase_err(float* ret);
 static status_t warmup_handler(void);
 static status_t holdover_handler(void);
 static status_t track_lock_handler(void);
+static double limit(double val);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -118,7 +119,7 @@ static status_t track_lock_handler(void);
 
 static double esum;
 const char* cntl_status = "";
-
+bool dac_hold;
 extern config_t cfg;
 static controlstatus_t cntlstat;
 
@@ -134,6 +135,7 @@ void cntl_task(void* param)
 
   esum = cfg.last_dacval;
   stat_esum = esum;
+  dac_hold = false;
 
   for(;;)
   {
@@ -325,6 +327,31 @@ static bool get_phase_err(float* ret)
 
 
 /*============================================================================*/
+static double limit(double val)
+/*------------------------------------------------------------------------------
+  Function:
+  limits the given value to the range 0..65535.
+  in:  val -> value
+  out: returns the value itself if it is between 0 and 65535, otherwise it
+       saturates accordingly.
+==============================================================================*/
+{
+  if(val > 65535.0)
+  {
+    return 65535.0;
+  }
+  else if(val < 0.0)
+  {
+    return 0;
+  }
+  else
+  {
+    return val;
+  }
+}
+
+
+/*============================================================================*/
 static uint16_t pi_control(double KP, double TI, double ee)
 /*------------------------------------------------------------------------------
   Function:
@@ -350,34 +377,13 @@ static uint16_t pi_control(double KP, double TI, double ee)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  esum = esum + 0.5*KP*(ee + eold)/TI;
+  esum = limit(esum + KP*(ee + eold)/(2.0*TI));
   eold = ee;
-
-  /* limit the integrator ("anti windup") */
-  if(esum > 65535.0)
-  {
-    esum = 65535.0;
-  }
-  else if(esum < 0.0)
-  {
-    esum = 0.0;
-  }
   stat_esum = esum;
 
   /* calculate the output signal and limit it ("output saturation") */
-  float efc = (float)(KP*ee + esum);
-  if(efc > 65535.0f)
-  {
-    return 65535u;
-  }
-  else if(efc < 0.0f)
-  {
-    return 0u;
-  }
-  else
-  {
-    return (uint16_t)efc;
-  }
+  double efc = limit(KP*ee + esum);
+  return (uint16_t)efc;
 }
 
 
@@ -501,7 +507,10 @@ static bool cntl(void)
     }
   }
 
-  set_dac(dacval);
+  if(dac_hold == false)
+  {
+    set_dac(dacval);
+  }
   return true;
 }
 
