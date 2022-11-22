@@ -74,7 +74,7 @@ typedef struct
   uint32_t vacc;
   uint16_t pdop;
   uint64_t time;
-} gpsinfo_t;
+} pvtinfo_t;
 
 typedef struct
 {
@@ -113,7 +113,15 @@ typedef struct
   } sats[MAX_SV];
   uint8_t best_snr;
   uint64_t time;
-} sv_info_t;
+} satinfo_t;
+
+typedef struct
+{
+  const pvtinfo_t* pvt;
+  const svindata_t* svi;
+  const dopinfo_t* dop;
+  const satinfo_t* sat;
+} gnssstatus_t;
 
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)
@@ -213,36 +221,6 @@ extern bool gps_waitready(void);
 
 
 /*============================================================================*/
-extern bool gps_wait_pvt(void);
-/*------------------------------------------------------------------------------
-  Function:
-  wait until position, velocity and time are known
-  in:  none
-  out: returns true when pvt data is available
-==============================================================================*/
-
-
-/*============================================================================*/
-extern bool gps_wait_sat(void);
-/*------------------------------------------------------------------------------
-  Function:
-  wait until satellite infos are collected
-  in:  none
-  out: returns true when sat data is available
-==============================================================================*/
-
-
-/*============================================================================*/
-extern void gps_timepulse_notify(void);
-/*------------------------------------------------------------------------------
-  Function:
-  wait until all data has been received
-  in:  none
-  out: none
-==============================================================================*/
-
-
-/*============================================================================*/
 extern bool gps_check_health(void);
 /*------------------------------------------------------------------------------
   Function:
@@ -250,6 +228,17 @@ extern bool gps_check_health(void);
   in:  none
   out: returns false if the gps reception is unstable/unreliable
 ==============================================================================*/
+
+
+/*============================================================================*/
+extern const gnssstatus_t* get_gnss_status(void);
+/*------------------------------------------------------------------------------
+  Function:
+  get position, velocity, time, survey etc. status info.
+  in:  none
+  out: returns a pointer to a gpsstatus_t structure with all data
+==============================================================================*/
+
 
 /*******************************************************************************
  * END OF CODE

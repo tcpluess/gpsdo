@@ -96,6 +96,19 @@
 #define FIX_3D 3u
 #define FIX_TIME 5u
 
+#define EVENT_DO_SVIN BIT_00
+#define EVENT_DISABLE_TMODE BIT_01
+#define EVENT_SET_FIXPOS_MODE BIT_02
+
+#define EVENT_TP_RECEIVED BIT_04
+#define EVENT_PVT_RECEIVED BIT_05
+#define EVENT_SAT_RECEIVED BIT_06
+#define EVENT_SVIN_RECEIVED BIT_07
+#define EVENT_TIMEPULSE_OK BIT_08
+#define EVENT_ACK_RECEIVED BIT_09
+#define EVENT_NAK_RECEIVED BIT_10
+#define EVENT_RECONFIG_GNSS BIT_11
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -144,12 +157,6 @@ typedef struct
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static qerr_t qerr;
-gpsinfo_t pvt_info;
-svindata_t svin_info;
-sv_info_t sat_info;
-dopinfo_t dop_info;
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
@@ -161,10 +168,10 @@ static void enable_txempty_irq(void);
 static void disable_txempty_irq(void);
 static void uart_irq_handler(void);
 static bool gps_wait_ack(void);
-static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
+static void unpack_pvt(const uint8_t* rdata, pvtinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
 static void unpack_tp(const uint8_t* rdata, qerr_t* ret);
-static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
+static void unpack_sv(const uint8_t* rdata, satinfo_t* svi);
 static void unpack_dop(const uint8_t* rdata, dopinfo_t* dop);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
@@ -183,19 +190,19 @@ static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
 static EventGroupHandle_t ublox_events;
 
+static qerr_t qerr;
+static pvtinfo_t pvt_info;
+static svindata_t svin_data;
+static satinfo_t sat_info;
+static dopinfo_t dop_info;
 
-#define EVENT_DO_SVIN BIT_00
-#define EVENT_DISABLE_TMODE BIT_01
-#define EVENT_SET_FIXPOS_MODE BIT_02
-
-#define EVENT_TP_RECEIVED BIT_04
-#define EVENT_PVT_RECEIVED BIT_05
-#define EVENT_SAT_RECEIVED BIT_06
-#define EVENT_SVIN_RECEIVED BIT_07
-#define EVENT_TIMEPULSE_OK BIT_08
-#define EVENT_ACK_RECEIVED BIT_09
-#define EVENT_NAK_RECEIVED BIT_10
-#define EVENT_RECONFIG_GNSS BIT_11
+static gnssstatus_t stat =
+{
+  .pvt = &pvt_info,
+  .svi = &svin_data,
+  .dop = &dop_info,
+  .sat = &sat_info
+};
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -275,15 +282,15 @@ void gps_task(void* param)
     if(bits & EVENT_SVIN_RECEIVED)
     {
       /* if the svin is finished, disable further svin messages */
-      if((svin_info.valid == true) && (svin_info.active == false))
+      if((svin_data.valid == true) && (svin_data.active == false))
       {
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
 
         /* copy the svin data to the configuration */
-        cfg.x = svin_info.x;
-        cfg.y = svin_info.y;
-        cfg.z = svin_info.z;
-        cfg.accuracy = (uint32_t)sqrt((double)svin_info.meanv);
+        cfg.x = svin_data.x;
+        cfg.y = svin_data.y;
+        cfg.z = svin_data.z;
+        cfg.accuracy = (uint32_t)sqrt((double)svin_data.meanv);
         cfg.fixpos_valid = true;
       }
     }
@@ -362,33 +369,6 @@ bool gps_waitready(void)
 }
 
 
-bool gps_wait_pvt(void)
-{
-  uint32_t bits = EVENT_PVT_RECEIVED;
-  if(xEventGroupWaitBits(ublox_events, bits, true, true, portMAX_DELAY))
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-bool gps_wait_sat(void)
-{
-  uint32_t bits = EVENT_SAT_RECEIVED;
-  if(xEventGroupWaitBits(ublox_events, bits, true, true, portMAX_DELAY))
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-
 bool gps_check_health(void)
 {
   uint64_t now = get_uptime_msec();
@@ -409,6 +389,12 @@ bool gps_check_health(void)
   }
 
   return true;
+}
+
+
+const gnssstatus_t* get_gnss_status(void)
+{
+  return &stat;
 }
 
 /*******************************************************************************
@@ -503,7 +489,7 @@ static void rx_task(void* param)
 
           case UBX_ID_TIM_SVIN:
           {
-            unpack_svin(rx.msg, &svin_info);
+            unpack_svin(rx.msg, &svin_data);
             (void)xEventGroupSetBits(ublox_events, EVENT_SVIN_RECEIVED);
             break;
           }
@@ -807,56 +793,58 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
 ==============================================================================*/
 {
   irqstatus_t txstatus = ubx_header1;
-  irqstatus_t nextstatus = ubx_header1;
+  bool done = false;
   uint8_t cka = 0;
   uint8_t ckb = 0;
   uint32_t read_pos = 0;
   uint8_t tmpdata = 0;
 
-  for(;;)
+  do
   {
     switch(txstatus)
     {
-      /* send sync1 then sync2; from here on, all the data to be sent is in the tx buffer */
+      /* send sync1 then sync2; from here on, all the data to be sent is in the
+         tx buffer. exclude the sync bytes and the checksum itself from the
+         checksum calculation. */
       case ubx_header1:
       {
         tmpdata = SYNC1;
-        nextstatus = ubx_header2;
-        break;
+        txstatus = ubx_header2;
+        goto send;
       }
 
       case ubx_header2:
       {
         tmpdata = SYNC2;
-        nextstatus = ubx_class;
-        break;
+        txstatus = ubx_class;
+        goto send;
       }
 
       case ubx_class:
       {
         tmpdata = tx->msgclass;
-        nextstatus = ubx_id;
+        txstatus = ubx_id;
         break;
       }
 
       case ubx_id:
       {
         tmpdata = tx->msgid;
-        nextstatus = ubx_len_lsb;
+        txstatus = ubx_len_lsb;
         break;
       }
 
       case ubx_len_lsb:
       {
         tmpdata = (uint8_t)tx->len;
-        nextstatus = ubx_len_msb;
+        txstatus = ubx_len_msb;
         break;
       }
 
       case ubx_len_msb:
       {
         tmpdata = tx->len >> 8;
-        nextstatus = ubx_data;
+        txstatus = ubx_data;
         break;
       }
 
@@ -866,7 +854,7 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
         read_pos++;
         if(read_pos == tx->len)
         {
-          nextstatus = ubx_cka;
+          txstatus = ubx_cka;
         }
         break;
       }
@@ -874,14 +862,15 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       case ubx_cka:
       {
         tmpdata = cka;
-        nextstatus = ubx_ckb;
-        break;
+        txstatus = ubx_ckb;
+        goto send;
       }
 
       case ubx_ckb:
       {
         tmpdata = ckb;
-        break;
+        done = true;
+        goto send;
       }
 
       default:
@@ -890,26 +879,15 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       }
     }
 
-    /* exclude the sync bytes and the checksum itself from the
-       checksum calculation. */
-    if((txstatus != ubx_cka) && (txstatus != ubx_ckb) &&
-       (txstatus != ubx_header1) && (txstatus != ubx_header2))
-    {
-      /* fletcher8 checksum */
-      cka = cka + tmpdata;
-      ckb = ckb + cka;
-    }
+    /* fletcher8 checksum */
+    cka = cka + tmpdata;
+    ckb = ckb + cka;
 
+send:
     (void)xStreamBufferSend(txstream, &tmpdata, 1, portMAX_DELAY);
     enable_txempty_irq();
 
-    if(txstatus == ubx_ckb)
-    {
-      return;
-    }
-
-    txstatus = nextstatus;
-  }
+  } while(!done);
 }
 
 
@@ -971,7 +949,7 @@ static bool gps_wait_ack(void)
 
 
 /*============================================================================*/
-static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info)
+static void unpack_pvt(const uint8_t* rdata, pvtinfo_t* info)
 /*------------------------------------------------------------------------------
   Function:
   unpacks the NAV-PVT (position, velocity, time) message
@@ -1064,7 +1042,7 @@ static void unpack_tp(const uint8_t* rdata, qerr_t* ret)
 
 
 /*============================================================================*/
-static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
+static void unpack_sv(const uint8_t* rdata, satinfo_t* svi)
 /*------------------------------------------------------------------------------
   Function:
   unpack the NAV-SAT message
