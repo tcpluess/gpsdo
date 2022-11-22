@@ -106,7 +106,7 @@ static uint16_t pi_control(double KP, double TI, float u);
 static bool cntl(void);
 static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
 static inline void ledoff(void) { GPIOE->BSRR = BIT_31; }
-static bool get_phase_err(float* ret);
+static bool get_phase_err(void);
 static status_t warmup_handler(void);
 static status_t holdover_handler(void);
 static status_t track_lock_handler(void);
@@ -116,6 +116,7 @@ static status_t track_lock_handler(void);
  ******************************************************************************/
 
 static float esum;
+static float e;
 const char* cntl_status = "";
 bool dac_hold;
 static controlstatus_t cntlstat;
@@ -173,6 +174,12 @@ float get_esum(void)
   return esum;
 }
 
+
+float get_error(void)
+{
+  return e;
+}
+
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
@@ -222,8 +229,7 @@ static status_t holdover_handler(void)
   {
     if(gps_check_health())
     {
-      float e;
-      if(pps_elapsed() && get_phase_err(&e))
+      if(pps_elapsed() && get_phase_err())
       {
         holdover_tic_count++;
 
@@ -284,8 +290,6 @@ static status_t track_lock_handler(void)
     }
     else
     {
-      /* no 1pps pulses or gps fix is invalid, switch to holdover */
-      stat_e = 0.0f;
       return holdover;
     }
   }
@@ -293,12 +297,13 @@ static status_t track_lock_handler(void)
 
 
 /*============================================================================*/
-static bool get_phase_err(float* ret)
+static bool get_phase_err(void)
 /*------------------------------------------------------------------------------
   Function:
-  determines the phase error in nanoseconds.
-  in:  ret -> this is where the phase error will be stored, is not NULL checked
-       because this seems not to be necessary here
+  determines the phase error in nanoseconds and stores it in the variable e.
+  this is necessary such that the phase error can be accessed by other modules
+  as well (via access function).
+  in:  none
   out: returns true if phase error is valid, false otherwise
 ==============================================================================*/
 {
@@ -320,10 +325,8 @@ static bool get_phase_err(float* ret)
   }
 
   /* calculate the actual phase error */
-  float result = (float)cfg.timeoffset - (tic + qerr - tdc);
+  e = (float)cfg.timeoffset - (tic + qerr - tdc);
 
-  *ret = result;
-  stat_e = result;
   return true;
 }
 
@@ -374,8 +377,7 @@ static bool cntl(void)
 ==============================================================================*/
 {
   /* phase error cannot be determined properly? then bail out */
-  float e;
-  if(get_phase_err(&e) == false)
+  if(get_phase_err() == false)
   {
     return false;
   }

@@ -126,7 +126,6 @@ static command_t cmds[] =
   {set_pps_dur,     "pps_dur",    "<ms> configures the duration of the PPS pulse"},
 };
 
-volatile float stat_e = 0.0f;
 volatile uint16_t stat_dac = 0u;
 
 extern volatile gpsinfo_t pvt_info;
@@ -488,17 +487,21 @@ static void enable_disp(int argc, const char* const argv[])
          console output with the controller task */
       (void)pps_elapsed();
 
+      /* collect all data */
       uint64_t now = get_uptime_msec();
       float i = get_iocxo();
       float t = get_temperature();
+      float esum = get_esum();
+      float e = get_error();
 
       extern const char* cntl_status;
       uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
 
+
       (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
-                   now, stat_e, get_esum(), stat_dac, i, t, sat_info.numsv,
+                   now, e, esum, stat_dac, i, t, sat_info.numsv,
                    pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
                    pvt_info.tacc, cntl_status);
       if(canread())
