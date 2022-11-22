@@ -73,9 +73,6 @@ static void disable_txempty_irq(void);
 static StreamBufferHandle_t txstream;
 static StreamBufferHandle_t rxstream;
 
-/* not static because from eeprom */
-extern config_t cfg;
-
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/

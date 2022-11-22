@@ -150,10 +150,6 @@ svindata_t svin_info;
 sv_info_t sat_info;
 dopinfo_t dop_info;
 
-/* not static because from eeprom */
-extern config_t cfg;
-
-
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/

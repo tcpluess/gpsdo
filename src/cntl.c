@@ -120,7 +120,6 @@ static double limit(double val);
 static double esum;
 const char* cntl_status = "";
 bool dac_hold;
-extern config_t cfg;
 static controlstatus_t cntlstat;
 
 /*******************************************************************************

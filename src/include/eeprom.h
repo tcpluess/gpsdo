@@ -86,6 +86,9 @@ typedef union
   uint8_t bytes[EEP_SZ];
 } config_t;
 
+/* make the config structure publicly accessible */
+extern config_t cfg;
+
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)
  ******************************************************************************/

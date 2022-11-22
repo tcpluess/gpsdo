@@ -105,8 +105,6 @@ static volatile uint32_t tic_capture;
 static volatile uint64_t uptime_msec;
 static EventGroupHandle_t timepulse_event;
 
-extern config_t cfg;
-
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/

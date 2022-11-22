@@ -125,9 +125,6 @@ static command_t cmds[] =
   {set_pps_dur,     "pps_dur",    "<ms> configures the duration of the PPS pulse"},
 };
 
-/* not static because it must be globally accessible */
-extern config_t cfg;
-
 volatile float stat_e = 0.0f;
 volatile double stat_esum = 0.0f;
 volatile uint16_t stat_dac = 0u;
