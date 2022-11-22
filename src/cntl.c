@@ -111,7 +111,6 @@ static bool get_phase_err(float* ret);
 static status_t warmup_handler(void);
 static status_t holdover_handler(void);
 static status_t track_lock_handler(void);
-static double limit(double val);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -326,31 +325,6 @@ static bool get_phase_err(float* ret)
 
 
 /*============================================================================*/
-static double limit(double val)
-/*------------------------------------------------------------------------------
-  Function:
-  limits the given value to the range 0..65535.
-  in:  val -> value
-  out: returns the value itself if it is between 0 and 65535, otherwise it
-       saturates accordingly.
-==============================================================================*/
-{
-  if(val > 65535.0)
-  {
-    return 65535.0;
-  }
-  else if(val < 0.0)
-  {
-    return 0;
-  }
-  else
-  {
-    return val;
-  }
-}
-
-
-/*============================================================================*/
 static uint16_t pi_control(double KP, double TI, double ee)
 /*------------------------------------------------------------------------------
   Function:
@@ -376,12 +350,12 @@ static uint16_t pi_control(double KP, double TI, double ee)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  esum = limit(esum + KP*(ee + eold)/(2.0*TI));
+  esum = fmin(fmax(0.0, esum + KP*(ee + eold)/(2.0*TI)), 65535.0);
   eold = ee;
   stat_esum = esum;
 
   /* calculate the output signal and limit it ("output saturation") */
-  double efc = limit(KP*ee + esum);
+  double efc = fmin(fmax(0.0, KP*ee + esum), 65535.0);
   return (uint16_t)efc;
 }
 
