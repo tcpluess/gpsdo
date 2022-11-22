@@ -241,8 +241,9 @@ void gps_task(void* param)
    - dynamic model and elevation mask
    - periodic reporting of certain messages
    - survey-in, fixed-position or normal mode */
-  ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
-  ubx_config_navmodel(cfg.elevation_mask);
+  config_t* cfg = get_config();
+  ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
+  ubx_config_navmodel(cfg->elevation_mask);
   ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
@@ -263,20 +264,20 @@ void gps_task(void* param)
 
     if(bits & EVENT_DISABLE_TMODE)
     {
-      ubx_config_tmode(tmode_disable, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+      ubx_config_tmode(tmode_disable, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
       ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
     }
 
     if(bits & EVENT_DO_SVIN)
     {
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-      ubx_config_tmode(tmode_svin, 0, 0, 0, cfg.svin_dur, 0, cfg.accuracy_limit);
+      ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
       ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
     }
 
     if(bits & EVENT_SET_FIXPOS_MODE)
     {
-      ubx_config_tmode(tmode_fixedpos, cfg.x, cfg.y, cfg.z, 0, cfg.accuracy, 0);
+      ubx_config_tmode(tmode_fixedpos, cfg->x, cfg->y, cfg->z, 0, cfg->accuracy, 0);
     }
 
     if(bits & EVENT_SVIN_RECEIVED)
@@ -287,17 +288,17 @@ void gps_task(void* param)
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
 
         /* copy the svin data to the configuration */
-        cfg.x = svin_data.x;
-        cfg.y = svin_data.y;
-        cfg.z = svin_data.z;
-        cfg.accuracy = (uint32_t)sqrt((double)svin_data.meanv);
-        cfg.fixpos_valid = true;
+        cfg->x = svin_data.x;
+        cfg->y = svin_data.y;
+        cfg->z = svin_data.z;
+        cfg->accuracy = (uint32_t)sqrt((double)svin_data.meanv);
+        cfg->fixpos_valid = true;
       }
     }
 
     if(bits & EVENT_RECONFIG_GNSS)
     {
-      ubx_config_gnss(cfg.use_gps, cfg.use_glonass, cfg.use_galileo);
+      ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
     }
   }
 }

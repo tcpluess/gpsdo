@@ -100,7 +100,7 @@ static void write_internal(uint32_t addr, uint8_t data);
  ******************************************************************************/
 
 /* not static because it must be globally accessible */
-config_t cfg;
+static config_t cfg;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -254,6 +254,12 @@ void save_config(void)
   calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
   pack_u16_be(cfg.bytes, CHECKSUM_OFFSET, calc_checksum);
   eep_write_multi(0, EEP_SZ, cfg.bytes);
+}
+
+
+config_t* get_config(void)
+{
+  return &cfg;
 }
 
 /*******************************************************************************

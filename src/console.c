@@ -39,6 +39,7 @@
 #include "adc.h"
 #include "dac.h"
 #include "cntl.h"
+#include "ublox.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -128,9 +129,7 @@ static command_t cmds[] =
 
 volatile uint16_t stat_dac = 0u;
 
-extern volatile gpsinfo_t pvt_info;
 extern volatile svindata_t svin_info;
-extern volatile sv_info_t sat_info;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -369,9 +368,10 @@ static void conf_gnss(int argc, const char* const argv[])
     }
   }
 
-  cfg.use_gps = use_gps;
-  cfg.use_galileo = use_galileo;
-  cfg.use_glonass = use_glonass;
+  config_t* cfg = get_config();
+  cfg->use_gps = use_gps;
+  cfg->use_galileo = use_galileo;
+  cfg->use_glonass = use_glonass;
 
   /* inform the gps module about the changed configuration */
   reconfigure_gnss();
@@ -394,7 +394,7 @@ static void conf_elev_mask(int argc, const char* const argv[])
     int32_t elevmask;
     if(str2num(argv[0], &elevmask, 0, 90))
     {
-      cfg.elevation_mask = (int8_t)elevmask;
+      get_config()->elevation_mask = (int8_t)elevmask;
     }
   }
 }
@@ -440,23 +440,24 @@ static void showcfg(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    (void)printf("last DAC value: %d\n", cfg.last_dacval);
-    (void)printf("use GPS: %s\n", (cfg.use_gps ? "yes" : "no"));
-    (void)printf("use GLONASS: %s\n", (cfg.use_glonass ? "yes" : "no"));
-    (void)printf("use GALILEO: %s\n", (cfg.use_galileo ? "yes" : "no"));
-    (void)printf("RS-232 baudrate: %lu\n", cfg.rs232_baudrate);
-    (void)printf("fixed position valid: %s\n", (cfg.fixpos_valid ? "yes" : "no"));
-    (void)printf("ECEF X position: %ld cm\n", cfg.x);
-    (void)printf("ECEF Y position: %ld cm\n", cfg.y);
-    (void)printf("ECEF Z position: %ld cm\n", cfg.z);
-    (void)printf("position accuracy: %lu mm\n", cfg.accuracy);
-    (void)printf("survey-in duration: %lu sec\n", cfg.svin_dur);
-    (void)printf("survey-in accuracy limit: %lu mm\n", cfg.accuracy_limit);
-    (void)printf("elevation mask: %d\n", cfg.elevation_mask);
-    (void)printf("auto-svin: %s\n", cfg.auto_svin ? "on" : "off");
-    (void)printf("tau: %d sec\n", cfg.tau);
-    (void)printf("time offset: %ld ns\n", cfg.timeoffset);
-    (void)printf("pps duration: %lu ms\n", cfg.pps_dur);
+    config_t* cfg = get_config();
+    (void)printf("last DAC value: %d\n", cfg->last_dacval);
+    (void)printf("use GPS: %s\n", (cfg->use_gps ? "yes" : "no"));
+    (void)printf("use GLONASS: %s\n", (cfg->use_glonass ? "yes" : "no"));
+    (void)printf("use GALILEO: %s\n", (cfg->use_galileo ? "yes" : "no"));
+    (void)printf("RS-232 baudrate: %lu\n", cfg->rs232_baudrate);
+    (void)printf("fixed position valid: %s\n", (cfg->fixpos_valid ? "yes" : "no"));
+    (void)printf("ECEF X position: %ld cm\n", cfg->x);
+    (void)printf("ECEF Y position: %ld cm\n", cfg->y);
+    (void)printf("ECEF Z position: %ld cm\n", cfg->z);
+    (void)printf("position accuracy: %lu mm\n", cfg->accuracy);
+    (void)printf("survey-in duration: %lu sec\n", cfg->svin_dur);
+    (void)printf("survey-in accuracy limit: %lu mm\n", cfg->accuracy_limit);
+    (void)printf("elevation mask: %d\n", cfg->elevation_mask);
+    (void)printf("auto-svin: %s\n", cfg->auto_svin ? "on" : "off");
+    (void)printf("tau: %d sec\n", cfg->tau);
+    (void)printf("time offset: %ld ns\n", cfg->timeoffset);
+    (void)printf("pps duration: %lu ms\n", cfg->pps_dur);
   }
   else
   {
@@ -491,19 +492,18 @@ static void enable_disp(int argc, const char* const argv[])
       uint64_t now = get_uptime_msec();
       float i = get_iocxo();
       float t = get_temperature();
-      float esum = get_esum();
-      float e = get_error();
+      const gnssstatus_t* gnss = get_gnss_status();
+      const cntlstatus_t* ctl = get_cntlstatus();
 
-      extern const char* cntl_status;
-      uint32_t meanv = (uint32_t)sqrt((double)svin_info.meanv);
+      uint32_t meanv = (uint32_t)sqrt((double)gnss->svi->meanv);
 
 
       (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
-                   now, e, esum, stat_dac, i, t, sat_info.numsv,
-                   pvt_info.lat, pvt_info.lon, svin_info.obs, meanv,
-                   pvt_info.tacc, cntl_status);
+                   now, ctl->e, ctl->esum, stat_dac, i, t, gnss->sat->numsv,
+                   gnss->pvt->lat, gnss->pvt->lon, gnss->svi->obs, meanv,
+                   gnss->pvt->tacc, ctl->mode);
       if(canread())
       {
         return;
@@ -548,8 +548,9 @@ static void svin(int argc, const char* const argv[])
       if(str2num(argv[0], &tm, 1, INT32_MAX) &&
          str2num(argv[1], &accuracy, 0, INT32_MAX))
       {
-        cfg.svin_dur = (uint32_t)tm;
-        cfg.accuracy_limit = (uint32_t)accuracy;
+        config_t* cfg = get_config();
+        cfg->svin_dur = (uint32_t)tm;
+        cfg->accuracy_limit = (uint32_t)accuracy;
         start_svin();
       }
       break;
@@ -579,42 +580,44 @@ static void sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    for(int i = 0; i < sat_info.numsv; i++)
+    const gnssstatus_t* gnss = get_gnss_status();
+
+    for(int i = 0; i < gnss->sat->numsv; i++)
     {
-      const char* gnss;
-      switch(sat_info.sats[i].gnssid)
+      const char* syst;
+      switch(gnss->sat->sats[i].gnssid)
       {
         case 0:
         {
-          gnss = "GPS    ";
+          syst = "GPS    ";
           break;
         }
 
         case 2:
         {
-          gnss = "GALILEO";
+          syst = "GALILEO";
           break;
         }
 
         case 6:
         {
-          gnss = "GLONASS";
+          syst = "GLONASS";
           break;
         }
 
         default:
         {
-          gnss = "?      ";
+          syst = "?      ";
           break;
         }
       }
       (void)printf("%s ID: %2d; C/N0: %2d dB; Az: %3d deg; El: %3d deg\n",
-        gnss, sat_info.sats[i].svid, sat_info.sats[i].cno,
-        sat_info.sats[i].azim, sat_info.sats[i].elev);
+        syst, gnss->sat->sats[i].svid, gnss->sat->sats[i].cno,
+        gnss->sat->sats[i].azim, gnss->sat->sats[i].elev);
     }
 
     const char* fixtype;
-    switch(pvt_info.fixtype)
+    switch(gnss->pvt->fixtype)
     {
       case 3:
       {
@@ -636,8 +639,8 @@ static void sat(int argc, const char* const argv[])
     }
     (void)printf("fix status: %s\n", fixtype);
 
-    uint64_t age = get_uptime_msec() - sat_info.time;
-    (void)printf("%d sats; last update: %llu ms ago\n\n", sat_info.numsv, age);
+    uint64_t age = get_uptime_msec() - gnss->sat->time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", gnss->sat->numsv, age);
   }
 }
 
@@ -657,11 +660,11 @@ static void auto_svin(int argc, const char* const argv[])
   {
     if(!strcmp(argv[0], "on"))
     {
-      cfg.auto_svin = true;
+      get_config()->auto_svin = true;
     }
     else if(!strcmp(argv[0], "off"))
     {
-      cfg.auto_svin = false;
+      get_config()->auto_svin = false;
     }
   }
 }
@@ -682,7 +685,7 @@ static void conf_timeconst(int argc, const char* const argv[])
     int32_t tau;
     if(str2num(argv[0], &tau, 10, 7200))
     {
-      cfg.tau = (uint16_t)tau;
+      get_config()->tau = (uint16_t)tau;
     }
   }
 }
@@ -761,7 +764,7 @@ static void offset(int argc, const char* const argv[])
     int32_t off;
     if(str2num(argv[0], &off, -500000000, 500000000))
     {
-      cfg.timeoffset = off;
+      get_config()->timeoffset = off;
     }
   }
 }
@@ -799,8 +802,8 @@ static void set_pps_dur(int argc, const char* const argv[])
     int32_t dur;
     if(str2num(argv[0], &dur, 1, 999))
     {
-      cfg.pps_dur = (uint32_t)dur;
-      set_pps_duration(cfg.pps_dur);
+      get_config()->pps_dur = (uint32_t)dur;
+      set_pps_duration(dur);
     }
   }
 }

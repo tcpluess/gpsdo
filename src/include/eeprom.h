@@ -86,8 +86,6 @@ typedef union
   uint8_t bytes[EEP_SZ];
 } config_t;
 
-/* make the config structure publicly accessible */
-extern config_t cfg;
 
 /*******************************************************************************
  * FUNCTION PROTOTYPES (PUBLIC)
@@ -175,6 +173,16 @@ extern void save_config(void);
 /*------------------------------------------------------------------------------
   Function:
   calculates the checksum of the new configuration and stores it on the eeprom
+  in:  none
+  out: none
+==============================================================================*/
+
+
+/*============================================================================*/
+extern config_t* get_config(void);
+/*------------------------------------------------------------------------------
+  Function:
+  return a pointer to the config structure for read/write
   in:  none
   out: none
 ==============================================================================*/

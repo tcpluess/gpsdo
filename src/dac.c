@@ -87,7 +87,7 @@ void dac_setup(void)
   /* default state: chip select not active; set dac to initial value; dac hold
      is disabled */
   spi_ss(false);
-  set_dac(cfg.last_dacval);
+  set_dac(get_config()->last_dacval);
 }
 
 void set_dac(uint16_t data)

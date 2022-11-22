@@ -130,7 +130,7 @@ void cntl_task(void* param)
   status_t gpsdostatus = warmup;
   cntlstat = fast_track;
 
-  ctl.esum = cfg.last_dacval;
+  ctl.esum = get_config()->last_dacval;
   ctl.mode = "";
   dac_hold = false;
 
@@ -319,7 +319,7 @@ static bool get_phase_err(void)
   }
 
   /* calculate the actual phase error */
-  ctl.e = (float)cfg.timeoffset - (tic + qerr - tdc);
+  ctl.e = (float)get_config()->timeoffset - (tic + qerr - tdc);
 
   return true;
 }
@@ -413,7 +413,7 @@ static bool cntl(void)
          slower control mode */
       if(lock_counter >= (FASTTRACK_TIME_LIMIT * 60u))
       {
-        cfg.last_dacval = dacval;
+        get_config()->last_dacval = dacval;
         lock_counter = 0;
         cntlstat = locked;
       }
@@ -441,7 +441,7 @@ static bool cntl(void)
          (adjustable) control mode */
       if(lock_counter >= (LOCKED_TIME_LIMIT * 60u))
       {
-        cfg.last_dacval = dacval;
+        get_config()->last_dacval = dacval;
         lock_counter = 0;
         cntlstat = stable;
       }
@@ -459,8 +459,8 @@ static bool cntl(void)
       ctl.mode = "stable";
 
       /* kp, ki and prefilter are stored in the eeprom */
-      double kp = (1.0/(OSCGAIN * (double)cfg.tau));
-      double ki = (double)cfg.tau;
+      double ki = (double)get_config()->tau;
+      double kp = (1.0/(OSCGAIN * ki));
       dacval = pi_control(kp, ki, ctl.e);
 
       /* if the phase error increases above the threshold MAX_PHASE_ERR, then

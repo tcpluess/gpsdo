@@ -84,7 +84,7 @@ endif
 
 # when running from RAM, assume this is a debug build ...
 ifeq ($(RUN_FROM_FLASH), 0)
-DEFS += -DDEBUG
+# DEFS += -DDEBUG
 endif
 
 # List C source files here

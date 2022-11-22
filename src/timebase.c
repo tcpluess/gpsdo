@@ -333,7 +333,7 @@ static void enable_timer(void)
   TIM2->SMCR = 0;
   TIM2->CCER = 0;
   TIM2->CCMR1 = (6u << 12) | BIT_11;
-  set_pps_duration(cfg.pps_dur);
+  set_pps_duration(get_config()->pps_dur);
 
   /* the 1pps output is also used to trigger the adc */
   TIM2->CR2 = (5u << 4);

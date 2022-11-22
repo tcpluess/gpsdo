@@ -93,8 +93,8 @@ void rs232_init(void)
 
   /* enable and configure usart2 */
   RCC->APB1ENR |= BIT_17;
-  USART2->BRR = (BAUD_FRAC(cfg.rs232_baudrate) << 0) |
-    (BAUD_INT(cfg.rs232_baudrate) << 4);
+  USART2->BRR = (BAUD_FRAC(get_config()->rs232_baudrate) << 0) |
+    (BAUD_INT(get_config()->rs232_baudrate) << 4);
   USART2->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
 }
 

@@ -33,6 +33,9 @@
 #include "ublox.h"
 #include "checksum.h"
 #include "nmea_output.h"
+#include "temperature.h"
+#include "adc.h"
+#include "cntl.h"
 
 #include <stdio.h>
 
@@ -75,13 +78,18 @@ void nmea_task(void* param)
 {
   /* unused */
   (void)param;
-  extern gpsinfo_t pvt_info;
+  //extern gpsinfo_t pvt_info;
 
   FILE* nmeaout = fdopen(NMEA_FD, "w");
   (void)setvbuf(nmeaout, NULL, _IOLBF, NMEA_MAX_LEN);
 
   for(;;)
   {
+    #if 0
+    char nmea[NMEA_MAX_LEN];
+    int len;
+    uint8_t cksum;
+
     /* wait until position, velocity and time are known */
     if(gps_wait_pvt())
     {
@@ -89,7 +97,6 @@ void nmea_task(void* param)
       /* if position, velocity and time are known AND valid */
       if((pvt_info.valid & (BIT_00 | BIT_01)) == (BIT_00 | BIT_01))
       {
-        char nmea[NMEA_MAX_LEN];
         int32_t lat_degrees, lon_degrees;
         float lat_minutes, lon_minutes;
         uint8_t yr2 = (uint8_t)(pvt_info.year % 1000u);
@@ -113,20 +120,47 @@ void nmea_task(void* param)
 
         /* construct the nmea message in the buffer. heading, speed and so on
            are constantly set to zero as they are not interesting. */
-        int len = snprintf(nmea, NMEA_MAX_LEN,
-          "GPRMC,%02d%02d%02d,A,%ld%08.5f,%c,%ld%08.5f,%c,000.0,000.0,%02d%02d%02d,000.0,E",
+        len = snprintf(nmea, NMEA_MAX_LEN,
+          "GPRMC,%02d%02d%02d,A,%ld%08.5f,%c,%ld%08.5f,%c,000.0,000.0,%02d%02d%02d,000.0,A",
           pvt_info.hour, pvt_info.min, pvt_info.sec,
           lat_degrees, lat_minutes, sn,
           lon_degrees, lon_minutes, we,
           pvt_info.day, pvt_info.month, yr2);
 
         /* calculate the checksum for the message */
-        uint8_t cksum = nmea0183_checksum(nmea, len);
+        cksum = nmea0183_checksum(nmea, len);
 
         /* construct the actual message and print it */
-        (void)fprintf(nmeaout, "$%s*%02X\n", nmea, cksum);
+        //(void)fprintf(nmeaout, "$%s*%02X\n", nmea, cksum);
+
+        len = snprintf(nmea, NMEA_MAX_LEN,
+          "GPGGA,%02d%02d%02d.00,%ld%08.5f,%c,%ld%08.5f,%c,1,10,1.01,%d,M,48.0,M,,",
+          pvt_info.hour, pvt_info.min, pvt_info.sec,
+          lat_degrees, lat_minutes, sn,
+          lon_degrees, lon_minutes, we,
+          pvt_info.height/1000);
+
+        /* calculate the checksum for the message */
+        cksum = nmea0183_checksum(nmea, len);
+
+        /* construct the actual message and print it */
+        //(void)fprintf(nmeaout, "$%s*%02X\n", nmea, cksum);
       }
     }
+
+    if(gps_wait_sat())
+    {
+      extern volatile uint16_t stat_dac;
+      float i = get_iocxo();
+      float t = get_temperature();
+      len = snprintf(nmea, NMEA_MAX_LEN,
+        "PTEST,%0.2f,%0.2f,%d,%0.1f,%0.1f",get_error(),get_esum(),stat_dac,i,t);
+      cksum = nmea0183_checksum(nmea, len);
+      //(void)fprintf(nmeaout, "$%s*%02X\n", nmea, cksum);
+    }
+    #else
+    vTaskDelay(1000);
+    #endif
   }
 }
 
