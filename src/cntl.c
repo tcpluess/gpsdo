@@ -97,13 +97,12 @@ typedef enum
 } controlstatus_t;
 
 extern volatile float stat_e;
-extern volatile double stat_esum;
 
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static uint16_t pi_control(double KP, double TI, double e);
+static uint16_t pi_control(double KP, double TI, float u);
 static bool cntl(void);
 static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
 static inline void ledoff(void) { GPIOE->BSRR = BIT_31; }
@@ -116,7 +115,7 @@ static status_t track_lock_handler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static double esum;
+static float esum;
 const char* cntl_status = "";
 bool dac_hold;
 static controlstatus_t cntlstat;
@@ -132,7 +131,6 @@ void cntl_task(void* param)
   cntlstat = fast_track;
 
   esum = cfg.last_dacval;
-  stat_esum = esum;
   dac_hold = false;
 
   for(;;)
@@ -167,6 +165,12 @@ void cntl_task(void* param)
 void cntl_restart(void)
 {
   cntlstat = fast_track;
+}
+
+
+float get_esum(void)
+{
+  return esum;
 }
 
 /*******************************************************************************
@@ -325,17 +329,17 @@ static bool get_phase_err(float* ret)
 
 
 /*============================================================================*/
-static uint16_t pi_control(double KP, double TI, double ee)
+static uint16_t pi_control(double KP, double TI, float u)
 /*------------------------------------------------------------------------------
   Function:
   this is the actual pi controller.
   in:  KP -> proportional gain
        TI -> integration time
-       ee -> error signal
+       u -> error signal (input to the PI controller)
   out: returns the controller output signal
 ==============================================================================*/
 {
-  static double eold = 0.0f;
+  static float uold = 0.0f;
 
   /* this is actually a bilinear transform: the integral part is
           1                                     2  z-1
@@ -350,12 +354,11 @@ static uint16_t pi_control(double KP, double TI, double ee)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  esum = fmin(fmax(0.0, esum + KP*(ee + eold)/(2.0*TI)), 65535.0);
-  eold = ee;
-  stat_esum = esum;
+  esum = fminf(fmaxf(0.0, esum + KP*(u + uold)/(2.0*TI)), 65535.0);
+  uold = u;
 
   /* calculate the output signal and limit it ("output saturation") */
-  double efc = fmin(fmax(0.0, KP*ee + esum), 65535.0);
+  float efc = fminf(fmaxf(0.0, KP*u + esum), 65535.0);
   return (uint16_t)efc;
 }
 
@@ -399,7 +402,7 @@ static bool cntl(void)
     case fast_track:
     {
       cntl_status = "fast_track";
-      dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, (double)e);
+      dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, e);
 
       if(abs_err < MAX_PHASE_ERR)
       {
@@ -427,7 +430,7 @@ static bool cntl(void)
     case locked:
     {
       cntl_status = "locked";
-      dacval = pi_control(KP_LOCKED, KI_LOCKED, (double)e);
+      dacval = pi_control(KP_LOCKED, KI_LOCKED, e);
 
       if(abs_err < MAX_PHASE_ERR)
       {
