@@ -115,11 +115,10 @@ static status_t track_lock_handler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static float esum;
-static float e;
-const char* cntl_status = "";
 bool dac_hold;
 static controlstatus_t cntlstat;
+
+static cntlstatus_t ctl;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -131,7 +130,8 @@ void cntl_task(void* param)
   status_t gpsdostatus = warmup;
   cntlstat = fast_track;
 
-  esum = cfg.last_dacval;
+  ctl.esum = cfg.last_dacval;
+  ctl.mode = "";
   dac_hold = false;
 
   for(;;)
@@ -169,15 +169,9 @@ void cntl_restart(void)
 }
 
 
-float get_esum(void)
+const cntlstatus_t* get_cntlstatus(void)
 {
-  return esum;
-}
-
-
-float get_error(void)
-{
-  return e;
+  return &ctl;
 }
 
 /*******************************************************************************
@@ -193,7 +187,7 @@ static status_t warmup_handler(void)
   out: returns the next status of the controller.
 ==============================================================================*/
 {
-  cntl_status = "warmup";
+  ctl.mode = "warmup";
 
   for(;;)
   {
@@ -222,7 +216,7 @@ static status_t holdover_handler(void)
 ==============================================================================*/
 {
   uint32_t holdover_tic_count = 0u;
-  cntl_status = "holdover";
+  ctl.mode = "holdover";
   ledon();
 
   for(;;)
@@ -236,7 +230,7 @@ static status_t holdover_handler(void)
         /* reset the time base (1pps pwm output) if the phase error
            is too large. otherwise it will take too long until the pll
            locks! */
-        if(fabsf(e) > MAX_ALLOWED_PHASE_ERR)
+        if(fabsf(ctl.e) > MAX_ALLOWED_PHASE_ERR)
         {
           timebase_reset();
         }
@@ -325,7 +319,7 @@ static bool get_phase_err(void)
   }
 
   /* calculate the actual phase error */
-  e = (float)cfg.timeoffset - (tic + qerr - tdc);
+  ctl.e = (float)cfg.timeoffset - (tic + qerr - tdc);
 
   return true;
 }
@@ -357,11 +351,11 @@ static uint16_t pi_control(double KP, double TI, float u)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  esum = fminf(fmaxf(0.0, esum + KP*(u + uold)/(2.0*TI)), 65535.0);
+  ctl.esum = fminf(fmaxf(0.0, ctl.esum + KP*(u + uold)/(2.0*TI)), 65535.0);
   uold = u;
 
   /* calculate the output signal and limit it ("output saturation") */
-  float efc = fminf(fmaxf(0.0, KP*u + esum), 65535.0);
+  float efc = fminf(fmaxf(0.0, KP*u + ctl.esum), 65535.0);
   return (uint16_t)efc;
 }
 
@@ -384,7 +378,7 @@ static bool cntl(void)
 
   /* if the phase error is less than one period, assume the pll is locked and
      switch on the green lock led */
-  float abs_err = fabsf(e);
+  float abs_err = fabsf(ctl.e);
   if(abs_err < MAX_PHASE_ERR)
   {
     ppsenable(true);
@@ -403,8 +397,8 @@ static bool cntl(void)
        more quickly */
     case fast_track:
     {
-      cntl_status = "fast_track";
-      dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, e);
+      ctl.mode = "fast_track";
+      dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, ctl.e);
 
       if(abs_err < MAX_PHASE_ERR)
       {
@@ -431,8 +425,8 @@ static bool cntl(void)
        settled for a while. */
     case locked:
     {
-      cntl_status = "locked";
-      dacval = pi_control(KP_LOCKED, KI_LOCKED, e);
+      ctl.mode = "locked";
+      dacval = pi_control(KP_LOCKED, KI_LOCKED, ctl.e);
 
       if(abs_err < MAX_PHASE_ERR)
       {
@@ -462,12 +456,12 @@ static bool cntl(void)
     /* this should be the normal operating state. */
     case stable:
     {
-      cntl_status = "stable";
+      ctl.mode = "stable";
 
       /* kp, ki and prefilter are stored in the eeprom */
       double kp = (1.0/(OSCGAIN * (double)cfg.tau));
       double ki = (double)cfg.tau;
-      dacval = pi_control(kp, ki, e);
+      dacval = pi_control(kp, ki, ctl.e);
 
       /* if the phase error increases above the threshold MAX_PHASE_ERR, then
          the ocxo is perhaps not stable enough and the control loop switches
