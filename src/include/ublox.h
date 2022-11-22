@@ -87,6 +87,18 @@ typedef struct
   uint64_t time;
 } svindata_t;
 
+typedef struct
+{
+  uint32_t itow;
+  uint16_t gdop;
+  uint16_t pdop;
+  uint16_t tdop;
+  uint16_t vdop;
+  uint16_t hdop;
+  uint16_t ndop;
+  uint16_t edop;
+  uint64_t time;
+} dopinfo_t;
 
 typedef struct
 {
@@ -207,6 +219,16 @@ extern bool gps_wait_pvt(void);
   wait until position, velocity and time are known
   in:  none
   out: returns true when pvt data is available
+==============================================================================*/
+
+
+/*============================================================================*/
+extern bool gps_wait_sat(void);
+/*------------------------------------------------------------------------------
+  Function:
+  wait until satellite infos are collected
+  in:  none
+  out: returns true when sat data is available
 ==============================================================================*/
 
 

@@ -73,6 +73,7 @@
 
 #define UBX_ID_NAV_PVT 0x07u /* position, velocity, time */
 #define UBX_ID_NAV_SAT 0x35u /* satellite info */
+#define UBX_ID_NAV_DOP 0x04u /* dop info */
 #define UBX_ID_TIM_TP 0x01u /* timepulse info */
 #define UBX_ID_TIM_SVIN 0x04u /* survey-in data */
 #define UBX_ID_CFG_TMODE2 0x3du /* timing mode configuration */
@@ -147,6 +148,7 @@ static qerr_t qerr;
 gpsinfo_t pvt_info;
 svindata_t svin_info;
 sv_info_t sat_info;
+dopinfo_t dop_info;
 
 /* not static because from eeprom */
 extern config_t cfg;
@@ -167,6 +169,7 @@ static void unpack_pvt(const uint8_t* rdata, gpsinfo_t* info);
 static void unpack_svin(const uint8_t* rdata, svindata_t* info);
 static void unpack_tp(const uint8_t* rdata, qerr_t* ret);
 static void unpack_sv(const uint8_t* rdata, sv_info_t* svi);
+static void unpack_dop(const uint8_t* rdata, dopinfo_t* dop);
 static void ubx_config_baudrate(uint32_t baudrate);
 static void ubx_config_gnss(bool gps, bool glonass, bool galileo);
 static void ubx_config_msgrate(uint8_t msgclass, uint8_t msgid, uint8_t rate);
@@ -240,6 +243,7 @@ void gps_task(void* param)
   ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
+  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_DOP, 1);
 
   /* timing mode must be disabled before survey-in can be started again */
   ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
@@ -375,6 +379,20 @@ bool gps_wait_pvt(void)
   }
 }
 
+bool gps_wait_sat(void)
+{
+  uint32_t bits = EVENT_SAT_RECEIVED;
+  if(xEventGroupWaitBits(ublox_events, bits, true, true, portMAX_DELAY))
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+
 bool gps_check_health(void)
 {
   uint64_t now = get_uptime_msec();
@@ -458,6 +476,13 @@ static void rx_task(void* param)
           {
             unpack_pvt(rx.msg, &pvt_info);
             (void)xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
+            break;
+          }
+
+          case UBX_ID_NAV_DOP:
+          {
+            unpack_dop(rx.msg, &dop_info);
+            //(void)xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
             break;
           }
 
@@ -1072,6 +1097,30 @@ static void unpack_sv(const uint8_t* rdata, sv_info_t* svi)
     }
   }
   svi->time = get_uptime_msec();
+  (void)xTaskResumeAll();
+}
+
+
+/*============================================================================*/
+static void unpack_dop(const uint8_t* rdata, dopinfo_t* dop)
+/*------------------------------------------------------------------------------
+  Function:
+  unpack the NAV-DOP message
+  in:  rdata -> raw data
+       dop -> dop info structure
+  out: none
+==============================================================================*/
+{
+  vTaskSuspendAll();
+  dop->itow = unpack_u32_le(rdata, 0);
+  dop->gdop = unpack_u16_le(rdata, 4);
+  dop->pdop = unpack_u16_le(rdata, 6);
+  dop->tdop = unpack_u16_le(rdata, 8);
+  dop->vdop = unpack_u16_le(rdata, 10);
+  dop->hdop = unpack_u16_le(rdata, 12);
+  dop->ndop = unpack_u16_le(rdata, 14);
+  dop->edop = unpack_u16_le(rdata, 16);
+  dop->time = get_uptime_msec();
   (void)xTaskResumeAll();
 }
 
