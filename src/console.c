@@ -200,14 +200,7 @@ void console_task(void* param)
             txchar('\r');
             txchar('\n');
             linebuffer[wrpos] = '\0';
-            if(strlen(linebuffer) > 0)
-            {
-              status = evaluate;
-            }
-            else
-            {
-              status = prompt;
-            }
+            status = evaluate;
             break;
           }
 
@@ -301,8 +294,8 @@ static void interpreter(int argc, const char* const argv[])
         return;
       }
     }
+    (void)printf("error\n");
   }
-  (void)printf("error\n");
 }
 
 
