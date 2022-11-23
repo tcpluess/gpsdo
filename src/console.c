@@ -47,6 +47,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
+#include <ctype.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -101,6 +102,7 @@ static void info(int argc, const char* const argv[]);
 static void set_pps_dur(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
 static bool lineeditor(int rx);
+static void insertchar(char c);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -804,6 +806,37 @@ static bool lineeditor(int rx)
   out: none
 ==============================================================================*/
 {
+  static bool escape = false;
+
+  /* wrong character */
+  if(rx < 0)
+  {
+    return false;
+  }
+
+  if(escape)
+  {
+    return false;
+  }
+
+  if((rx == '\n') || (rx == '\r'))
+  {
+    txchar('\r');
+    txchar('\n');
+    linebuffer[wrpos] = '\0';
+    return true;
+  }
+
+  if(iscntrl(rx))
+  {
+
+  }
+  else
+  {
+    insertchar(rx);
+  }
+
+#if 0
   switch(rx)
   {
     /* no character received, nothing to do */
@@ -833,10 +866,7 @@ static bool lineeditor(int rx)
     case '\r':
     case '\n':
     {
-      txchar('\r');
-      txchar('\n');
-      linebuffer[wrpos] = '\0';
-      return true;
+
     }
 
     /* a normal character is received, so echo back and add it into
@@ -853,7 +883,26 @@ static bool lineeditor(int rx)
       break;
     }
   }
+#endif
   return false;
+}
+
+
+/*============================================================================*/
+static void insertchar(char c)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(wrpos < MAX_LINELEN - 2)
+  {
+    txchar(c);
+    linebuffer[wrpos] = c;
+    wrpos++;
+  }
 }
 
 /*******************************************************************************
