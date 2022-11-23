@@ -216,7 +216,7 @@ void console_task(void* param)
           default:
           {
             /* FIXME: need to check this condition */
-            if(wrpos < MAX_LINELEN-2)
+            if((wrpos < MAX_LINELEN-2) && (rx >= ' '))
             {
               txchar((char)rx);
               linebuffer[wrpos] = (char)rx;
