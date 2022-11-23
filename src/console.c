@@ -100,6 +100,7 @@ static void offset(int argc, const char* const argv[]);
 static void info(int argc, const char* const argv[]);
 static void set_pps_dur(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
+static bool lineeditor(int rx);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -167,56 +168,9 @@ void console_task(void* param)
       case input:
       {
         rx = kbhit();
-
-        switch(rx)
+        if(lineeditor(rx) == true)
         {
-          /* no character received, nothing to do */
-          case -1:
-          {
-            break;
-          }
-
-          /* backspace entered: only need to do something if the line buffer is not
-             empty; erase the last character in the terminal by going back one,
-             sending a space and again going back one; also decrease the
-             writing pos into the line buffer */
-          case '\b':
-          {
-            if(wrpos > 0)
-            {
-              txchar('\b');
-              txchar(' ');
-              txchar('\b');
-              wrpos--;
-            }
-            break;
-          }
-
-          /* enter is pressed, terminate the line buffer and evaluate it
-             or do nothing if the line buffer is empty */
-          case '\r':
-          case '\n':
-          {
-            txchar('\r');
-            txchar('\n');
-            linebuffer[wrpos] = '\0';
-            status = evaluate;
-            break;
-          }
-
-          /* a normal character is received, so echo back and add it into
-             the line buffer */
-          default:
-          {
-            /* FIXME: need to check this condition */
-            if((wrpos < MAX_LINELEN-2) && (rx >= ' '))
-            {
-              txchar((char)rx);
-              linebuffer[wrpos] = (char)rx;
-              wrpos++;
-            }
-            break;
-          }
+          status = evaluate;
         }
         break;
       }
@@ -837,6 +791,68 @@ static bool str2num(const char* str, int32_t* value, int32_t min, int32_t max)
 
 error:
   (void)printf("invalid value or value out of range: %s\n", str);
+  return false;
+}
+
+
+/*============================================================================*/
+static bool lineeditor(int rx)
+/*------------------------------------------------------------------------------
+  Function:
+  the line editor works similar to gnu's libreadline.
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  switch(rx)
+  {
+    /* no character received, nothing to do */
+    case -1:
+    {
+      break;
+    }
+
+    /* backspace entered: only need to do something if the line buffer is not
+       empty; erase the last character in the terminal by going back one,
+       sending a space and again going back one; also decrease the
+       writing pos into the line buffer */
+    case '\b':
+    {
+      if(wrpos > 0)
+      {
+        txchar('\b');
+        txchar(' ');
+        txchar('\b');
+        wrpos--;
+      }
+      break;
+    }
+
+    /* enter is pressed, terminate the line buffer and evaluate it
+       or do nothing if the line buffer is empty */
+    case '\r':
+    case '\n':
+    {
+      txchar('\r');
+      txchar('\n');
+      linebuffer[wrpos] = '\0';
+      return true;
+    }
+
+    /* a normal character is received, so echo back and add it into
+       the line buffer */
+    default:
+    {
+      /* FIXME: need to check this condition */
+      if((wrpos < MAX_LINELEN-2) && (rx >= ' '))
+      {
+        txchar((char)rx);
+        linebuffer[wrpos] = (char)rx;
+        wrpos++;
+      }
+      break;
+    }
+  }
   return false;
 }
 
