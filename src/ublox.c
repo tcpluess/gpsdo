@@ -344,15 +344,6 @@ void reconfigure_gnss(void)
 void disable_tmode(void)
 {
   (void)xEventGroupSetBits(ublox_events, EVENT_DISABLE_TMODE);
-/*  if(cfg.fixpos_valid)
-  {
-    set_fixpos_mode();
-    status = fixpos_mode;
-  }
-  else
-  {
-    status = normal;
-  }*/
 }
 
 
@@ -372,24 +363,42 @@ bool gps_waitready(void)
 
 bool gps_check_health(void)
 {
+  bool ret = true;
   uint64_t now = get_uptime_msec();
 
-  if((now - sat_info.time > 1000) || (sat_info.best_snr < 25))
+  if(now - sat_info.time > 1000)
   {
-#ifdef DEBUG
-    (void)printf("# sat SNR too bad!\n");
-#endif
-    return false;
-  }
-  if((now - pvt_info.time > 1000) || (pvt_info.tacc > 100))
-  {
-#ifdef DEBUG
-    (void)printf("# time accuracy too bad!\n");
-#endif
-    return false;
+    #ifdef DEBUG
+    (void)printf("# sat info too old!\n");
+    #endif
+    ret = false;
   }
 
-  return true;
+  if(sat_info.best_snr < 25)
+  {
+    #ifdef DEBUG
+    (void)printf("# sat snr too bad!\n");
+    #endif
+    ret = false;
+  }
+
+  if(now - pvt_info.time > 1000)
+  {
+    #ifdef DEBUG
+    (void)printf("# pvt info too old!\n");
+    #endif
+    ret = false;
+  }
+
+  if(pvt_info.tacc > 100)
+  {
+    #ifdef DEBUG
+    (void)printf("# time accuracy too low!\n");
+    #endif
+    ret = false;
+  }
+
+  return ret;
 }
 
 
