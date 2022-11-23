@@ -53,7 +53,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define MAX_LINELEN 256u
+#define MAX_LINELEN 80u
 #define MAX_TOKENS 10u
 
 /*******************************************************************************
@@ -103,13 +103,21 @@ static void set_pps_dur(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
 static bool lineeditor(int rx);
 static void insertchar(char c);
+static void cntlchar(char c);
+static void backspace(int num);
+static void delete(int num);
+static void term_cursorleft(uint32_t num);
+static void term_cursorright(uint32_t num);
+static bool handle_esc(char c);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
 static char linebuffer[MAX_LINELEN];
-static uint32_t wrpos = 0;
+static uint32_t cursor = 0;
+static uint32_t linelen = 0;
+static bool escape = false;
 
 static command_t cmds[] =
 {
@@ -162,7 +170,7 @@ void console_task(void* param)
         txchar('#');
         txchar(' ');
         status = input;
-        wrpos = 0;
+        cursor = 0;
         break;
       }
 
@@ -806,8 +814,6 @@ static bool lineeditor(int rx)
   out: none
 ==============================================================================*/
 {
-  static bool escape = false;
-
   /* wrong character */
   if(rx < 0)
   {
@@ -816,74 +822,33 @@ static bool lineeditor(int rx)
 
   if(escape)
   {
+    txchar(rx);
+    if(handle_esc(rx))
+    {
+      escape = false;
+    }
     return false;
   }
 
   if((rx == '\n') || (rx == '\r'))
   {
-    txchar('\r');
-    txchar('\n');
-    linebuffer[wrpos] = '\0';
+    txstr("\n\r");
+    linebuffer[linelen] = '\0';
+     cursor = 0;
+    linelen = 0;
+
     return true;
   }
 
   if(iscntrl(rx))
   {
-
+    cntlchar(rx);
   }
   else
   {
     insertchar(rx);
   }
 
-#if 0
-  switch(rx)
-  {
-    /* no character received, nothing to do */
-    case -1:
-    {
-      break;
-    }
-
-    /* backspace entered: only need to do something if the line buffer is not
-       empty; erase the last character in the terminal by going back one,
-       sending a space and again going back one; also decrease the
-       writing pos into the line buffer */
-    case '\b':
-    {
-      if(wrpos > 0)
-      {
-        txchar('\b');
-        txchar(' ');
-        txchar('\b');
-        wrpos--;
-      }
-      break;
-    }
-
-    /* enter is pressed, terminate the line buffer and evaluate it
-       or do nothing if the line buffer is empty */
-    case '\r':
-    case '\n':
-    {
-
-    }
-
-    /* a normal character is received, so echo back and add it into
-       the line buffer */
-    default:
-    {
-      /* FIXME: need to check this condition */
-      if((wrpos < MAX_LINELEN-2) && (rx >= ' '))
-      {
-        txchar((char)rx);
-        linebuffer[wrpos] = (char)rx;
-        wrpos++;
-      }
-      break;
-    }
-  }
-#endif
   return false;
 }
 
@@ -897,12 +862,329 @@ static void insertchar(char c)
   out: none
 ==============================================================================*/
 {
-  if(wrpos < MAX_LINELEN - 2)
+  if(cursor < MAX_LINELEN - 2)
   {
-    txchar(c);
-    linebuffer[wrpos] = c;
-    wrpos++;
+    memmove(linebuffer + cursor + 1, linebuffer + cursor, MAX_LINELEN - linelen - 1);
+    linebuffer[cursor] = c;
+
+    if(cursor == linelen)
+    {
+      txchar(c);
+    }
+    else
+    {
+    txstr(linebuffer + cursor);
+    term_cursorleft(linelen - cursor);
+
+    }
+    cursor++;
+    linelen++;
+    linebuffer[linelen] = '\0';
   }
+}
+
+
+/*============================================================================*/
+static void cntlchar(char c)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  switch(c)
+  {
+    case '\033':
+    {
+      escape = true;
+      break;
+    }
+
+    /* single backspace */
+    case '\b':
+    {
+      if(cursor > 0)
+      {
+      backspace(1);
+      if(cursor == linelen)
+      {
+        txstr("\033[D \033[D");
+      }
+      else
+      {
+        /* go back one char and then delete until the end of the line */
+        txstr("\033[D\033[K");
+
+        /* print the modified text */
+        txstr(linebuffer + cursor);
+        term_cursorleft(linelen - cursor);
+      }
+    }
+      break;
+    }
+
+    /* delete to the beginning of the line (ctrl+u) */
+    case 0x15:
+    {
+      term_cursorleft(cursor);
+      backspace(cursor);
+      txstr("\033[K");
+      txstr(linebuffer + cursor);
+      term_cursorleft(linelen);
+      break;
+    }
+
+    /* delete to the end of the line (ctrl+k) */
+    case 0x0b:
+    {
+      txstr("\033[K");
+      linelen = cursor;
+      linebuffer[linelen] = '\0';
+      break;
+    }
+
+    /* jump to end of line (ctrl+e) */
+    case 0x05:
+    {
+      term_cursorright(linelen - cursor);
+      cursor = linelen;
+      break;
+    }
+
+    /* jump to begin of line (ctrl+a) */
+    case 0x01:
+    {
+      term_cursorleft(cursor);
+      cursor = 0;
+      break;
+    }
+
+    /* move cursor right (ctrl+f) */
+    case 0x06:
+    {
+      if(cursor < linelen)
+      {
+        cursor++;
+        term_cursorright(1);
+      }
+      break;
+    }
+
+    /* move cursor left (ctrl+b) */
+    case 0x02:
+    {
+      if(cursor > 0)
+      {
+        cursor--;
+        term_cursorleft(1);
+      }
+      break;
+    }
+
+    /* delete character (ctrl+d) */
+    case 0x04:
+    {
+      delete(1);
+      txstr("\033[K");
+      txstr(linebuffer + cursor);
+      term_cursorleft(linelen - cursor);
+      break;
+    }
+  }
+}
+
+
+/*============================================================================*/
+static void backspace(int num)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(cursor >= num)
+  {
+    memmove(linebuffer + cursor - num, linebuffer + cursor, linelen - cursor + num);
+    cursor -= num;
+    linelen -= num;
+    linebuffer[linelen] = '\0';
+  }
+}
+
+
+/*============================================================================*/
+static void delete(int num)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if((linelen != 0) && (cursor < linelen))
+  {
+    memmove(linebuffer + cursor, linebuffer + cursor + num, linelen - cursor + num);
+    linelen -= num;
+    linebuffer[linelen] = '\0';
+  }
+}
+
+
+/*============================================================================*/
+static void term_cursorleft(uint32_t num)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(num != 0)
+  {
+  char buffer[10];
+  snprintf(buffer, 10, "\033[%ldD", num);
+  txstr(buffer);
+}
+}
+
+
+/*============================================================================*/
+static void term_cursorright(uint32_t num)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  if(num != 0)
+  {
+  char buffer[10];
+  snprintf(buffer, 10, "\033[%ldC", num);
+  txstr(buffer);
+}
+}
+
+
+/*============================================================================*/
+static bool handle_esc(char c)
+/*------------------------------------------------------------------------------
+  Function:
+  set the duration of the pps pulse
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  static bool bracket = false;
+  static bool tilde = false;
+  static bool waitkey = false;
+
+  switch(c)
+  {
+    case '[':
+      {
+        bracket = true;
+        return false;
+      }
+
+    case 'D':
+      {
+        if(bracket)
+        {
+          if(cursor > 0)
+          {
+            cursor--;
+            term_cursorleft(1);
+          }
+          bracket = false;
+        }
+          return true;
+      }
+
+    case 'C':
+      {
+        if(bracket)
+        {
+          if(cursor < linelen)
+      {
+        cursor++;
+        term_cursorright(1);
+      }
+          bracket = false;
+
+        }
+        return true;
+      }
+
+    case '1':
+      {
+        term_cursorleft(cursor);
+        cursor = 0;
+        tilde = true;
+        return false;
+      }
+
+    case '2': /* insert */
+      {
+        tilde=true;
+        return false;
+      }
+
+      case 'O':
+      {
+        waitkey = true;
+        return false;
+      }
+
+    case 'F':
+      {
+        if(waitkey)
+        {
+          waitkey = false;
+        term_cursorright(linelen - cursor);
+        cursor = linelen;
+        return true;
+        }
+        break;
+      }
+
+    case '3':
+      {
+        delete(1);
+        txstr("\033[K");
+        txstr(linebuffer + cursor);
+        term_cursorleft(linelen - cursor);
+        tilde = true;
+        return false;
+      }
+
+    case '5':
+    case '6':
+      {
+        tilde = true;
+        return false;
+      }
+
+
+    case '~':
+      {
+        if(tilde)
+        {
+          return true;
+        }
+        break;
+      }
+
+    default:
+      {
+        return true;
+      }
+
+  }
+
+  return false;
 }
 
 /*******************************************************************************
