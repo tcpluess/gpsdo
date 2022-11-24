@@ -169,7 +169,6 @@ static int interpreter(int argc, const char* const argv[])
   {
     /* the actual command is always first */
     const char* command = argv[0];
-
     int numcmds = sizeof(cmds) / sizeof(cmds[0]);
 
     for(int i = 0; i < numcmds; i++)
@@ -181,6 +180,7 @@ static int interpreter(int argc, const char* const argv[])
     }
   }
 
+  /* command not found gives error message "not implemented" */
   errno = ENOSYS;
   return -1;
 }

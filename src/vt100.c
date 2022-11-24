@@ -32,6 +32,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -173,8 +174,13 @@ int vt100_lineeditor(vt100_t* term)
 
       const char* toks[MAX_TOKENS];
       int ntoks = find_tokens(term->linebuffer, &toks[0], MAX_TOKENS);
+      if(ntoks > MAX_TOKENS)
+      {
+        errno = E2BIG;
+        return -1;
+      }
+
       int ret = term->interpreter(ntoks, toks);
-      //TODO: use E2BIG in find_tokens
       return ret;
     }
 
@@ -752,20 +758,17 @@ static int find_tokens(char* line, const char** toks, int maxtoks)
 ==============================================================================*/
 {
   char* ptr = strtok(line, " ");
-
-  for(int toknum = 0; toknum < maxtoks; toknum++)
+  int toknum = 0;
+  do
   {
-    if(ptr != NULL)
+    if(toknum < maxtoks)
     {
-      toks[toknum] = ptr;
-      ptr = strtok(NULL, " ");
+        toks[toknum] = ptr;
     }
-    else
-    {
-      return toknum;
-    }
-  }
-  return 0;
+    ptr = strtok(NULL, " ");
+    toknum++;
+  } while(ptr != NULL);
+  return toknum;
 }
 
 /*******************************************************************************
