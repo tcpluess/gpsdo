@@ -93,13 +93,13 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static void insertchar(vt100_t* term, char c);
-static void cntlchar(vt100_t* term, char c);
-static void backspace(vt100_t* term, uint32_t num);
-static void delete(vt100_t* term, uint32_t num);
-static void term_cursorleft(vt100_t* term, uint32_t num);
-static void term_cursorright(vt100_t* term, uint32_t num);
-static bool handle_esc(vt100_t* term, char c);
+static void insertchar(vt100_t* term, int c);
+static void cntlchar(vt100_t* term, int c);
+static void backspace(vt100_t* term, size_t num);
+static void delete(vt100_t* term, size_t num);
+static void term_cursorleft(vt100_t* term, size_t num);
+static void term_cursorright(vt100_t* term, size_t num);
+static bool handle_esc(vt100_t* term, int c);
 static void key_end(vt100_t* term);
 static void key_del(vt100_t* term);
 static void key_home(vt100_t* term);
@@ -120,7 +120,7 @@ static int find_tokens(char* line, const char** toks, int maxtoks);
  ******************************************************************************/
 
 /*============================================================================*/
-void vt100_init(vt100_t* term, interpreter_func interpreter, FILE* out, FILE* in)
+void vt100_init(vt100_t* term, interpreter_func intr, FILE* out, FILE* in)
 /*------------------------------------------------------------------------------
   Function:
   the line editor works similar to gnu's libreadline.
@@ -128,8 +128,8 @@ void vt100_init(vt100_t* term, interpreter_func interpreter, FILE* out, FILE* in
   out: none
 ==============================================================================*/
 {
-  memset(term, 0, sizeof(vt100_t));
-  term->interpreter = interpreter;
+  (void)memset(term, 0, sizeof(vt100_t));
+  term->interpreter = intr;
   term->out = out;
   term->in = in;
   (void)setvbuf(out, NULL, _IONBF, 0);
@@ -148,10 +148,10 @@ int vt100_lineeditor(vt100_t* term)
 {
   for(;;)
   {
-    int rx = fgetc(term->in);
+    int c = fgetc(term->in);
 
     /* wrong character */
-    if(rx < 0)
+    if(c < 0)
     {
       return -1;
     }
@@ -159,7 +159,7 @@ int vt100_lineeditor(vt100_t* term)
     /* if the escape character is received, process escape sequence accordingly */
     if(term->escape)
     {
-      if(handle_esc(term, rx))
+      if(handle_esc(term, c))
       {
         term->escape = false;
       }
@@ -168,7 +168,7 @@ int vt100_lineeditor(vt100_t* term)
 
     /* if enter is pressed, terminate the entered string; also the line editor
        is complete */
-    if((rx == ANSI_CR) || (rx == ANSI_LF))
+    if((c == ANSI_CR) || (c == ANSI_LF))
     {
       key_enter(term);
 
@@ -184,13 +184,13 @@ int vt100_lineeditor(vt100_t* term)
       return ret;
     }
 
-    if(iscntrl(rx))
+    if(iscntrl(c))
     {
-      cntlchar(term, rx);
+      cntlchar(term, c);
     }
     else
     {
-      insertchar(term, rx);
+      insertchar(term, c);
     }
   }
 }
@@ -213,7 +213,7 @@ char* vt100_line(vt100_t* term)
  ******************************************************************************/
 
 /*============================================================================*/
-static void backspace(vt100_t* term, uint32_t num)
+static void backspace(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -223,9 +223,9 @@ static void backspace(vt100_t* term, uint32_t num)
 {
   if(term->cursor >= num)
   {
-    memmove(term->linebuffer + term->cursor - num,
-            term->linebuffer + term->cursor,
-            term->linelen - term->cursor + num);
+    (void)memmove(term->linebuffer + term->cursor - num,
+                  term->linebuffer + term->cursor,
+                  (term->linelen - term->cursor) + num);
     term->cursor -= num;
     term->linelen -= num;
     term->linebuffer[term->linelen] = '\0';
@@ -234,7 +234,7 @@ static void backspace(vt100_t* term, uint32_t num)
 
 
 /*============================================================================*/
-static void delete(vt100_t* term, uint32_t num)
+static void delete(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -244,9 +244,9 @@ static void delete(vt100_t* term, uint32_t num)
 {
   if((term->linelen != 0) && (term->cursor < term->linelen))
   {
-    memmove(term->linebuffer + term->cursor,
-            term->linebuffer + term->cursor + num,
-            term->linelen - term->cursor + num);
+    (void)memmove(term->linebuffer + term->cursor,
+                  term->linebuffer + term->cursor + num,
+                  (term->linelen - term->cursor) + num);
     term->linelen -= num;
     term->linebuffer[term->linelen] = '\0';
   }
@@ -254,7 +254,7 @@ static void delete(vt100_t* term, uint32_t num)
 
 
 /*============================================================================*/
-static void term_cursorleft(vt100_t* term, uint32_t num)
+static void term_cursorleft(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -265,13 +265,13 @@ static void term_cursorleft(vt100_t* term, uint32_t num)
   (void)term;
   if(num != 0)
   {
-    (void)fprintf(term->out, "\033[%ldD", num);
+    (void)fprintf(term->out, "\033[%uD", num);
   }
 }
 
 
 /*============================================================================*/
-static void term_cursorright(vt100_t* term, uint32_t num)
+static void term_cursorright(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -282,13 +282,13 @@ static void term_cursorright(vt100_t* term, uint32_t num)
   (void)term;
   if(num != 0)
   {
-    (void)fprintf(term->out, "\033[%ldC", num);
+    (void)fprintf(term->out, "\033[%zuC", num);
   }
 }
 
 
 /*============================================================================*/
-static bool handle_esc(vt100_t* term, char c)
+static bool handle_esc(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -423,6 +423,7 @@ static bool handle_esc(vt100_t* term, char c)
       case 'R': /* F3 OR */
       case 'S': /* F4 OS */
       case 'M': /* enter with numlock off OM */
+      default:
       {
         return true;
       }
@@ -460,11 +461,8 @@ static bool handle_esc(vt100_t* term, char c)
       }
 
       case ESC_PGUP:
-      {
-        return true;
-      }
-
       case ESC_PGDOWN:
+      default:
       {
         return true;
       }
@@ -476,7 +474,7 @@ static bool handle_esc(vt100_t* term, char c)
 
 
 /*============================================================================*/
-static void cntlchar(vt100_t* term, char c)
+static void cntlchar(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -548,12 +546,17 @@ static void cntlchar(vt100_t* term, char c)
       key_del(term);
       break;
     }
+
+    default:
+    {
+      break;
+    }
   }
 }
 
 
 /*============================================================================*/
-static void insertchar(vt100_t* term, char c)
+static void insertchar(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -563,27 +566,26 @@ static void insertchar(vt100_t* term, char c)
 {
   if((term->insert) && (term->cursor < term->linelen))
   {
-    term->linebuffer[term->cursor] = c;
-    fputc(c, stdout);
+    term->linebuffer[term->cursor] = (char)c;
+    (void)fputc(c, stdout);
     term->cursor++;
     return;
   }
   if(term->cursor < MAX_LINELEN - 2)
   {
-    memmove(term->linebuffer + term->cursor + 1,
-            term->linebuffer + term->cursor,
-            MAX_LINELEN - term->linelen - 1);
-    term->linebuffer[term->cursor] = c;
+    (void)memmove(term->linebuffer + term->cursor + 1,
+                  term->linebuffer + term->cursor,
+                  (MAX_LINELEN - term->linelen) - 1u);
+    term->linebuffer[term->cursor] = (char)c;
 
     if(term->cursor == term->linelen)
     {
-      fputc(c, stdout);
+      (void)fputc(c, stdout);
     }
     else
     {
-    (void)fprintf(term->out, term->linebuffer + term->cursor);
-    term_cursorleft(term, term->linelen - term->cursor);
-
+      (void)fputs(term->linebuffer + term->cursor, term->out);
+      term_cursorleft(term, term->linelen - term->cursor);
     }
     term->cursor++;
     term->linelen++;
@@ -682,7 +684,7 @@ static void key_bksp(vt100_t* term)
     backspace(term, 1);
     if(term->cursor == term->linelen)
     {
-      (void)fprintf(term->out, "\033[D \033[D");
+      (void)fputs("\033[D \033[D", term->out);
     }
     else
     {
@@ -720,7 +722,7 @@ static void key_ctrl_k(vt100_t* term)
   out: none
 ==============================================================================*/
 {
-  (void)fprintf(term->out, "\033[K");
+  (void)fputs("\033[K", term->out);
   term->linelen = term->cursor;
   term->linebuffer[term->linelen] = '\0';
 }
@@ -735,7 +737,7 @@ static void key_enter(vt100_t* term)
   out: none
 ==============================================================================*/
 {
-  (void)fprintf(term->out, "\n\r");
+  (void)fputs("\n\r", term->out);
   term->linebuffer[term->linelen] = '\0';
   term->cursor = 0;
   term->linelen = 0;
@@ -750,11 +752,13 @@ static int find_tokens(char* line, const char** toks, int maxtoks)
 /*------------------------------------------------------------------------------
   Function:
   finds all tokens separated by at least one space and returns the pointers to
-  them as well as their number
+  them as well as their number. maximum maxtoks tokens are returned; if there
+  are more tokens, this is indicated by the return value.
   in:  line -> string containing some space-separated tokens
        toks -> pointer to an array where the tokens will be stored
        maxtoks -> maximum number of tokens to find
   out: the array toks is populated with the pointers to the individual tokens
+       and the number of tokens present is returned
 ==============================================================================*/
 {
   char* ptr = strtok(line, " ");

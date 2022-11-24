@@ -81,7 +81,6 @@ static int showcfg(int argc, const char* const argv[]);
 static int enable_disp(int argc, const char* const argv[]);
 static int svin(int argc, const char* const argv[]);
 static int sat(int argc, const char* const argv[]);
-static int auto_svin(int argc, const char* const argv[]);
 static int conf_timeconst(int argc, const char* const argv[]);
 static int man_hold(int argc, const char* const argv[]);
 static int uptime(int argc, const char* const argv[]);
@@ -105,11 +104,10 @@ static command_t cmds[] =
   {conf_gnss,       "gnss",       "[gps|glonass|galileo] - select GNSS to use"},
   {conf_elev_mask,  "elev_mask",  "configures an elevation mask, must be between 0deg and 90deg"},
   {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
-  {svin,            "svin",       "[<time> <accuracy> | stop] - perform survey in for <time> seconds with accuracy <accuracy> or stop running survey-in"},
+  {svin,            "svin",       "[<time> <accuracy> | stop | {auto|off} ] - perform survey in for <time> seconds with accuracy <accuracy>, stop running survey-in or auto survey-in"},
   {sat,             "sat",        "display satellite info"},
-  {auto_svin,       "auto_svin",  "[on|off] configure auto-svin"},
   {conf_timeconst,  "timeconst",  "<tau> - sets the time constant (sec) between 10s and 7200s"},
-  {man_hold,        "hold",       "<number> | off - holds the DAC value to <number>, disabling the control loop, or sets the DAC automatically"},
+  {man_hold,        "hold",       "<number> | on | off - holds the DAC value to <number>, disabling the control loop, holds the dac at current value or sets the DAC automatically"},
   {uptime,          "uptime",     "shows the current uptime"},
   {offset,          "offset",     "sets the offset of the pps output in ns, must be between -0.5s to 0.5s"},
   {info,            "info",       "show version information"},
@@ -129,7 +127,7 @@ void console_task(void* param)
   rs232_init();
   vt100_init(&term, interpreter, stdout, stdin);
 
-  info(0, NULL);
+  (void)info(0, NULL);
 
   for(;;)
   {
@@ -141,18 +139,14 @@ void console_task(void* param)
        callback function with the input tokens */
     if(vt100_lineeditor(&term) != 0)
     {
-      printf("%s\n", strerror(errno));
+      (void)printf("%s\n", strerror(errno));
     }
-
   }
 }
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
-
-
-
 
 /*============================================================================*/
 static int interpreter(int argc, const char* const argv[])
@@ -230,36 +224,52 @@ static int conf_gnss(int argc, const char* const argv[])
   bool use_gps = false;
   bool use_glonass = false;
   bool use_galileo = false;
-  for(int i = 0; i < argc; i++)
+  if(argc == 0)
   {
-    if(!strcmp(argv[i], "gps"))
-    {
-      use_gps = true;
-    }
-    else if(!strcmp(argv[i], "galileo"))
-    {
-      use_galileo = true;
-    }
-    else if(!strcmp(argv[i], "glonass"))
-    {
-      use_glonass = true;
-    }
-    else
-    {
-      (void)printf("unknown GNSS <%s> - abort\n", argv[i]);
-      errno = EINVAL;
-      return -1;
-    }
+    config_t* cfg = get_config();
+    (void)printf("use GPS: %s\n", (cfg->use_gps ? "yes" : "no"));
+    (void)printf("use GLONASS: %s\n", (cfg->use_glonass ? "yes" : "no"));
+    (void)printf("use GALILEO: %s\n", (cfg->use_galileo ? "yes" : "no"));
+    return 0;
   }
+  else if(argc < 4)
+  {
+    for(int i = 0; i < argc; i++)
+    {
+      if(!strcmp(argv[i], "gps"))
+      {
+        use_gps = true;
+      }
+      else if(!strcmp(argv[i], "galileo"))
+      {
+        use_galileo = true;
+      }
+      else if(!strcmp(argv[i], "glonass"))
+      {
+        use_glonass = true;
+      }
+      else
+      {
+        (void)printf("unknown GNSS <%s> - abort\n", argv[i]);
+        errno = EINVAL;
+        return -1;
+      }
+    }
 
-  config_t* cfg = get_config();
-  cfg->use_gps = use_gps;
-  cfg->use_galileo = use_galileo;
-  cfg->use_glonass = use_glonass;
+    config_t* cfg = get_config();
+    cfg->use_gps = use_gps;
+    cfg->use_galileo = use_galileo;
+    cfg->use_glonass = use_glonass;
 
-  /* inform the gps module about the changed configuration */
-  reconfigure_gnss();
-  return 0;
+    /* inform the gps module about the changed configuration */
+    reconfigure_gnss();
+    return 0;
+  }
+  else
+  {
+    errno = E2BIG;
+    return -1;
+  }
 }
 
 
@@ -274,7 +284,12 @@ static int conf_elev_mask(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
-  if(argc == 1)
+  if(argc == 0)
+  {
+    (void)printf("elevation mask: %d\n", get_config()->elevation_mask);
+    return 0;
+  }
+  else if(argc == 1)
   {
     int32_t elevmask;
     if(str2num(argv[0], &elevmask, 0, 90))
@@ -286,7 +301,7 @@ static int conf_elev_mask(int argc, const char* const argv[])
   }
   else
   {
-    errno = EINVAL;
+    errno = E2BIG;
     return -1;
   }
 }
@@ -312,7 +327,7 @@ static int savecfg(int argc, const char* const argv[])
   }
   else
   {
-    errno = EINVAL;
+    errno = E2BIG;
     return -1;
   }
 }
@@ -336,27 +351,24 @@ static int showcfg(int argc, const char* const argv[])
   {
     config_t* cfg = get_config();
     (void)printf("last DAC value: %d\n", cfg->last_dacval);
-    (void)printf("use GPS: %s\n", (cfg->use_gps ? "yes" : "no"));
-    (void)printf("use GLONASS: %s\n", (cfg->use_glonass ? "yes" : "no"));
-    (void)printf("use GALILEO: %s\n", (cfg->use_galileo ? "yes" : "no"));
+    (void)conf_gnss(0, NULL);
     (void)printf("RS-232 baudrate: %lu\n", cfg->rs232_baudrate);
     (void)printf("fixed position valid: %s\n", (cfg->fixpos_valid ? "yes" : "no"));
     (void)printf("ECEF X position: %ld cm\n", cfg->x);
     (void)printf("ECEF Y position: %ld cm\n", cfg->y);
     (void)printf("ECEF Z position: %ld cm\n", cfg->z);
     (void)printf("position accuracy: %lu mm\n", cfg->accuracy);
-    (void)printf("survey-in duration: %lu sec\n", cfg->svin_dur);
-    (void)printf("survey-in accuracy limit: %lu mm\n", cfg->accuracy_limit);
-    (void)printf("elevation mask: %d\n", cfg->elevation_mask);
-    (void)printf("auto-svin: %s\n", cfg->auto_svin ? "on" : "off");
-    (void)printf("tau: %d sec\n", cfg->tau);
-    (void)printf("time offset: %ld ns\n", cfg->timeoffset);
-    (void)printf("pps duration: %lu ms\n", cfg->pps_dur);
+
+    (void)conf_elev_mask(0, NULL);
+    (void)svin(0, NULL);
+    (void)conf_timeconst(0, NULL);
+    (void)offset(0, NULL);
+    (void)set_pps_dur(0, NULL);
     return 0;
   }
   else
   {
-    errno = EINVAL;
+    errno = E2BIG;
     return -1;
   }
 }
@@ -431,13 +443,37 @@ static int svin(int argc, const char* const argv[])
 
   switch(argc)
   {
+    /* just svin */
+    case 0:
+    {
+      config_t* cfg = get_config();
+
+      // TODO: display message about svin status
+      (void)printf("auto-svin: %s\n", cfg->auto_svin ? "on" : "off");
+      (void)printf("survey-in duration: %lu sec\n", cfg->svin_dur);
+      (void)printf("survey-in accuracy limit: %lu mm\n", cfg->accuracy_limit);
+      return 0;
+    }
+
     /* svin stop */
     case 1:
     {
       if(!strcmp(argv[0], "stop"))
       {
         disable_tmode();
+        return 0;
       }
+      else if(!strcmp(argv[0], "auto"))
+      {
+        get_config()->auto_svin = true;
+        return 0;
+      }
+      else if(!strcmp(argv[0], "off"))
+      {
+        get_config()->auto_svin = false;
+      }
+
+      errno = EINVAL;
       break;
     }
 
@@ -453,17 +489,18 @@ static int svin(int argc, const char* const argv[])
         cfg->svin_dur = (uint32_t)tm;
         cfg->accuracy_limit = (uint32_t)accuracy;
         start_svin();
+        return 0;
       }
       break;
     }
 
     default:
     {
+      errno = E2BIG;
       break;
     }
   }
 
-  errno = EINVAL;
   return -1;
 }
 
@@ -546,35 +583,8 @@ static int sat(int argc, const char* const argv[])
     (void)printf("%d sats; last update: %llu ms ago\n\n", gnss->sat->numsv, age);
     return 0;
   }
-  errno = EINVAL;
-  return -1;
-}
 
-
-/*============================================================================*/
-static int auto_svin(int argc, const char* const argv[])
-/*------------------------------------------------------------------------------
-  Function:
-  configure auto survey-in
-  in:  argc -> number of arguments, see below
-       argv -> array of strings; one required ("on" enables auto-svin, "off"
-       disabels it)
-  out: none
-==============================================================================*/
-{
-  if(argc == 1)
-  {
-    if(!strcmp(argv[0], "on"))
-    {
-      get_config()->auto_svin = true;
-    }
-    else if(!strcmp(argv[0], "off"))
-    {
-      get_config()->auto_svin = false;
-    }
-    return 0;
-  }
-  errno = EINVAL;
+  errno = E2BIG;
   return -1;
 }
 
@@ -589,16 +599,24 @@ static int conf_timeconst(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
-  if(argc == 1)
+  if(argc == 0)
+  {
+    (void)printf("time constant: %d sec\n", get_config()->tau);
+    return 0;
+  }
+  else if(argc == 1)
   {
     int32_t tau;
     if(str2num(argv[0], &tau, 10, 7200))
     {
       get_config()->tau = (uint16_t)tau;
+      return 0;
     }
-    return 0;
+
+    return -1;
   }
-  errno = EINVAL;
+
+  errno = E2BIG;
   return -1;
 }
 
@@ -614,7 +632,12 @@ static int man_hold(int argc, const char* const argv[])
 ==============================================================================*/
 {
   extern bool dac_hold;
-  if(argc == 1)
+  if(argc == 0)
+  {
+    (void)printf("manual hold: %s\n", dac_hold ? "on" : "off");
+    return 0;
+  }
+  else if(argc == 1)
   {
     /* command given is "hold off" ? */
     if(!strcmp(argv[0], "off"))
@@ -622,13 +645,20 @@ static int man_hold(int argc, const char* const argv[])
       dac_hold = false;
       return 0;
     }
+    else if(!strcmp(argv[0], "on"))
+    {
+      dac_hold = true;
+      return 0;
+    }
     else
     {
+      /* command is given hold <number> ? */
       int32_t dac;
       if(str2num(argv[0], &dac, 0, UINT16_MAX))
       {
         dac_hold = true;
         set_dac((uint16_t)dac);
+        return 0;
       }
       else
       {
@@ -636,7 +666,8 @@ static int man_hold(int argc, const char* const argv[])
       }
     }
   }
-  errno = EINVAL;
+
+  errno = E2BIG;
   return -1;
 }
 
@@ -665,7 +696,7 @@ static int uptime(int argc, const char* const argv[])
     (void)printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
     return 0;
   }
-  errno = EINVAL;
+  errno = E2BIG;
   return -1;
 }
 
@@ -679,6 +710,11 @@ static int offset(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
+  if(argc == 0)
+  {
+    (void)printf("pps offset: %ld ns\n", get_config()->timeoffset);
+    return 0;
+  }
   if(argc == 1)
   {
     /* when the setpoint is changed, then restart the control loop.
@@ -694,7 +730,8 @@ static int offset(int argc, const char* const argv[])
       return -1;
     }
   }
-  errno = EINVAL;
+
+  errno = E2BIG;
   return -1;
 }
 
@@ -727,13 +764,18 @@ static int set_pps_dur(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
+  if(argc == 0)
+  {
+    (void)printf("pps duration: %lu ms\n", get_config()->pps_dur);
+    return 0;
+  }
   if(argc == 1)
   {
     int32_t dur;
     if(str2num(argv[0], &dur, 1, 999))
     {
       get_config()->pps_dur = (uint32_t)dur;
-      set_pps_duration(dur);
+      set_pps_duration((uint32_t)dur);
       return 0;
     }
     else
@@ -741,7 +783,8 @@ static int set_pps_dur(int argc, const char* const argv[])
       return -1;
     }
   }
-  errno = EINVAL;
+
+  errno = E2BIG;
   return -1;
 }
 

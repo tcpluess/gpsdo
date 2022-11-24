@@ -39,8 +39,8 @@
  * CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define MAX_LINELEN 80u
-#define MAX_TOKENS 10u
+#define MAX_LINELEN 80
+#define MAX_TOKENS 10
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -55,12 +55,11 @@ typedef int (*interpreter_func)(int argc, const char* const argv[]);
 typedef struct
 {
   char linebuffer[MAX_LINELEN];
-  uint32_t cursor;
-  uint32_t linelen;
+  size_t cursor;
+  size_t linelen;
   bool escape;
   char esc_code;
   bool insert;
-
   interpreter_func interpreter;
   FILE* out;
   FILE* in;
@@ -72,7 +71,7 @@ typedef struct
  ******************************************************************************/
 
 /*============================================================================*/
-extern void vt100_init(vt100_t* term, interpreter_func interpreter, FILE* out, FILE* in);
+extern void vt100_init(vt100_t* term, interpreter_func intr, FILE* out, FILE* in);
 /*------------------------------------------------------------------------------
   Function:
   this is the worker "thread" for the console
