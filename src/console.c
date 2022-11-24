@@ -40,6 +40,7 @@
 #include "dac.h"
 #include "cntl.h"
 #include "ublox.h"
+#include "vt100.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -47,14 +48,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
-#include <ctype.h>
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
-
-#define MAX_LINELEN 80u
-#define MAX_TOKENS 10u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -64,17 +61,9 @@
  * PRIVATE TYPE DEFINITIONS
  ******************************************************************************/
 
-typedef enum
-{
-  startup,
-  prompt,
-  input,
-  evaluate
-} consolestatus_t;
-
 typedef struct
 {
-  void(*func)(int argc, const char* const argv[]);
+  int(*func)(int argc, const char* const argv[]);
   const char* name;
   const char* helpstring;
 } command_t;
@@ -83,41 +72,30 @@ typedef struct
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
-static int find_tokens(char* line, const char** toks, int maxtoks);
-static void interpreter(int argc, const char* const argv[]);
-static void help(int argc, const char* const argv[]);
-static void conf_gnss(int argc, const char* const argv[]);
-static void conf_elev_mask(int argc, const char* const argv[]);
-static void savecfg(int argc, const char* const argv[]);
-static void showcfg(int argc, const char* const argv[]);
-static void enable_disp(int argc, const char* const argv[]);
-static void svin(int argc, const char* const argv[]);
-static void sat(int argc, const char* const argv[]);
-static void auto_svin(int argc, const char* const argv[]);
-static void conf_timeconst(int argc, const char* const argv[]);
-static void man_hold(int argc, const char* const argv[]);
-static void uptime(int argc, const char* const argv[]);
-static void offset(int argc, const char* const argv[]);
-static void info(int argc, const char* const argv[]);
-static void set_pps_dur(int argc, const char* const argv[]);
+static int interpreter(int argc, const char* const argv[]);
+static int help(int argc, const char* const argv[]);
+static int conf_gnss(int argc, const char* const argv[]);
+static int conf_elev_mask(int argc, const char* const argv[]);
+static int savecfg(int argc, const char* const argv[]);
+static int showcfg(int argc, const char* const argv[]);
+static int enable_disp(int argc, const char* const argv[]);
+static int svin(int argc, const char* const argv[]);
+static int sat(int argc, const char* const argv[]);
+static int auto_svin(int argc, const char* const argv[]);
+static int conf_timeconst(int argc, const char* const argv[]);
+static int man_hold(int argc, const char* const argv[]);
+static int uptime(int argc, const char* const argv[]);
+static int offset(int argc, const char* const argv[]);
+static int info(int argc, const char* const argv[]);
+static int set_pps_dur(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
-static bool lineeditor(int rx);
-static void insertchar(char c);
-static void cntlchar(char c);
-static void backspace(int num);
-static void delete(int num);
-static void term_cursorleft(uint32_t num);
-static void term_cursorright(uint32_t num);
-static bool handle_esc(char c);
+
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static char linebuffer[MAX_LINELEN];
-static uint32_t cursor = 0;
-static uint32_t linelen = 0;
-static bool escape = false;
+static vt100_t term;
 
 static command_t cmds[] =
 {
@@ -140,7 +118,6 @@ static command_t cmds[] =
 
 volatile uint16_t stat_dac = 0u;
 
-extern volatile svindata_t svin_info;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -150,51 +127,23 @@ void console_task(void* param)
 {
   (void)param;
   rs232_init();
-  static consolestatus_t status = startup;
-  int rx;
+  vt100_init(&term, interpreter, stdout, stdin);
+
+  info(0, NULL);
+
   for(;;)
   {
-    switch(status)
+    /* console prompt */
+    txchar('#');
+    txchar(' ');
+
+    /* the line editor receives characters and then invokes the interpreter
+       callback function with the input tokens */
+    if(vt100_lineeditor(&term) != 0)
     {
-      /* clears the terminal and prints the info screen */
-      case startup:
-      {
-        info(0, NULL);
-        status = prompt;
-        break;
-      }
-
-      /* prints the console prompt character */
-      case prompt:
-      {
-        txchar('#');
-        txchar(' ');
-        status = input;
-        cursor = 0;
-        break;
-      }
-
-      /* processes the received characters and echoes them back accordingly */
-      case input:
-      {
-        rx = kbhit();
-        if(lineeditor(rx) == true)
-        {
-          status = evaluate;
-        }
-        break;
-      }
-
-      /* if a command line has been entered, it is processed in this state */
-      case evaluate:
-      {
-        const char* toks[MAX_TOKENS];
-        int ntoks = find_tokens(linebuffer, &toks[0], MAX_TOKENS);
-        interpreter(ntoks, toks);
-        status = prompt;
-        break;
-      }
+      printf("%s\n", strerror(errno));
     }
+
   }
 }
 
@@ -202,38 +151,11 @@ void console_task(void* param)
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
 
-/*============================================================================*/
-static int find_tokens(char* line, const char** toks, int maxtoks)
-/*------------------------------------------------------------------------------
-  Function:
-  finds all tokens separated by at least one space and returns the pointers to
-  them as well as their number
-  in:  line -> string containing some space-separated tokens
-       toks -> pointer to an array where the tokens will be stored
-       maxtoks -> maximum number of tokens to find
-  out: the array toks is populated with the pointers to the individual tokens
-==============================================================================*/
-{
-  char* ptr = strtok(line, " ");
 
-  for(int toknum = 0; toknum < maxtoks; toknum++)
-  {
-    if(ptr != NULL)
-    {
-      toks[toknum] = ptr;
-      ptr = strtok(NULL, " ");
-    }
-    else
-    {
-      return toknum;
-    }
-  }
-  return 0;
-}
 
 
 /*============================================================================*/
-static void interpreter(int argc, const char* const argv[])
+static int interpreter(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   the interpreter gets the number of arguments and the individual arguments,
@@ -254,17 +176,18 @@ static void interpreter(int argc, const char* const argv[])
     {
       if(!strcmp(command, cmds[i].name))
       {
-        cmds[i].func(argc-1, &argv[1]);
-        return;
+        return cmds[i].func(argc-1, &argv[1]);
       }
     }
-    (void)printf("error\n");
   }
+
+  errno = ENOSYS;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void help(int argc, const char* const argv[])
+static int help(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   the interpreter gets the number of arguments and the individual arguments,
@@ -288,11 +211,13 @@ static void help(int argc, const char* const argv[])
       (void)printf("%s : %s\n", cmd->name, cmd->helpstring);
     }
   }
+
+  return 0;
 }
 
 
 /*============================================================================*/
-static void conf_gnss(int argc, const char* const argv[])
+static int conf_gnss(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the gnss systems to be used
@@ -321,7 +246,9 @@ static void conf_gnss(int argc, const char* const argv[])
     }
     else
     {
-      (void)printf("unknown GNSS <%s> - skipped\n", argv[i]);
+      (void)printf("unknown GNSS <%s> - abort\n", argv[i]);
+      errno = EINVAL;
+      return -1;
     }
   }
 
@@ -332,11 +259,12 @@ static void conf_gnss(int argc, const char* const argv[])
 
   /* inform the gps module about the changed configuration */
   reconfigure_gnss();
+  return 0;
 }
 
 
 /*============================================================================*/
-static void conf_elev_mask(int argc, const char* const argv[])
+static int conf_elev_mask(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the elevation mask
@@ -353,12 +281,19 @@ static void conf_elev_mask(int argc, const char* const argv[])
     {
       get_config()->elevation_mask = (int8_t)elevmask;
     }
+
+    return 0;
+  }
+  else
+  {
+    errno = EINVAL;
+    return -1;
   }
 }
 
 
 /*============================================================================*/
-static void savecfg(int argc, const char* const argv[])
+static int savecfg(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   save the configuration to the eeprom
@@ -373,16 +308,18 @@ static void savecfg(int argc, const char* const argv[])
   if(argc == 0)
   {
     save_config();
+    return 0;
   }
   else
   {
-    (void)printf("error");
+    errno = EINVAL;
+    return -1;
   }
 }
 
 
 /*============================================================================*/
-static void showcfg(int argc, const char* const argv[])
+static int showcfg(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays the currently used configuration data (not necessarily stored in
@@ -415,16 +352,18 @@ static void showcfg(int argc, const char* const argv[])
     (void)printf("tau: %d sec\n", cfg->tau);
     (void)printf("time offset: %ld ns\n", cfg->timeoffset);
     (void)printf("pps duration: %lu ms\n", cfg->pps_dur);
+    return 0;
   }
   else
   {
-    (void)printf("error");
+    errno = EINVAL;
+    return -1;
   }
 }
 
 
 /*============================================================================*/
-static void enable_disp(int argc, const char* const argv[])
+static int enable_disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enables the auto-display
@@ -463,15 +402,20 @@ static void enable_disp(int argc, const char* const argv[])
                    gnss->pvt->tacc, ctl->mode);
       if(canread())
       {
-        return;
+        return 0;
       }
     }
+  }
+  else
+  {
+    errno = EINVAL;
+    return -1;
   }
 }
 
 
 /*============================================================================*/
-static void svin(int argc, const char* const argv[])
+static int svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   starts a survey-in usng a given duration and accuracy limit
@@ -515,15 +459,17 @@ static void svin(int argc, const char* const argv[])
 
     default:
     {
-      (void)printf("unknown syntax\n");
+      break;
     }
   }
-  return;
+
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void sat(int argc, const char* const argv[])
+static int sat(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   displays satellite info
@@ -598,12 +544,15 @@ static void sat(int argc, const char* const argv[])
 
     uint64_t age = get_uptime_msec() - gnss->sat->time;
     (void)printf("%d sats; last update: %llu ms ago\n\n", gnss->sat->numsv, age);
+    return 0;
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void auto_svin(int argc, const char* const argv[])
+static int auto_svin(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure auto survey-in
@@ -623,12 +572,15 @@ static void auto_svin(int argc, const char* const argv[])
     {
       get_config()->auto_svin = false;
     }
+    return 0;
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void conf_timeconst(int argc, const char* const argv[])
+static int conf_timeconst(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure time constant and prefilter
@@ -644,12 +596,15 @@ static void conf_timeconst(int argc, const char* const argv[])
     {
       get_config()->tau = (uint16_t)tau;
     }
+    return 0;
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void man_hold(int argc, const char* const argv[])
+static int man_hold(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enable/disable DAC hold
@@ -665,6 +620,7 @@ static void man_hold(int argc, const char* const argv[])
     if(!strcmp(argv[0], "off"))
     {
       dac_hold = false;
+      return 0;
     }
     else
     {
@@ -674,13 +630,19 @@ static void man_hold(int argc, const char* const argv[])
         dac_hold = true;
         set_dac((uint16_t)dac);
       }
+      else
+      {
+        return -1;
+      }
     }
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void uptime(int argc, const char* const argv[])
+static int uptime(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   shows the uptime. does not need arguments
@@ -701,12 +663,15 @@ static void uptime(int argc, const char* const argv[])
     uint32_t day = (uint32_t)(tm / 24ull);
 
     (void)printf("uptime: %lu days, %lu hours, %lu min, %lu sec\n", day, hour, min, sec);
+    return 0;
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void offset(int argc, const char* const argv[])
+static int offset(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   sets the offset of the pps output
@@ -722,13 +687,20 @@ static void offset(int argc, const char* const argv[])
     if(str2num(argv[0], &off, -500000000, 500000000))
     {
       get_config()->timeoffset = off;
+      return 0;
+    }
+    else
+    {
+      return -1;
     }
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
 /*============================================================================*/
-static void info(int argc, const char* const argv[])
+static int info(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   show version info
@@ -742,11 +714,12 @@ static void info(int argc, const char* const argv[])
   (void)printf("compiled " __DATE__ " " __TIME__ "\n");
   (void)printf("with FreeRTOS " tskKERNEL_VERSION_NUMBER "\n");
   (void)printf("use \"help\" to see the available commands\n\n");
+  return 0;
 }
 
 
 /*============================================================================*/
-static void set_pps_dur(int argc, const char* const argv[])
+static int set_pps_dur(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -761,8 +734,15 @@ static void set_pps_dur(int argc, const char* const argv[])
     {
       get_config()->pps_dur = (uint32_t)dur;
       set_pps_duration(dur);
+      return 0;
+    }
+    else
+    {
+      return -1;
     }
   }
+  errno = EINVAL;
+  return -1;
 }
 
 
@@ -801,389 +781,6 @@ static bool str2num(const char* str, int32_t* value, int32_t min, int32_t max)
 
 error:
   (void)printf("invalid value or value out of range: %s\n", str);
-  return false;
-}
-
-
-/*============================================================================*/
-static bool lineeditor(int rx)
-/*------------------------------------------------------------------------------
-  Function:
-  the line editor works similar to gnu's libreadline.
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  /* wrong character */
-  if(rx < 0)
-  {
-    return false;
-  }
-
-  if(escape)
-  {
-    txchar(rx);
-    if(handle_esc(rx))
-    {
-      escape = false;
-    }
-    return false;
-  }
-
-  if((rx == '\n') || (rx == '\r'))
-  {
-    txstr("\n\r");
-    linebuffer[linelen] = '\0';
-     cursor = 0;
-    linelen = 0;
-
-    return true;
-  }
-
-  if(iscntrl(rx))
-  {
-    cntlchar(rx);
-  }
-  else
-  {
-    insertchar(rx);
-  }
-
-  return false;
-}
-
-
-/*============================================================================*/
-static void insertchar(char c)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if(cursor < MAX_LINELEN - 2)
-  {
-    memmove(linebuffer + cursor + 1, linebuffer + cursor, MAX_LINELEN - linelen - 1);
-    linebuffer[cursor] = c;
-
-    if(cursor == linelen)
-    {
-      txchar(c);
-    }
-    else
-    {
-    txstr(linebuffer + cursor);
-    term_cursorleft(linelen - cursor);
-
-    }
-    cursor++;
-    linelen++;
-    linebuffer[linelen] = '\0';
-  }
-}
-
-
-/*============================================================================*/
-static void cntlchar(char c)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  switch(c)
-  {
-    case '\033':
-    {
-      escape = true;
-      break;
-    }
-
-    /* single backspace */
-    case '\b':
-    {
-      if(cursor > 0)
-      {
-      backspace(1);
-      if(cursor == linelen)
-      {
-        txstr("\033[D \033[D");
-      }
-      else
-      {
-        /* go back one char and then delete until the end of the line */
-        txstr("\033[D\033[K");
-
-        /* print the modified text */
-        txstr(linebuffer + cursor);
-        term_cursorleft(linelen - cursor);
-      }
-    }
-      break;
-    }
-
-    /* delete to the beginning of the line (ctrl+u) */
-    case 0x15:
-    {
-      term_cursorleft(cursor);
-      backspace(cursor);
-      txstr("\033[K");
-      txstr(linebuffer + cursor);
-      term_cursorleft(linelen);
-      break;
-    }
-
-    /* delete to the end of the line (ctrl+k) */
-    case 0x0b:
-    {
-      txstr("\033[K");
-      linelen = cursor;
-      linebuffer[linelen] = '\0';
-      break;
-    }
-
-    /* jump to end of line (ctrl+e) */
-    case 0x05:
-    {
-      term_cursorright(linelen - cursor);
-      cursor = linelen;
-      break;
-    }
-
-    /* jump to begin of line (ctrl+a) */
-    case 0x01:
-    {
-      term_cursorleft(cursor);
-      cursor = 0;
-      break;
-    }
-
-    /* move cursor right (ctrl+f) */
-    case 0x06:
-    {
-      if(cursor < linelen)
-      {
-        cursor++;
-        term_cursorright(1);
-      }
-      break;
-    }
-
-    /* move cursor left (ctrl+b) */
-    case 0x02:
-    {
-      if(cursor > 0)
-      {
-        cursor--;
-        term_cursorleft(1);
-      }
-      break;
-    }
-
-    /* delete character (ctrl+d) */
-    case 0x04:
-    {
-      delete(1);
-      txstr("\033[K");
-      txstr(linebuffer + cursor);
-      term_cursorleft(linelen - cursor);
-      break;
-    }
-  }
-}
-
-
-/*============================================================================*/
-static void backspace(int num)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if(cursor >= num)
-  {
-    memmove(linebuffer + cursor - num, linebuffer + cursor, linelen - cursor + num);
-    cursor -= num;
-    linelen -= num;
-    linebuffer[linelen] = '\0';
-  }
-}
-
-
-/*============================================================================*/
-static void delete(int num)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if((linelen != 0) && (cursor < linelen))
-  {
-    memmove(linebuffer + cursor, linebuffer + cursor + num, linelen - cursor + num);
-    linelen -= num;
-    linebuffer[linelen] = '\0';
-  }
-}
-
-
-/*============================================================================*/
-static void term_cursorleft(uint32_t num)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if(num != 0)
-  {
-  char buffer[10];
-  snprintf(buffer, 10, "\033[%ldD", num);
-  txstr(buffer);
-}
-}
-
-
-/*============================================================================*/
-static void term_cursorright(uint32_t num)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if(num != 0)
-  {
-  char buffer[10];
-  snprintf(buffer, 10, "\033[%ldC", num);
-  txstr(buffer);
-}
-}
-
-
-/*============================================================================*/
-static bool handle_esc(char c)
-/*------------------------------------------------------------------------------
-  Function:
-  set the duration of the pps pulse
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  static bool bracket = false;
-  static bool tilde = false;
-  static bool waitkey = false;
-
-  switch(c)
-  {
-    case '[':
-      {
-        bracket = true;
-        return false;
-      }
-
-    case 'D':
-      {
-        if(bracket)
-        {
-          if(cursor > 0)
-          {
-            cursor--;
-            term_cursorleft(1);
-          }
-          bracket = false;
-        }
-          return true;
-      }
-
-    case 'C':
-      {
-        if(bracket)
-        {
-          if(cursor < linelen)
-      {
-        cursor++;
-        term_cursorright(1);
-      }
-          bracket = false;
-
-        }
-        return true;
-      }
-
-    case '1':
-      {
-        term_cursorleft(cursor);
-        cursor = 0;
-        tilde = true;
-        return false;
-      }
-
-    case '2': /* insert */
-      {
-        tilde=true;
-        return false;
-      }
-
-      case 'O':
-      {
-        waitkey = true;
-        return false;
-      }
-
-    case 'F':
-      {
-        if(waitkey)
-        {
-          waitkey = false;
-        term_cursorright(linelen - cursor);
-        cursor = linelen;
-        return true;
-        }
-        break;
-      }
-
-    case '3':
-      {
-        delete(1);
-        txstr("\033[K");
-        txstr(linebuffer + cursor);
-        term_cursorleft(linelen - cursor);
-        tilde = true;
-        return false;
-      }
-
-    case '5':
-    case '6':
-      {
-        tilde = true;
-        return false;
-      }
-
-
-    case '~':
-      {
-        if(tilde)
-        {
-          return true;
-        }
-        break;
-      }
-
-    default:
-      {
-        return true;
-      }
-
-  }
-
   return false;
 }
 

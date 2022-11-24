@@ -118,21 +118,22 @@ _ssize_t _read_r(struct _reent *r, int file, void *ptr, size_t len)
     case STDIN_FILENO:
     {
       extern int kbhit(void);
-      size_t numread;
+      size_t numread = 0;
       char* dest = (char*)ptr;
 
-      for(numread = 0; numread < len; numread++)
+      while(numread < len)
       {
         int rxchar = kbhit();
         if(rxchar >= 0)
         {
           dest[numread] = (char)rxchar;
+          numread++;
         }
         else
         {
           r->_errno = EIO;
+          break;
         }
-        break;
       }
       return numread;
     }
