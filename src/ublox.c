@@ -91,7 +91,7 @@
 #define TX_BUFFER_SIZE 50u
 #define RECEIVE_TIMEOUT pdMS_TO_TICKS(10u)
 #define ACK_TIMEOUT 100u /* ms */
-#define RESET_DELAY pdMS_TO_TICKS(100u)
+#define RESET_DELAY pdMS_TO_TICKS(250u)
 
 #define FIX_3D 3u
 #define FIX_TIME 5u
@@ -217,6 +217,7 @@ void gps_task(void* param)
   ublox_events = xEventGroupCreate();
   (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
   qerr.valid = false;
+  bool fixpos_verify = false;
 
   /* initialise hardware */
   init_pins();
@@ -244,13 +245,25 @@ void gps_task(void* param)
   config_t* cfg = get_config();
   ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
   ubx_config_navmodel(cfg->elevation_mask);
+  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
   ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
   ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_DOP, 1);
 
-  /* timing mode must be disabled before survey-in can be started again */
-  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+  /* if the fixed position in the eeprom is valid, we start a short survey-in
+     to validate the position. also, if auto svin is enabled, the survey-in
+     will be started as well. */
+  if(cfg->fixpos_valid)
+  {
+    fixpos_verify = true;
+    start_svin();
+  }
+  else if(cfg->auto_svin)
+  {
+    start_svin();
+  }
+
   for(;;)
   {
     /* wait until at least one of the following events occurs:
@@ -259,18 +272,23 @@ void gps_task(void* param)
      - request to perform a survey-in
      - request to configure the fixed position mode
      - request to change gnss systems used */
-    uint32_t bits = EVENT_DISABLE_TMODE | EVENT_DO_SVIN | EVENT_SET_FIXPOS_MODE | EVENT_SVIN_RECEIVED | EVENT_RECONFIG_GNSS;
+    uint32_t bits = EVENT_DISABLE_TMODE |
+                    EVENT_DO_SVIN |
+                    EVENT_SET_FIXPOS_MODE |
+                    EVENT_SVIN_RECEIVED |
+                    EVENT_RECONFIG_GNSS;
     bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
 
     if(bits & EVENT_DISABLE_TMODE)
     {
-      ubx_config_tmode(tmode_disable, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
+      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
       ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
     }
 
     if(bits & EVENT_DO_SVIN)
     {
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+      vTaskDelay(RESET_DELAY);
       ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
       ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
     }
@@ -282,16 +300,41 @@ void gps_task(void* param)
 
     if(bits & EVENT_SVIN_RECEIVED)
     {
-      /* if the svin is finished, disable further svin messages */
-      if((svin_data.valid == true) && (svin_data.active == false))
+      if(svin_data.active)
       {
+        /* we received data from the survey-in */
+        if((cfg->fixpos_valid) && fixpos_verify)
+        {
+          /* check if the currently determined distance is close to what is
+             saved in the eeprom */
+          float dx = (float)(cfg->x - svin_data.x);
+          float dy = (float)(cfg->y - svin_data.y);
+          float dz = (float)(cfg->z - svin_data.z);
+
+          /* calculate error vector in mm - ecef coordinates are in cm! */
+          float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
+          printf("# error vector magnitude: %f mm\n", mag);
+          if(mag < cfg->accuracy_limit)
+          {
+            fixpos_verify = false;
+            printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
+            ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+            vTaskDelay(100u);
+            set_fixpos_mode();
+            ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+          }
+        }
+      }
+      else if(svin_data.valid == true)
+      {
+        /* the survey-in is finished */
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
 
         /* copy the svin data to the configuration */
         cfg->x = svin_data.x;
         cfg->y = svin_data.y;
         cfg->z = svin_data.z;
-        cfg->accuracy = (uint32_t)sqrt((double)svin_data.meanv);
+        cfg->accuracy = (uint32_t)sqrtf((float)svin_data.meanv);
         cfg->fixpos_valid = true;
       }
     }
@@ -340,6 +383,7 @@ void reconfigure_gnss(void)
 {
   (void)xEventGroupSetBits(ublox_events, EVENT_RECONFIG_GNSS);
 }
+
 
 void disable_tmode(void)
 {

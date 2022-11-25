@@ -74,19 +74,18 @@ typedef struct
 
 static int interpreter(int argc, const char* const argv[]);
 static int help(int argc, const char* const argv[]);
-static int conf_gnss(int argc, const char* const argv[]);
-static int conf_elev_mask(int argc, const char* const argv[]);
-static int savecfg(int argc, const char* const argv[]);
-static int showcfg(int argc, const char* const argv[]);
-static int enable_disp(int argc, const char* const argv[]);
+static int gnss(int argc, const char* const argv[]);
+static int elev_mask(int argc, const char* const argv[]);
+static int conf(int argc, const char* const argv[]);
+static int disp(int argc, const char* const argv[]);
 static int svin(int argc, const char* const argv[]);
 static int sat(int argc, const char* const argv[]);
-static int conf_timeconst(int argc, const char* const argv[]);
-static int man_hold(int argc, const char* const argv[]);
+static int timeconst(int argc, const char* const argv[]);
+static int hold(int argc, const char* const argv[]);
 static int uptime(int argc, const char* const argv[]);
-static int offset(int argc, const char* const argv[]);
 static int info(int argc, const char* const argv[]);
-static int set_pps_dur(int argc, const char* const argv[]);
+static int pps(int argc, const char* const argv[]);
+static int reboot(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
 
 
@@ -99,19 +98,18 @@ static vt100_t term;
 static command_t cmds[] =
 {
   {help,            "help",       "display this screen"},
-  {showcfg,         "conf",       "display all configuration items"},
-  {savecfg,         "save",       "save the configuration to EEPROM"},
-  {conf_gnss,       "gnss",       "[gps|glonass|galileo] - select GNSS to use"},
-  {conf_elev_mask,  "elev_mask",  "configures an elevation mask, must be between 0deg and 90deg"},
-  {enable_disp,     "disp",       "auto display status (for logging); leave with <enter>"},
+  {conf,            "conf",       "<show> | <save> - display all configuration items"},
+  {gnss,            "gnss",       "[gps|glonass|galileo] - select GNSS to use"},
+  {elev_mask,       "elev_mask",  "configures an elevation mask, must be between 0deg and 90deg"},
+  {disp,            "disp",       "auto display status (for logging); leave with <enter>"},
   {svin,            "svin",       "[<time> <accuracy> | stop | {auto|off} ] - perform survey in for <time> seconds with accuracy <accuracy>, stop running survey-in or auto survey-in"},
   {sat,             "sat",        "display satellite info"},
-  {conf_timeconst,  "timeconst",  "<tau> - sets the time constant (sec) between 10s and 7200s"},
-  {man_hold,        "hold",       "<number> | on | off - holds the DAC value to <number>, disabling the control loop, holds the dac at current value or sets the DAC automatically"},
+  {timeconst,       "timeconst",  "<tau> - sets or shows the time constant (sec) between 10s and 7200s"},
+  {hold,            "hold",       "<number> | on | off - holds the DAC value to <number>, disabling the control loop, holds the dac at current value or sets the DAC automatically"},
   {uptime,          "uptime",     "shows the current uptime"},
-  {offset,          "offset",     "sets the offset of the pps output in ns, must be between -0.5s to 0.5s"},
   {info,            "info",       "show version information"},
-  {set_pps_dur,     "pps_dur",    "<ms> configures the duration of the PPS pulse"},
+  {reboot,          "reboot",     "reboot the system"},
+  {pps,             "pps",        "offset <ns> | dur <ms> - configures the duration of the PPS pulse in ms and the offset in ns"},
 };
 
 volatile uint16_t stat_dac = 0u;
@@ -211,7 +209,7 @@ static int help(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int conf_gnss(int argc, const char* const argv[])
+static int gnss(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the gnss systems to be used
@@ -224,9 +222,9 @@ static int conf_gnss(int argc, const char* const argv[])
   bool use_gps = false;
   bool use_glonass = false;
   bool use_galileo = false;
+  config_t* cfg = get_config();
   if(argc == 0)
   {
-    config_t* cfg = get_config();
     (void)printf("use GPS: %s\n", (cfg->use_gps ? "yes" : "no"));
     (void)printf("use GLONASS: %s\n", (cfg->use_glonass ? "yes" : "no"));
     (void)printf("use GALILEO: %s\n", (cfg->use_galileo ? "yes" : "no"));
@@ -256,7 +254,6 @@ static int conf_gnss(int argc, const char* const argv[])
       }
     }
 
-    config_t* cfg = get_config();
     cfg->use_gps = use_gps;
     cfg->use_galileo = use_galileo;
     cfg->use_glonass = use_glonass;
@@ -274,7 +271,7 @@ static int conf_gnss(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int conf_elev_mask(int argc, const char* const argv[])
+static int elev_mask(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure the elevation mask
@@ -308,74 +305,56 @@ static int conf_elev_mask(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int savecfg(int argc, const char* const argv[])
+static int conf(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  save the configuration to the eeprom
+  displays or saves the currently used configuration data
   in:  argc -> number of arguments, see below
        argv -> array of strings; none required
   out: none
 ==============================================================================*/
 {
-  /* unused */
-  (void)argv;
-
   if(argc == 0)
   {
-    save_config();
-    return 0;
-  }
-  else
-  {
-    errno = E2BIG;
+    errno = EINVAL;
     return -1;
   }
+  else if(argc == 1)
+  {
+    if(!strcmp(argv[0], "show"))
+    {
+      config_t* cfg = get_config();
+      (void)printf("last DAC value: %d\n", cfg->last_dacval);
+      (void)printf("RS-232 baudrate: %lu\n", cfg->rs232_baudrate);
+      (void)printf("fixed position valid: %s\n", (cfg->fixpos_valid ? "yes" : "no"));
+      (void)printf("ECEF X position: %ld cm\n", cfg->x);
+      (void)printf("ECEF Y position: %ld cm\n", cfg->y);
+      (void)printf("ECEF Z position: %ld cm\n", cfg->z);
+      (void)printf("position accuracy: %lu mm\n", cfg->accuracy);
+
+      (void)gnss(0, NULL);
+      (void)elev_mask(0, NULL);
+      (void)svin(0, NULL);
+      (void)timeconst(0, NULL);
+      (void)pps(0, NULL);
+      return 0;
+    }
+    else if(!strcmp(argv[0], "save"))
+    {
+      save_config();
+      printf("config saved!\n");
+      return 0;
+    }
+
+  }
+
+  errno = E2BIG;
+  return -1;
 }
 
 
 /*============================================================================*/
-static int showcfg(int argc, const char* const argv[])
-/*------------------------------------------------------------------------------
-  Function:
-  displays the currently used configuration data (not necessarily stored in
-  the eeprom!)
-  in:  argc -> number of arguments, see below
-       argv -> array of strings; none required
-  out: none
-==============================================================================*/
-{
-  /* unused */
-  (void)argv;
-
-  if(argc == 0)
-  {
-    config_t* cfg = get_config();
-    (void)printf("last DAC value: %d\n", cfg->last_dacval);
-    (void)conf_gnss(0, NULL);
-    (void)printf("RS-232 baudrate: %lu\n", cfg->rs232_baudrate);
-    (void)printf("fixed position valid: %s\n", (cfg->fixpos_valid ? "yes" : "no"));
-    (void)printf("ECEF X position: %ld cm\n", cfg->x);
-    (void)printf("ECEF Y position: %ld cm\n", cfg->y);
-    (void)printf("ECEF Z position: %ld cm\n", cfg->z);
-    (void)printf("position accuracy: %lu mm\n", cfg->accuracy);
-
-    (void)conf_elev_mask(0, NULL);
-    (void)svin(0, NULL);
-    (void)conf_timeconst(0, NULL);
-    (void)offset(0, NULL);
-    (void)set_pps_dur(0, NULL);
-    return 0;
-  }
-  else
-  {
-    errno = E2BIG;
-    return -1;
-  }
-}
-
-
-/*============================================================================*/
-static int enable_disp(int argc, const char* const argv[])
+static int disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enables the auto-display
@@ -403,7 +382,7 @@ static int enable_disp(int argc, const char* const argv[])
       const gnssstatus_t* gnss = get_gnss_status();
       const cntlstatus_t* ctl = get_cntlstatus();
 
-      uint32_t meanv = (uint32_t)sqrt((double)gnss->svi->meanv);
+      uint32_t meanv = (uint32_t)sqrtf((float)gnss->svi->meanv);
 
 
       (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
@@ -448,8 +427,7 @@ static int svin(int argc, const char* const argv[])
     {
       config_t* cfg = get_config();
 
-      // TODO: display message about svin status
-      (void)printf("auto-svin: %s\n", cfg->auto_svin ? "on" : "off");
+      (void)printf("auto survey-in: %s\n", cfg->auto_svin ? "on" : "off");
       (void)printf("survey-in duration: %lu sec\n", cfg->svin_dur);
       (void)printf("survey-in accuracy limit: %lu mm\n", cfg->accuracy_limit);
       return 0;
@@ -590,7 +568,7 @@ static int sat(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int conf_timeconst(int argc, const char* const argv[])
+static int timeconst(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   configure time constant and prefilter
@@ -622,7 +600,7 @@ static int conf_timeconst(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int man_hold(int argc, const char* const argv[])
+static int hold(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enable/disable DAC hold
@@ -631,10 +609,9 @@ static int man_hold(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
-  extern bool dac_hold;
   if(argc == 0)
   {
-    (void)printf("manual hold: %s\n", dac_hold ? "on" : "off");
+    (void)printf("manual hold: %s\n", dac_gethold() ? "on" : "off");
     return 0;
   }
   else if(argc == 1)
@@ -642,12 +619,12 @@ static int man_hold(int argc, const char* const argv[])
     /* command given is "hold off" ? */
     if(!strcmp(argv[0], "off"))
     {
-      dac_hold = false;
+      dac_sethold(false);
       return 0;
     }
     else if(!strcmp(argv[0], "on"))
     {
-      dac_hold = true;
+      dac_sethold(true);
       return 0;
     }
     else
@@ -656,7 +633,7 @@ static int man_hold(int argc, const char* const argv[])
       int32_t dac;
       if(str2num(argv[0], &dac, 0, UINT16_MAX))
       {
-        dac_hold = true;
+        dac_sethold(true);
         set_dac((uint16_t)dac);
         return 0;
       }
@@ -702,41 +679,6 @@ static int uptime(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int offset(int argc, const char* const argv[])
-/*------------------------------------------------------------------------------
-  Function:
-  sets the offset of the pps output
-  in:  noen
-  out: none
-==============================================================================*/
-{
-  if(argc == 0)
-  {
-    (void)printf("pps offset: %ld ns\n", get_config()->timeoffset);
-    return 0;
-  }
-  if(argc == 1)
-  {
-    /* when the setpoint is changed, then restart the control loop.
-       otherwise, it takes too long until the pll locks with the new phase. */
-    int32_t off;
-    if(str2num(argv[0], &off, -500000000, 500000000))
-    {
-      get_config()->timeoffset = off;
-      return 0;
-    }
-    else
-    {
-      return -1;
-    }
-  }
-
-  errno = E2BIG;
-  return -1;
-}
-
-
-/*============================================================================*/
 static int info(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
@@ -756,7 +698,7 @@ static int info(int argc, const char* const argv[])
 
 
 /*============================================================================*/
-static int set_pps_dur(int argc, const char* const argv[])
+static int pps(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
@@ -764,28 +706,64 @@ static int set_pps_dur(int argc, const char* const argv[])
   out: none
 ==============================================================================*/
 {
+  /* shorthand */
+  config_t* cfg = get_config();
+
   if(argc == 0)
   {
-    (void)printf("pps duration: %lu ms\n", get_config()->pps_dur);
+    (void)printf("pps offset: %ld ns\n", cfg->timeoffset);
+    (void)printf("pps duration: %lu ms\n", cfg->pps_dur);
     return 0;
   }
-  if(argc == 1)
+  if(argc == 2)
   {
-    int32_t dur;
-    if(str2num(argv[0], &dur, 1, 999))
+    if(!strcmp(argv[0], "offset"))
     {
-      get_config()->pps_dur = (uint32_t)dur;
-      set_pps_duration((uint32_t)dur);
-      return 0;
+      int32_t off;
+      if(str2num(argv[1], &off, -500000000, 500000000))
+      {
+        cfg->timeoffset = off;
+        return 0;
+      }
+      else
+      {
+        return -1;
+      }
     }
-    else
+    else if(!strcmp(argv[0], "dur"))
     {
-      return -1;
+      int32_t dur;
+      if(str2num(argv[1], &dur, 1, 999))
+      {
+        cfg->pps_dur = (uint32_t)dur;
+        set_pps_duration((uint32_t)dur);
+        return 0;
+      }
+      else
+      {
+        return -1;
+      }
     }
   }
 
-  errno = E2BIG;
+  errno = EINVAL;
   return -1;
+}
+
+
+/*============================================================================*/
+static int reboot(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  tight loop to force a watchdog reset
+  in:  noen
+  out: none
+==============================================================================*/
+{
+  (void)argc;
+  (void)argv;
+  for(;;);
+  return 0;
 }
 
 
@@ -808,23 +786,19 @@ static bool str2num(const char* str, int32_t* value, int32_t min, int32_t max)
   if((end == str) || (*end != '\0'))
   {
     errno = EINVAL;
-    goto error;
+    return false;
   }
   if(errno == ERANGE)
   {
-    goto error;
+    return false;
   }
   if((num < min) || (num > max))
   {
     errno = ERANGE;
-    goto error;
+    return false;
   }
   *value = num;
   return true;
-
-error:
-  (void)printf("invalid value or value out of range: %s\n", str);
-  return false;
 }
 
 /*******************************************************************************

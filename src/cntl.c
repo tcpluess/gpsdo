@@ -115,7 +115,6 @@ static status_t track_lock_handler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-bool dac_hold;
 static controlstatus_t cntlstat;
 
 static cntlstatus_t ctl;
@@ -132,7 +131,7 @@ void cntl_task(void* param)
 
   ctl.esum = get_config()->last_dacval;
   ctl.mode = "";
-  dac_hold = false;
+  dac_sethold(false);
 
   for(;;)
   {
@@ -479,10 +478,7 @@ static bool cntl(void)
     }
   }
 
-  if(dac_hold == false)
-  {
-    set_dac(dacval);
-  }
+  set_dac(dacval);
   return true;
 }
 

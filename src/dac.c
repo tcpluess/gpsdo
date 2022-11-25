@@ -58,12 +58,16 @@ static void spi_transmit(uint8_t data);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+static bool hold;
+
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
 void dac_setup(void)
 {
+  hold = false;
+
   /* enable gpio b */
   RCC->AHB1ENR |= BIT_01;
 
@@ -90,34 +94,50 @@ void dac_setup(void)
   set_dac(get_config()->last_dacval);
 }
 
+
 void set_dac(uint16_t data)
 {
-  /* check if this data has already been loaded into the dac
-     and bail out if so to keep the dac as quiet as possible;
-     also bail out if dac hold is enabled */
-  static uint16_t previousdata = 0u;
-  if(data == previousdata)
+  if(hold == false)
   {
-    return;
+    /* check if this data has already been loaded into the dac
+       and bail out if so to keep the dac as quiet as possible;
+       also bail out if dac hold is enabled */
+    static uint16_t previousdata = 0u;
+    if(data == previousdata)
+    {
+      return;
+    }
+    else
+    {
+      previousdata = data;
+    }
+
+    /* slave select */
+    spi_ss(true);
+
+    /* first byte is always zero, then upper byte, then lower byte */
+    spi_transmit(0u);
+    spi_transmit(data >> 8);
+    spi_transmit((uint8_t)data);
+
+    /* unselect */
+    spi_ss(false);
+
+    extern volatile uint16_t stat_dac;
+    stat_dac = data;
   }
-  else
-  {
-    previousdata = data;
-  }
+}
 
-  /* slave select */
-  spi_ss(true);
 
-  /* first byte is always zero, then upper byte, then lower byte */
-  spi_transmit(0u);
-  spi_transmit(data >> 8);
-  spi_transmit((uint8_t)data);
+void dac_sethold(bool on)
+{
+  hold = on;
+}
 
-  /* unselect */
-  spi_ss(false);
 
-  extern volatile uint16_t stat_dac;
-  stat_dac = data;
+bool dac_gethold(void)
+{
+  return hold;
 }
 
 /*******************************************************************************
@@ -145,6 +165,7 @@ static void spi_ss(bool enable)
     GPIOB->BSRR = BIT_12;
   }
 }
+
 
 /*============================================================================*/
 static void spi_transmit(uint8_t data)
