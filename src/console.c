@@ -763,7 +763,7 @@ static int reboot(int argc, const char* const argv[])
   (void)argc;
   (void)argv;
   for(;;);
-  return 0;
+  return 0; /*lint !e527 deliberately unreachable */
 }
 
 
