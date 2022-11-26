@@ -342,7 +342,7 @@ static int conf(int argc, const char* const argv[])
     else if(!strcmp(argv[0], "save"))
     {
       save_config();
-      printf("config saved!\n");
+      (void)printf("config saved!\n");
       return 0;
     }
 
@@ -379,18 +379,18 @@ static int disp(int argc, const char* const argv[])
       uint64_t now = get_uptime_msec();
       float i = get_iocxo();
       float t = get_temperature();
-      const gnssstatus_t* gnss = get_gnss_status();
+      const gnssstatus_t* mgnss = get_gnss_status();
       const cntlstatus_t* ctl = get_cntlstatus();
 
-      uint32_t meanv = (uint32_t)sqrtf((float)gnss->svi->meanv);
+      uint32_t meanv = (uint32_t)sqrtf((float)mgnss->svi->meanv);
 
 
       (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
-                   now, ctl->e, ctl->esum, stat_dac, i, t, gnss->sat->numsv,
-                   gnss->pvt->lat, gnss->pvt->lon, gnss->svi->obs, meanv,
-                   gnss->pvt->tacc, ctl->mode);
+                   now, ctl->e, ctl->esum, stat_dac, i, t, mgnss->sat->numsv,
+                   mgnss->pvt->lat, mgnss->pvt->lon, mgnss->svi->obs, meanv,
+                   mgnss->pvt->tacc, ctl->mode);
       if(canread())
       {
         return 0;
@@ -498,12 +498,12 @@ static int sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    const gnssstatus_t* gnss = get_gnss_status();
+    const gnssstatus_t* mgnss = get_gnss_status();
 
-    for(int i = 0; i < gnss->sat->numsv; i++)
+    for(int i = 0; i < mgnss->sat->numsv; i++)
     {
       const char* syst;
-      switch(gnss->sat->sats[i].gnssid)
+      switch(mgnss->sat->sats[i].gnssid)
       {
         case 0:
         {
@@ -530,12 +530,12 @@ static int sat(int argc, const char* const argv[])
         }
       }
       (void)printf("%s ID: %2d; C/N0: %2d dB; Az: %3d deg; El: %3d deg\n",
-        syst, gnss->sat->sats[i].svid, gnss->sat->sats[i].cno,
-        gnss->sat->sats[i].azim, gnss->sat->sats[i].elev);
+        syst, mgnss->sat->sats[i].svid, mgnss->sat->sats[i].cno,
+        mgnss->sat->sats[i].azim, mgnss->sat->sats[i].elev);
     }
 
     const char* fixtype;
-    switch(gnss->pvt->fixtype)
+    switch(mgnss->pvt->fixtype)
     {
       case 3:
       {
@@ -557,8 +557,8 @@ static int sat(int argc, const char* const argv[])
     }
     (void)printf("fix status: %s\n", fixtype);
 
-    uint64_t age = get_uptime_msec() - gnss->sat->time;
-    (void)printf("%d sats; last update: %llu ms ago\n\n", gnss->sat->numsv, age);
+    uint64_t age = get_uptime_msec() - mgnss->sat->time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", mgnss->sat->numsv, age);
     return 0;
   }
 
