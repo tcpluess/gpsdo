@@ -78,7 +78,7 @@ int main(void)
 {
   vic_init();
 
-  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
+  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
 
   vTaskStartScheduler();
   /*lint -unreachable */
