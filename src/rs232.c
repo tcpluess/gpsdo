@@ -49,6 +49,7 @@
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
 #define BAUD_FRAC(x) ((uint32_t)((40000000.0/(x)-16.0*BAUD_INT(x))+0.5))
 #define RS232_BUFFERSIZE 200u
+#define RS232_BAUD 115200u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -93,8 +94,7 @@ void rs232_init(void)
 
   /* enable and configure usart2 */
   RCC->APB1ENR |= BIT_17;
-  USART2->BRR = (BAUD_FRAC(get_config()->rs232_baudrate) << 0) |
-    (BAUD_INT(get_config()->rs232_baudrate) << 4);
+  USART2->BRR = (BAUD_FRAC(RS232_BAUD) << 0) | (BAUD_INT(RS232_BAUD) << 4);
   USART2->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
 }
 
