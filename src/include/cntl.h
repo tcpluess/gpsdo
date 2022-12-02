@@ -46,7 +46,7 @@
 typedef struct
 {
   const char* mode;
-  float esum;
+  double esum;
   float e;
 
 } cntlstatus_t;

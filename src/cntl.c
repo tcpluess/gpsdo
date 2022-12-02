@@ -129,7 +129,7 @@ void cntl_task(void* param)
   status_t gpsdostatus = warmup;
   cntlstat = fast_track;
 
-  ctl.esum = get_config()->last_dacval;
+  ctl.esum = (double)(get_config()->last_dacval);
   ctl.mode = "";
   dac_sethold(false);
 
@@ -350,11 +350,11 @@ static uint16_t pi_control(double KP, double TI, float u)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  ctl.esum = fminf(fmaxf(0.0, ctl.esum + KP*(u + uold)/(2.0*TI)), 65535.0);
+  ctl.esum = fmin(fmax(0.0, ctl.esum + KP*(u + uold)/(2.0*TI)), 65535.0);
   uold = u;
 
   /* calculate the output signal and limit it ("output saturation") */
-  float efc = fminf(fmaxf(0.0, KP*u + ctl.esum), 65535.0);
+  float efc = (float)(fmin(fmax(0.0, KP*u + ctl.esum), 65535.0));
   return (uint16_t)efc;
 }
 
