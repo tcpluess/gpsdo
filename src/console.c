@@ -715,7 +715,7 @@ static int pps(int argc, const char* const argv[])
     (void)printf("pps duration: %lu ms\n", cfg->pps_dur);
     return 0;
   }
-  if(argc == 2)
+  else if(argc == 2)
   {
     if(!strcmp(argv[0], "offset"))
     {
