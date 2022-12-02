@@ -385,7 +385,7 @@ static int disp(int argc, const char* const argv[])
       uint32_t meanv = (uint32_t)sqrtf((float)gnss->svi->meanv);
 
 
-      (void)printf("%-10llu e=%-7.2f eI=%-9.3f D=%-5d I=%.1f T=%.1f sat=%-2d " \
+      (void)printf("%-10llu e=%-7.2f eI=%-10.4f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
                    now, ctl->e, ctl->esum, stat_dac, i, t, gnss->sat->numsv,
