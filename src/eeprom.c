@@ -226,21 +226,16 @@ void load_config(void)
     cfg.use_gps = true;
     cfg.use_glonass = false;
     cfg.use_galileo = true;
-
     cfg.fixpos_valid = false;
-    cfg.svin_dur = 4*3600;
+    cfg.svin_dur = 86400u; /* 24 hours */
     cfg.x = 0;
     cfg.y = 0;
     cfg.z = 0;
     cfg.accuracy = 0;
-    cfg.accuracy_limit = 10000; /* 10m default accuracy for survey-in */
-
-    cfg.auto_svin = false;
-
-    cfg.tau = 250u;
-
-    cfg.elevation_mask = 15; /* 5 degree elevation mask */
-
+    cfg.accuracy_limit = 300; /* 300mm default accuracy for survey-in */
+    cfg.auto_svin = true;
+    cfg.tau = 200u; /* 200 seconds default time constant */
+    cfg.elevation_mask = 45; /* 45 degree elevation mask */
     cfg.timeoffset = 0;
     cfg.pps_dur = 100u;
   }
