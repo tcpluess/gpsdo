@@ -179,13 +179,36 @@ void eep_chip_erase(void)
 void eep_read_multi(uint32_t addr, uint32_t len, void* buf)
 {
   uint8_t* ptr = (uint8_t*)buf;
+
+  /* select slave */
+  EEP_SS(1);
+
+  /* send out the address and opcode */
+  addr_cycle(addr, OP_READ);
+
   while(len > 0)
   {
-    *ptr = eep_read(addr);
+    uint8_t rddata = 0u;
+    for(int i = 0; i < 8; i++)
+    {
+      /* transfer is msb first */
+      rddata = (uint8_t)(rddata << 1);
+
+      EEP_MOSI(0);
+      EEP_SCK(1);
+
+      /* save the transferred bit */
+      rddata |= EEP_MISO();
+
+      EEP_SCK(0);
+    }
+
+    *ptr = rddata;
     ptr++;
-    addr++;
     len--;
   }
+  /* de-select slave */
+  EEP_SS(0);
 }
 
 
