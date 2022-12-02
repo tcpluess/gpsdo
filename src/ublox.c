@@ -577,7 +577,7 @@ static void init_uart(void)
 {
   /* enable usart 3 and install the irq handler */
   RCC->APB1ENR |= BIT_18;
-  USART3->BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
+  uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
   //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
