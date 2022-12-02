@@ -39,7 +39,7 @@
  ******************************************************************************/
 
 #define EEP_SZ 512u
-#define CFG_VERSION 34u
+#define CFG_VERSION 12u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -58,7 +58,6 @@ typedef union
     bool use_gps;
     bool use_glonass;
     bool use_galileo;
-    uint32_t rs232_baudrate;
 
     /* fixed positon data */
     bool fixpos_valid;

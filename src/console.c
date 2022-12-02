@@ -325,7 +325,6 @@ static int conf(int argc, const char* const argv[])
     {
       config_t* cfg = get_config();
       (void)printf("last DAC value: %d\n", cfg->last_dacval);
-      (void)printf("RS-232 baudrate: %lu\n", cfg->rs232_baudrate);
       (void)printf("fixed position valid: %s\n", (cfg->fixpos_valid ? "yes" : "no"));
       (void)printf("ECEF X position: %ld cm\n", cfg->x);
       (void)printf("ECEF Y position: %ld cm\n", cfg->y);

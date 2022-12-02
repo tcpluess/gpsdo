@@ -226,7 +226,6 @@ void load_config(void)
     cfg.use_gps = true;
     cfg.use_glonass = false;
     cfg.use_galileo = true;
-    cfg.rs232_baudrate = 115200u;
 
     cfg.fixpos_valid = false;
     cfg.svin_dur = 4*3600;
