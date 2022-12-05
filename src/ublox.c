@@ -184,7 +184,7 @@ static void ubx_receive_packet(ubxbuffer_t* rx);
 static void ubx_transmit_packet(const ubxbuffer_t* tx);
 
 static void init_pins(void);
-static void gps_reset(bool do_reset);
+static void gps_reset(void);
 
 static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
@@ -217,7 +217,6 @@ void gps_task(void* param)
   ublox_events = xEventGroupCreate();
   (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
   qerr.valid = false;
-  bool fixpos_verify = false;
 
   /* initialise hardware */
   init_pins();
@@ -227,10 +226,7 @@ void gps_task(void* param)
   uart_config_baudrate(BAUD_INITIAL);
 
   /* reset the gps module */
-  gps_reset(true);
-  vTaskDelay(RESET_DELAY);
-  gps_reset(false);
-  vTaskDelay(RESET_DELAY);
+  gps_reset();
 
   /* after the module has started up, the uart is reconfigured:
    - high baud rate
@@ -254,12 +250,7 @@ void gps_task(void* param)
   /* if the fixed position in the eeprom is valid, we start a short survey-in
      to validate the position. also, if auto svin is enabled, the survey-in
      will be started as well. */
-  if(cfg->fixpos_valid)
-  {
-    fixpos_verify = true;
-    start_svin();
-  }
-  else if(cfg->auto_svin)
+  if((cfg->fixpos_valid) || (cfg->auto_svin))
   {
     start_svin();
   }
@@ -288,7 +279,6 @@ void gps_task(void* param)
     if(bits & EVENT_DO_SVIN)
     {
       ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-      vTaskDelay(RESET_DELAY);
       ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
       ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
     }
@@ -300,42 +290,47 @@ void gps_task(void* param)
 
     if(bits & EVENT_SVIN_RECEIVED)
     {
+      /* we received data from the survey-in */
       if(svin_data.active)
       {
-        /* we received data from the survey-in */
-        if((cfg->fixpos_valid) && fixpos_verify)
+        /* if the survey-in is running and the data is valid, we stop the
+           survey in, store the position that was determined in the gpsdo
+           configuration and disable further svin messages. */
+        if(svin_data.valid == true)
         {
-          /* check if the currently determined distance is close to what is
-             saved in the eeprom */
-          float dx = (float)(cfg->x - svin_data.x);
-          float dy = (float)(cfg->y - svin_data.y);
-          float dz = (float)(cfg->z - svin_data.z);
+          ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
 
-          /* calculate error vector in mm - ecef coordinates are in cm! */
-          float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
-          printf("# error vector magnitude: %f mm\n", mag);
-          if(mag < cfg->accuracy_limit)
+          /* copy the svin data to the configuration */
+          cfg->x = svin_data.x;
+          cfg->y = svin_data.y;
+          cfg->z = svin_data.z;
+          cfg->accuracy = (uint32_t)sqrtf((float)svin_data.meanv);
+          cfg->fixpos_valid = true;
+        }
+
+        /* if auto survey in is disabled, check the fixed position */
+        if(cfg->auto_svin == false)
+        {
+          if(cfg->fixpos_valid)
           {
-            fixpos_verify = false;
-            printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
-            ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-            vTaskDelay(100u);
-            set_fixpos_mode();
-            ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+            /* check if the currently determined position is close to what is
+               saved in the eeprom */
+            float dx = (float)(cfg->x - svin_data.x);
+            float dy = (float)(cfg->y - svin_data.y);
+            float dz = (float)(cfg->z - svin_data.z);
+
+            /* calculate error vector in mm - ecef coordinates are in cm! */
+            float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
+            printf("# error vector magnitude: %f mm\n", mag);
+            if(mag <= cfg->accuracy_limit)
+            {
+              printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
+              ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+              ubx_config_tmode(tmode_fixedpos, cfg->x, cfg->y, cfg->z, 0, cfg->accuracy, 0);
+              ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+            }
           }
         }
-      }
-      else if(svin_data.valid == true)
-      {
-        /* the survey-in is finished */
-        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
-
-        /* copy the svin data to the configuration */
-        cfg->x = svin_data.x;
-        cfg->y = svin_data.y;
-        cfg->z = svin_data.z;
-        cfg->accuracy = (uint32_t)sqrtf((float)svin_data.meanv);
-        cfg->fixpos_valid = true;
       }
     }
 
@@ -579,7 +574,6 @@ static void init_uart(void)
   RCC->APB1ENR |= BIT_18;
   uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
-  //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
 }
 
@@ -607,7 +601,7 @@ static void init_pins(void)
 
 
 /*============================================================================*/
-static void gps_reset(bool do_reset)
+static void gps_reset(void)
 /*------------------------------------------------------------------------------
   Function:
   resets the gps module
@@ -615,16 +609,10 @@ static void gps_reset(bool do_reset)
   out: none
 ==============================================================================*/
 {
-  if(do_reset)
-  {
-    /* reset pin low */
-    GPIOD->BSRR = BIT_26;
-  }
-  else
-  {
-    /* reset pin high */
-    GPIOD->BSRR = BIT_10;
-  }
+  GPIOD->BSRR = BIT_26;
+  vTaskDelay(RESET_DELAY);
+  GPIOD->BSRR = BIT_10;
+  vTaskDelay(RESET_DELAY);
 }
 
 
