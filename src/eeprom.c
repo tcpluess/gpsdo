@@ -243,23 +243,19 @@ void load_config(void)
   uint16_t calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
   if((rd_cksum != calc_checksum) || (cfg.version != CFG_VERSION))
   {
+    /* set all data to zero and then explicitly configure the items that are
+       nonzero by default */
     (void)memset(cfg.bytes, 0, EEP_SZ);
     cfg.version = CFG_VERSION;
     cfg.last_dacval = 32768u;
     cfg.use_gps = true;
-    cfg.use_glonass = false;
     cfg.use_galileo = true;
-    cfg.fixpos_valid = false;
     cfg.svin_dur = 86400u; /* 24 hours */
-    cfg.x = 0;
-    cfg.y = 0;
-    cfg.z = 0;
-    cfg.accuracy = 0;
+    cfg.accuracy = UINT32_MAX;
     cfg.accuracy_limit = 300; /* 300mm default accuracy for survey-in */
-    cfg.auto_svin = true;
+    cfg.auto_svin = false;
     cfg.tau = 200u; /* 200 seconds default time constant */
     cfg.elevation_mask = 45; /* 45 degree elevation mask */
-    cfg.timeoffset = 0;
     cfg.pps_dur = 100u;
   }
 }
