@@ -142,7 +142,8 @@ static void console_task(void* param)
        callback function with the input tokens */
     if(vt100_lineeditor(&term) != 0)
     {
-      (void)printf("%s\n", strerror(errno));
+      const char* err = strerror(errno);
+      (void)printf("%s\n", err);
     }
   }
 }
@@ -163,14 +164,22 @@ static int interpreter(int argc, const char* const argv[])
   {
     /* the actual command is always first */
     const char* command = argv[0];
-    int numcmds = sizeof(cmds) / sizeof(cmds[0]);
 
-    for(int i = 0; i < numcmds; i++)
+    /* do nothing if command is empty */
+    if(strlen(command) > 0)
     {
-      if(!strcmp(command, cmds[i].name))
+      int numcmds = sizeof(cmds) / sizeof(cmds[0]);
+      for(int i = 0; i < numcmds; i++)
       {
-        return cmds[i].func(argc-1, &argv[1]);
+        if(!strcmp(command, cmds[i].name))
+        {
+          return cmds[i].func(argc-1, &argv[1]);
+        }
       }
+    }
+    else
+    {
+      return 0;
     }
   }
 
