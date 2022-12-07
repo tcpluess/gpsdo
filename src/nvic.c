@@ -197,10 +197,10 @@ void vic_enableirq(int32_t intnum, funcptr_t func)
 
   if(intnum >= 0)
   {
-    uint32_t shift = intnum % 32;
-    uint32_t offset = intnum / 32;
+    uint32_t shift = ((uint32_t)intnum) % 32u;
+    uint32_t offset = ((uint32_t)intnum) / 32u;
 
-    NVIC_ISER[offset] = (1u << shift);
+    NVIC_ISER[offset] = (1u << shift); /*lint !e647 cast is ok */
     NVIC_IPR[intnum] = LOWEST_IRQ_PRIO;
   }
 }
