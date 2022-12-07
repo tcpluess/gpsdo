@@ -18,7 +18,6 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "console.h"
 #include "rs232.h"
 #include "eeprom.h"
 #include "ublox.h"
@@ -27,13 +26,10 @@
 #include "adc.h"
 #include "dac.h"
 #include "cntl.h"
-#include "ublox.h"
 #include "vt100.h"
 
 #include <errno.h>
-#include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
 
