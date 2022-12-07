@@ -3,31 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    driver for the TDC7200 time to digital converter
  *
- * Compiler:       ANSI-C
- *
  * Filename:       tdc.c
- *
- * Version:        1.2
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  03.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
-
-   [1.1]    01.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - use hardware spi interface
-
-   [1.2]    27.05.2021    Tobias Plüss <tpluess@ieee.org>
-   - use external interrupt and semaphores for more efficient access
  ******************************************************************************/
 
 /*******************************************************************************

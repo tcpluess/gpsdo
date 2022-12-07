@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    adt7301 driver
  *
- * Compiler:       ANSI-C
- *
  * Filename:       adt7301.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  03.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

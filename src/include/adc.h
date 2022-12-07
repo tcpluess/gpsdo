@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         any
- *
- * Type:           header file
- *
  * Description:    driver for the ADC1 of the STM32F407
  *
- * Compiler:       ANSI-C
- *
  * Filename:       adc.h
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  31.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    31.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 #ifndef __ADC_H__

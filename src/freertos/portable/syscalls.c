@@ -3,26 +3,14 @@
  *
  * Project:
  *
- * Target:         any
- *
- * Type:           module
- *
  * Description:    some necessary functions for C standard library calls (
  *                 e.g. malloc).
  *
- * Compiler:       ANSI-C
- *
  * Filename:       syscalls.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  04.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    04.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created. initial version only with sbrk
  ******************************************************************************/
 
 /*******************************************************************************

@@ -3,28 +3,13 @@
  *
  * Project:
  *
- * Target:         Cortex M4F
- *
- * Type:           C startup code
- *
  * Description:    C startup code for Cortex M4F, not suitable for C++
  *
- * Compiler:       GNU AS
- *
  * Filename:       crt0.s
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  03.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
-
-   [1.1]    22.03.2022    Tobias Plüss <tpluess@ieee.org>
-   - add __libc_init_array initialisation for c++
  ******************************************************************************/
 
 .syntax unified

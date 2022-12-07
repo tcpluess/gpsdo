@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    nmea sentences output
  *
- * Compiler:       ANSI-C
- *
  * Filename:       nmea_output.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  17.03.2022
- *******************************************************************************
-   Modification History:
-   [1.0]    17.03.2022    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

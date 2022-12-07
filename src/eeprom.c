@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    driver for the 93C66 EEPROM
  *
- * Compiler:       ANSI-C
- *
  * Filename:       eeprom.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  14.04.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    14.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

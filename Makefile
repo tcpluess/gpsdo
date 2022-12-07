@@ -3,31 +3,13 @@
 #
 # Project:        GPS frequency standard
 #
-# Target:         Cortex M4F
-#
-# Type:           makefile
-#
 # Description:    makefile
 #
-# Compiler:       GNU
-#
 # Filename:       Makefile
-#
-# Version:        1.0
 #
 # Author:         Tobias Plüss <tpluess@ieee.org>
 #
 # Creation-Date:  03.03.2020
-################################################################################
-# Modification History:
-# [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-# - created
-#
-# [1.1]    22.03.2022    Tobias Plüss <tpluess@ieee.org>
-# - added makefile itself to the dependencies
-# - added linkerscript to the dependencies
-# - added c++ support
-# - improved assembly support
 ################################################################################
 
 MAKEFLAGS := --jobs=8

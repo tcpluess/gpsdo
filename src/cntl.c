@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    control algorithm for the GNSS frequency standard
  *
- * Compiler:       ANSI-C
- *
  * Filename:       cntl.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  28.04.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    28.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

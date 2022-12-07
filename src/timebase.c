@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    module for various timing topics for the gpsdo
  *
- * Compiler:       ANSI-C
- *
  * Filename:       timebase.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  03.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

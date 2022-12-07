@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         any
- *
- * Type:           header file
- *
  * Description:    conversion functions for raw byte arrays <-> number formats
  *
- * Compiler:       ANSI-C
- *
  * Filename:       convert.h
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  11.04.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    11.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 #ifndef __CONVERT_H__

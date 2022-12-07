@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         any
- *
- * Type:           module
- *
  * Description:    checksum functions
  *
- * Compiler:       ANSI-C
- *
  * Filename:       checksum.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  20.04.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    20.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

@@ -3,25 +3,13 @@
  *
  * Project:        -
  *
- * Target:         any
- *
- * Type:           module
- *
  * Description:    some generic macros
  *
- * Compiler:       ANSI-C
- *
  * Filename:       misc.h
- *
- * Version:        1.0
  *
  * Author:         Tobias Pluess
  *
  * Creation-Date:  19.08.2005
- *******************************************************************************
-   Modification History:
-   [1.0]    19.08.2005    Tobias Pluess
-   - first release
  ******************************************************************************/
 
 #ifndef __MISC_H__

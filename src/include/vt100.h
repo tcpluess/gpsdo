@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         any
- *
- * Type:           header file
- *
  * Description:    VT100 terminal interface functions with line editor
  *
- * Compiler:       ANSI-C
- *
  * Filename:       vt100.h
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  24.11.2022
- *******************************************************************************
-   Modification History:
-   [1.0]    24.11.2022    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 #ifndef __VT100_H__

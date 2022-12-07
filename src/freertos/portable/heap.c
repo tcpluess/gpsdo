@@ -3,26 +3,14 @@
  *
  * Project:
  *
- * Target:         any
- *
- * Type:           module
- *
  * Description:    implementation of the newlib syscalls such that freertos uses
  *                 the ordinary malloc.
  *
- * Compiler:       ANSI-C
- *
  * Filename:       syscalls.c
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  28.05.2021
- *******************************************************************************
-   Modification History:
-   [1.0]    28.05.2021    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 /*******************************************************************************

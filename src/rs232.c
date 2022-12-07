@@ -3,31 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         STM32F407VE
- *
- * Type:           module
- *
  * Description:    serial port driver for usage with printf() calls
  *
- * Compiler:       ANSI-C
- *
  * Filename:       rs232.c
- *
- * Version:        2.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  03.03.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    03.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
-
-   [1.1]    31.03.2020    Tobias Plüss <tpluess@ieee.org>
-   - modify the transmit routine to use the tx empty interrupt
-
-   [2.0]    14.05.2021    Tobias Plüss <tpluess@ieee.org>
-   - ported to FreeRTOS.
  ******************************************************************************/
 
 /*******************************************************************************

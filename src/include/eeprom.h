@@ -3,25 +3,13 @@
  *
  * Project:        GPS frequency standard
  *
- * Target:         any
- *
- * Type:           header file
- *
  * Description:    driver for the 93C66 EEPROM
  *
- * Compiler:       ANSI-C
- *
  * Filename:       eeprom.h
- *
- * Version:        1.0
  *
  * Author:         Tobias Plüss <tpluess@ieee.org>
  *
  * Creation-Date:  14.04.2020
- *******************************************************************************
-   Modification History:
-   [1.0]    14.04.2020    Tobias Plüss <tpluess@ieee.org>
-   - created
  ******************************************************************************/
 
 #ifndef __EEPROM_H__
