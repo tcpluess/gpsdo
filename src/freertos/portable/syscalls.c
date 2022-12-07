@@ -65,6 +65,11 @@
  ******************************************************************************/
 
 
+/* forward declarations to keep the compiler silent */
+int _isatty(int file);
+int _getpid(void);
+int _kill(int pid, int sig);
+
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
   switch(file)
