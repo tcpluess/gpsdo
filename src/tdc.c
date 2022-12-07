@@ -321,8 +321,6 @@ static void tdc_ss(bool select)
   {
     GPIOA->BSRR = BIT_04;
   }
-
-  /* include a small delay to meet the setup time. */
 }
 
 /*============================================================================*/
