@@ -36,7 +36,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "event_groups.h"
+#include "semphr.h"
 #include "tdc.h"
 #include "stm32f407xx.h"
 #include "misc.h"
@@ -89,7 +89,11 @@
 #define EXTI9_IRQ 23u
 
 /* timeout to wait for the tdc */
-#define TDC_READY_TIMEOUT 10 /* ms */
+#define TDC_READY_TIMEOUT pdMS_TO_TICKS(10u) /* ms */
+
+/* reset default values for config2 and int mask */
+#define DEFAULT_CONFIG2 0x40u
+#define DEFAULT_INT_MASK 0x07u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -118,7 +122,7 @@ static bool tdc_waitready(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static EventGroupHandle_t tdc_events;
+static SemaphoreHandle_t tdc_sem;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -135,7 +139,7 @@ void setup_tdc(void)
   GPIOA->PUPDR |= (1u << 18);
   GPIOA->AFR[0] |= (5u << 20) | (5u << 24) | (5u << 28);
 
-  tdc_events = xEventGroupCreate();
+  tdc_sem = xSemaphoreCreateBinary();
   tdc_config_interrupt();
 
   /* disble the tdc for now */
@@ -155,11 +159,26 @@ void setup_tdc(void)
   /* this resets the internal state of the tdc */
   tdc_hwenable(true);
 
-  /* configure the measurement mode, # of average cycles and interrupt when
-     measurements are done */
-  tdc_write(ADDR_CONFIG1, CONFIG1);
-  tdc_write(ADDR_CONFIG2, CONFIG2);
-  tdc_write(ADDR_INT_MASK, NEW_MEAS_INT);
+  /* sanity check if the communication works. */
+  uint8_t config2 = tdc_read(ADDR_CONFIG2);
+  uint8_t intmask = tdc_read(ADDR_INT_MASK);
+
+  if((config2 == DEFAULT_CONFIG2) && (intmask == DEFAULT_INT_MASK))
+  {
+    /* configure the measurement mode, # of average cycles and interrupt when
+       measurements are done */
+    tdc_write(ADDR_CONFIG1, CONFIG1);
+    tdc_write(ADDR_CONFIG2, CONFIG2);
+    tdc_write(ADDR_INT_MASK, NEW_MEAS_INT);
+    enable_tdc();
+  }
+  else
+  {
+    #ifdef DEBUG
+    (void)printf("something went wrong: tdc not in its default state\n");
+    (void)printf("CONFIG2 = %x, INTMASK = %x\n", config2, intmask);
+    #endif
+  }
 }
 
 
@@ -376,7 +395,7 @@ static void tdc_irqhandler(void)
   EXTI->PR = BIT_09;
 
   /* signal to waiting tasks */
-  (void)xEventGroupSetBitsFromISR(tdc_events, BIT_10, NULL);
+  (void)xSemaphoreGiveFromISR(tdc_sem, NULL);
 }
 
 
@@ -408,10 +427,7 @@ static bool tdc_waitready(void)
   out: returns true if the tdc was ready, false if something went wrong
 ==============================================================================*/
 {
-  uint32_t bits = BIT_10;
-  bits = xEventGroupWaitBits(tdc_events, bits, true, true,
-                             pdMS_TO_TICKS(TDC_READY_TIMEOUT));
-  if(bits & BIT_10)
+  if(xSemaphoreTake(tdc_sem, TDC_READY_TIMEOUT))
   {
     if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
     {
