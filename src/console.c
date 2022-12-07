@@ -72,6 +72,7 @@ typedef struct
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void console_task(void* param);
 static int interpreter(int argc, const char* const argv[]);
 static int help(int argc, const char* const argv[]);
 static int gnss(int argc, const char* const argv[]);
@@ -119,14 +120,30 @@ volatile uint16_t stat_dac = 0u;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void console_task(void* param)
+void console_init(void)
 {
-  (void)param;
   rs232_init();
   vt100_init(&term, interpreter, stdout, stdin);
+  (void)xTaskCreate(console_task, "console", 1500, NULL, 2, NULL);
+}
 
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+/*============================================================================*/
+static void console_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  the interpreter gets the number of arguments and the individual arguments,
+  searches the command to be executed and passes the arguments to it
+  in:  argc -> number of arguments, including the command itself
+       argv -> array of strings
+  out: none
+==============================================================================*/
+{
+  (void)param;
   (void)info(0, NULL);
-
   for(;;)
   {
     /* console prompt */
@@ -142,9 +159,6 @@ void console_task(void* param)
   }
 }
 
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
 
 /*============================================================================*/
 static int interpreter(int argc, const char* const argv[])
@@ -341,7 +355,7 @@ static int conf(int argc, const char* const argv[])
     else if(!strcmp(argv[0], "save"))
     {
       save_config();
-      printf("config saved!\n");
+      (void)printf("config saved!\n");
       return 0;
     }
 
@@ -378,18 +392,18 @@ static int disp(int argc, const char* const argv[])
       uint64_t now = get_uptime_msec();
       float i = get_iocxo();
       float t = get_temperature();
-      const gnssstatus_t* gnss = get_gnss_status();
+      const gnssstatus_t* mygnss = get_gnss_status();
       const cntlstatus_t* ctl = get_cntlstatus();
 
-      uint32_t meanv = (uint32_t)sqrtf((float)gnss->svi->meanv);
+      uint32_t meanv = (uint32_t)sqrtf((float)mygnss->svi->meanv);
 
 
       (void)printf("%-10llu e=%-7.2f eI=%-10.4f D=%-5d I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
                    "status=%s\n",
-                   now, ctl->e, ctl->esum, stat_dac, i, t, gnss->sat->numsv,
-                   gnss->pvt->lat, gnss->pvt->lon, gnss->svi->obs, meanv,
-                   gnss->pvt->tacc, ctl->mode);
+                   now, ctl->e, ctl->esum, stat_dac, i, t, mygnss->sat->numsv,
+                   mygnss->pvt->lat, mygnss->pvt->lon, mygnss->svi->obs, meanv,
+                   mygnss->pvt->tacc, ctl->mode);
       if(canread())
       {
         return 0;
@@ -426,7 +440,6 @@ static int svin(int argc, const char* const argv[])
     {
       config_t* cfg = get_config();
 
-      (void)printf("auto survey-in: %s\n", cfg->auto_svin ? "on" : "off");
       (void)printf("survey-in duration: %lu sec\n", cfg->svin_dur);
       (void)printf("survey-in accuracy limit: %lu mm\n", cfg->accuracy_limit);
       return 0;
@@ -437,17 +450,8 @@ static int svin(int argc, const char* const argv[])
     {
       if(!strcmp(argv[0], "stop"))
       {
-        disable_tmode();
+        manual_svin_stop();
         return 0;
-      }
-      else if(!strcmp(argv[0], "auto"))
-      {
-        get_config()->auto_svin = true;
-        return 0;
-      }
-      else if(!strcmp(argv[0], "off"))
-      {
-        get_config()->auto_svin = false;
       }
 
       errno = EINVAL;
@@ -465,7 +469,7 @@ static int svin(int argc, const char* const argv[])
         config_t* cfg = get_config();
         cfg->svin_dur = (uint32_t)tm;
         cfg->accuracy_limit = (uint32_t)accuracy;
-        start_svin();
+        manual_svin();
         return 0;
       }
       break;
@@ -497,12 +501,12 @@ static int sat(int argc, const char* const argv[])
 
   if(argc == 0)
   {
-    const gnssstatus_t* gnss = get_gnss_status();
+    const gnssstatus_t* mygnss = get_gnss_status();
 
-    for(int i = 0; i < gnss->sat->numsv; i++)
+    for(int i = 0; i < mygnss->sat->numsv; i++)
     {
       const char* syst;
-      switch(gnss->sat->sats[i].gnssid)
+      switch(mygnss->sat->sats[i].gnssid)
       {
         case 0:
         {
@@ -529,20 +533,20 @@ static int sat(int argc, const char* const argv[])
         }
       }
       (void)printf("%s ID: %2d; C/N0: %2d dB; Az: %3d deg; El: %3d deg\n",
-        syst, gnss->sat->sats[i].svid, gnss->sat->sats[i].cno,
-        gnss->sat->sats[i].azim, gnss->sat->sats[i].elev);
+        syst, mygnss->sat->sats[i].svid, mygnss->sat->sats[i].cno,
+        mygnss->sat->sats[i].azim, mygnss->sat->sats[i].elev);
     }
 
     const char* fixtype;
-    switch(gnss->pvt->fixtype)
+    switch(mygnss->pvt->fixtype)
     {
-      case 3:
+      case FIX_3D:
       {
         fixtype = "3D fix";
         break;
       }
 
-      case 5:
+      case FIX_TIME:
       {
         fixtype = "timing";
         break;
@@ -556,8 +560,8 @@ static int sat(int argc, const char* const argv[])
     }
     (void)printf("fix status: %s\n", fixtype);
 
-    uint64_t age = get_uptime_msec() - gnss->sat->time;
-    (void)printf("%d sats; last update: %llu ms ago\n\n", gnss->sat->numsv, age);
+    uint64_t age = get_uptime_msec() - mygnss->sat->time;
+    (void)printf("%d sats; last update: %llu ms ago\n\n", mygnss->sat->numsv, age);
     return 0;
   }
 
@@ -762,7 +766,7 @@ static int reboot(int argc, const char* const argv[])
   (void)argc;
   (void)argv;
   for(;;);
-  return 0;
+  return 0; /*lint !e527 unreachable */
 }
 
 
