@@ -49,7 +49,7 @@
 #define GAIN 20.0f
 
 /* maximum time to wait for the ADC */
-#define ADC_MAX_WAITDELAY 10u /* ms */
+#define ADC_MAX_WAITDELAY pdMS_TO_TICKS(10u)
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -115,7 +115,7 @@ float get_iocxo(void)
 {
   /* wait maximum 10ms for the ADC if, for some reason, the adc has not been
      properly triggered */
-  if(xSemaphoreTake(adc_ready, pdMS_TO_TICKS(ADC_MAX_WAITDELAY)))
+  if(xSemaphoreTake(adc_ready, ADC_MAX_WAITDELAY))
   {
     /* these are the internal reference voltage and the ocxo current */
     float ichan = ADC1->JDR1;
