@@ -48,7 +48,6 @@ typedef struct
   const char* mode;
   double esum;
   float e;
-
 } cntlstatus_t;
 
 /*******************************************************************************
@@ -56,7 +55,7 @@ typedef struct
  ******************************************************************************/
 
 /*============================================================================*/
-extern void cntl_task(void* param);
+extern void control_init(void);
 /*------------------------------------------------------------------------------
   Function:
   this is the actual GNSS control program
@@ -83,8 +82,6 @@ extern const cntlstatus_t* get_cntlstatus(void);
   in:  none
   out: none
 ==============================================================================*/
-
-extern void cntl_set(float sp);
 
 /*******************************************************************************
  * END OF CODE

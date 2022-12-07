@@ -96,12 +96,11 @@ typedef enum
   stable
 } controlstatus_t;
 
-extern volatile float stat_e;
-
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void cntl_task(void* param);
 static uint16_t pi_control(double KP, double TI, float u);
 static bool cntl(void);
 static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
@@ -123,7 +122,39 @@ static cntlstatus_t ctl;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void cntl_task(void* param)
+void control_init(void)
+{
+  tmp_init();
+  adc_init();
+  timebase_init();
+  dac_setup();
+  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
+}
+
+
+void cntl_restart(void)
+{
+  cntlstat = fast_track;
+}
+
+
+const cntlstatus_t* get_cntlstatus(void)
+{
+  return &ctl;
+}
+
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+/*============================================================================*/
+static void cntl_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  this is called while the ocxo needs to warm up to stabilise.
+  in:  none
+  out: returns the next status of the controller.
+==============================================================================*/
 {
   (void)param;
   status_t gpsdostatus = warmup;
@@ -158,24 +189,15 @@ void cntl_task(void* param)
         gpsdostatus = track_lock_handler();
         break;
       }
+
+      default:
+      {
+        break;
+      }
     }
   }
 }
 
-void cntl_restart(void)
-{
-  cntlstat = fast_track;
-}
-
-
-const cntlstatus_t* get_cntlstatus(void)
-{
-  return &ctl;
-}
-
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
 
 /*============================================================================*/
 static status_t warmup_handler(void)
@@ -474,6 +496,11 @@ static bool cntl(void)
         cntlstat = locked;
       }
 
+      break;
+    }
+
+    default:
+    {
       break;
     }
   }
