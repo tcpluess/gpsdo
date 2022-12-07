@@ -89,6 +89,7 @@ static inline void delay(void)
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void load_config(void);
 static void addr_cycle(uint32_t addr, uint32_t opcode);
 static void write_enable(bool enable);
 static bool check_busy(void);
@@ -117,6 +118,9 @@ void eep_init(void)
   /* default levels of the signals */
   EEP_MOSI(0);
   EEP_SCK(0);
+
+  /* load the config when the eeprom is initialised */
+  load_config();
 }
 
 
@@ -230,7 +234,37 @@ void eep_write_multi(uint32_t addr, uint32_t len, void* buf)
 }
 
 
-void load_config(void)
+
+
+
+void save_config(void)
+{
+  uint16_t calc_checksum;
+  calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
+  pack_u16_be(cfg.bytes, CHECKSUM_OFFSET, calc_checksum);
+  eep_write_multi(0, EEP_SZ, cfg.bytes);
+}
+
+
+config_t* get_config(void)
+{
+  return &cfg;
+}
+
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+
+/*============================================================================*/
+static void load_config(void)
+/*------------------------------------------------------------------------------
+  Function:
+  reads the entire config from the eeprom, verifies the checksum and
+  initialises default values if the checksum is wrong
+  in:  none
+  out: none
+==============================================================================*/
 {
   (void)memset(cfg.bytes, 0, EEP_SZ);
   eep_read_multi(0, EEP_SZ, &cfg);
@@ -253,31 +287,12 @@ void load_config(void)
     cfg.svin_dur = 86400u; /* 24 hours */
     cfg.accuracy = UINT32_MAX;
     cfg.accuracy_limit = 300; /* 300mm default accuracy for survey-in */
-    cfg.auto_svin = false;
     cfg.tau = 200u; /* 200 seconds default time constant */
     cfg.elevation_mask = 45; /* 45 degree elevation mask */
     cfg.pps_dur = 100u;
   }
 }
 
-
-void save_config(void)
-{
-  uint16_t calc_checksum;
-  calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
-  pack_u16_be(cfg.bytes, CHECKSUM_OFFSET, calc_checksum);
-  eep_write_multi(0, EEP_SZ, cfg.bytes);
-}
-
-
-config_t* get_config(void)
-{
-  return &cfg;
-}
-
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
 
 /*============================================================================*/
 static void addr_cycle(uint32_t addr, uint32_t opcode)

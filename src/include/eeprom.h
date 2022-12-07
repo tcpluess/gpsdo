@@ -68,8 +68,6 @@ typedef union
     uint32_t accuracy;
     uint32_t accuracy_limit;
 
-    bool auto_svin; /* automatically start survey in at boot time */
-
     /* navigation model */
     int8_t elevation_mask;
 
@@ -152,17 +150,6 @@ extern void eep_write_multi(uint32_t addr, uint32_t len, void* buf);
   in:  addr -> start address
        len -> number of bytes
        buf -> buffer for the write data
-  out: none
-==============================================================================*/
-
-
-/*============================================================================*/
-extern void load_config(void);
-/*------------------------------------------------------------------------------
-  Function:
-  reads the entire config from the eeprom, verifies the checksum and
-  initialises default values if the checksum is wrong
-  in:  none
   out: none
 ==============================================================================*/
 
