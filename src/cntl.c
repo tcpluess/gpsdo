@@ -327,7 +327,7 @@ static bool get_phase_err(void)
 
   /* obtain the interpolator value */
   float tdc;
-  if(get_tdc(&tdc) == false)
+  if(read_tdc(&tdc) == false)
   {
     return false;
   }
