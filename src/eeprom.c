@@ -52,12 +52,10 @@
 #define OP_WDS 0u /* write disable */
 #define OP_ERASE ((BIT_01 | BIT_00) << ADDR_LEN)
 #define OP_ERAL 0u /* erase all */
-#define OP_WRAL 0u /* write all same data */
 
 #define WEN_ADDR (BIT_08 | BIT_07)
 #define WDS_ADDR 0u
 #define ERAL_ADDR BIT_08
-#define WRAL_ADDR BIT_07
 
 #define START_BIT BIT_11
 
