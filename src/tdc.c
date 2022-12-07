@@ -36,7 +36,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "event_groups.h"
+#include "semphr.h"
 #include "tdc.h"
 #include "stm32f407xx.h"
 #include "misc.h"
@@ -50,7 +50,7 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define CAL_PERIODS 20u
+#define CAL_PERIODS 40u
 #if CAL_PERIODS == 2u
 #define CONFIG2 (0u << 6)
 #elif CAL_PERIODS == 10u
@@ -89,7 +89,11 @@
 #define EXTI9_IRQ 23u
 
 /* timeout to wait for the tdc */
-#define TDC_READY_TIMEOUT 10 /* ms */
+#define TDC_READY_TIMEOUT pdMS_TO_TICKS(10u) /* ms */
+
+/* reset default values for config2 and int mask */
+#define DEFAULT_CONFIG2 0x40u
+#define DEFAULT_INT_MASK 0x07u
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -103,6 +107,8 @@
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void enable_tdc(void);
+static void init_hardware(void);
 static uint8_t tdc_read(uint8_t addr);
 static uint32_t tdc_read24(uint8_t addr);
 static void tdc_write(uint8_t addr, uint8_t data);
@@ -118,7 +124,7 @@ static bool tdc_waitready(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static EventGroupHandle_t tdc_events;
+static SemaphoreHandle_t tdc_sem;
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -126,62 +132,57 @@ static EventGroupHandle_t tdc_events;
 
 void setup_tdc(void)
 {
-  /* enable port a */
-  RCC->AHB1ENR |= BIT_00;
+  init_hardware();
 
-  /* ss and enable are gpios; mosi, miso and sck belong to spi1.
-     use a internal pullup for the irq pin */
-  GPIOA->MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
-  GPIOA->PUPDR |= (1u << 18);
-  GPIOA->AFR[0] |= (5u << 20) | (5u << 24) | (5u << 28);
-
-  tdc_events = xEventGroupCreate();
-  tdc_config_interrupt();
+  tdc_sem = xSemaphoreCreateBinary();
 
   /* disble the tdc for now */
   tdc_ss(false);
   tdc_hwenable(false);
 
-  /* enable spi1 */
-  RCC->APB2ENR |= BIT_12;
-
-  /* configure spi1 */
-  SPI1->CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
-  SPI1->CR2 = 0;
-
-  /* enable spi2 */
-  SPI1->CR1 |= BIT_06;
-
   /* this resets the internal state of the tdc */
   tdc_hwenable(true);
 
-  /* configure the measurement mode, # of average cycles and interrupt when
-     measurements are done */
-  tdc_write(ADDR_CONFIG1, CONFIG1);
-  tdc_write(ADDR_CONFIG2, CONFIG2);
-  tdc_write(ADDR_INT_MASK, NEW_MEAS_INT);
+  /* sanity check if the communication works. */
+  uint8_t config2 = tdc_read(ADDR_CONFIG2);
+  uint8_t intmask = tdc_read(ADDR_INT_MASK);
+
+  if((config2 == DEFAULT_CONFIG2) && (intmask == DEFAULT_INT_MASK))
+  {
+    /* configure the measurement mode, # of average cycles and interrupt when
+       measurements are done */
+    tdc_write(ADDR_CONFIG1, CONFIG1);
+    tdc_write(ADDR_CONFIG2, CONFIG2);
+    tdc_write(ADDR_INT_MASK, NEW_MEAS_INT);
+    enable_tdc();
+  }
+  else
+  {
+    #ifdef DEBUG
+    (void)printf("something went wrong: tdc not in its default state\n");
+    (void)printf("CONFIG2 = %x, INTMASK = %x\n", config2, intmask);
+    #endif
+  }
 }
 
 
-void enable_tdc(void)
-{
-  /* sets the enable bit in the config register */
-  tdc_write(ADDR_CONFIG1, BIT_00);
-}
-
-
-bool get_tdc(float* result)
+bool read_tdc(float* result)
 {
   if(tdc_waitready())
   {
+    /* read the measurement data, then prepare for the next measurement
+       by setting enable */
     float calib1 = tdc_read24(ADDR_CALIB1);
     float calib2 = tdc_read24(ADDR_CALIB2);
     float time1 = tdc_read24(ADDR_TIME1);
     enable_tdc();
 
+    /*                                  CAL_PERIODS - 1
+       the result is: (clock period) *  ---------------
+                                        calib2 - calib1 */
     float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
 
-    /* sanity check, allow +/-10% deviation. min. 100ns, max. 200ns */
+    /* sanity check, allow +/-10% deviation. min. 90ns, max. 220ns */
     if((ns < 90.0f) || (ns > 220.0f))
     {
 #ifdef DEBUG
@@ -199,6 +200,51 @@ bool get_tdc(float* result)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+/*============================================================================*/
+static void enable_tdc(void)
+/*------------------------------------------------------------------------------
+  Function:
+  enable the tdc to measure
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* sets the enable bit in the config register */
+  tdc_write(ADDR_CONFIG1, BIT_00);
+}
+
+/*============================================================================*/
+static void init_hardware(void)
+/*------------------------------------------------------------------------------
+  Function:
+  initialise the hardware related to the tdc
+  in:  none
+  out: none
+==============================================================================*/
+{
+  /* enable port a */
+  RCC->AHB1ENR |= BIT_00;
+
+  /* ss and enable are gpios; mosi, miso and sck belong to spi1.
+     use a internal pullup for the irq pin */
+  GPIOA->MODER |= (1u << 6) | (1u << 8) | (2u << 10) | (2u << 12) | (2u << 14);
+  GPIOA->PUPDR |= (1u << 18);
+  GPIOA->AFR[0] |= (5u << 20) | (5u << 24) | (5u << 28);
+
+  /* enable spi1 */
+  RCC->APB2ENR |= BIT_12;
+
+  /* configure spi1 */
+  SPI1->CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
+  SPI1->CR2 = 0;
+
+  /* enable spi2 */
+  SPI1->CR1 |= BIT_06;
+
+  /* also configure interrupts */
+  tdc_config_interrupt();
+}
 
 /*============================================================================*/
 static uint8_t tdc_read(uint8_t addr)
@@ -302,8 +348,6 @@ static void tdc_ss(bool select)
   {
     GPIOA->BSRR = BIT_04;
   }
-
-  /* include a small delay to meet the setup time. */
 }
 
 /*============================================================================*/
@@ -376,7 +420,7 @@ static void tdc_irqhandler(void)
   EXTI->PR = BIT_09;
 
   /* signal to waiting tasks */
-  (void)xEventGroupSetBitsFromISR(tdc_events, BIT_10, NULL);
+  (void)xSemaphoreGiveFromISR(tdc_sem, NULL);
 }
 
 
@@ -408,10 +452,7 @@ static bool tdc_waitready(void)
   out: returns true if the tdc was ready, false if something went wrong
 ==============================================================================*/
 {
-  uint32_t bits = BIT_10;
-  bits = xEventGroupWaitBits(tdc_events, bits, true, true,
-                             pdMS_TO_TICKS(TDC_READY_TIMEOUT));
-  if(bits & BIT_10)
+  if(xSemaphoreTake(tdc_sem, TDC_READY_TIMEOUT))
   {
     if((tdc_irq_ack() & NEW_MEAS_INT) == 0)
     {

@@ -43,6 +43,8 @@
  ******************************************************************************/
 
 #define MAX_SV 40u
+#define FIX_3D 3u
+#define FIX_TIME 5u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -128,10 +130,10 @@ typedef struct
  ******************************************************************************/
 
 /*============================================================================*/
-extern void gps_task(void* param);
+extern void gnss_init(void);
 /*------------------------------------------------------------------------------
   Function:
-  the task handling all gnss related stuff
+  initialise tne gnss functionality
   in:  none
   out: none
 ==============================================================================*/
@@ -158,7 +160,7 @@ extern void reconfigure_gnss(void);
 
 
 /*============================================================================*/
-extern void start_svin(void);
+extern void manual_svin(void);
 /*------------------------------------------------------------------------------
   Function:
   start the survey-in process; the accuracy limit and duration are taken from
@@ -169,18 +171,7 @@ extern void start_svin(void);
 
 
 /*============================================================================*/
-extern void set_fixpos_mode(void);
-/*------------------------------------------------------------------------------
-  Function:
-  puts the gps module into fixed-position (timing) mode, using the ecef
-  xyz coordinates and accuracy from the config data
-  in:  none
-  out: none
-==============================================================================*/
-
-
-/*============================================================================*/
-extern void disable_tmode(void);
+extern void manual_svin_stop(void);
 /*------------------------------------------------------------------------------
   Function:
   disables the timing mode and switches the gps module to normal (positioning)
@@ -205,16 +196,6 @@ extern bool check_fix(void);
 /*------------------------------------------------------------------------------
   Function:
   initiates a reset and reconfiguration procedure of the gps module
-  in:  none
-  out: none
-==============================================================================*/
-
-
-/*============================================================================*/
-extern bool gps_waitready(void);
-/*------------------------------------------------------------------------------
-  Function:
-  wait until all data has been received
   in:  none
   out: none
 ==============================================================================*/

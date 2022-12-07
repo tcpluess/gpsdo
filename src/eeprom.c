@@ -89,6 +89,7 @@ static inline void delay(void)
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void load_config(void);
 static void addr_cycle(uint32_t addr, uint32_t opcode);
 static void write_enable(bool enable);
 static bool check_busy(void);
@@ -117,6 +118,9 @@ void eep_init(void)
   /* default levels of the signals */
   EEP_MOSI(0);
   EEP_SCK(0);
+
+  /* load the config when the eeprom is initialised */
+  load_config();
 }
 
 
@@ -179,13 +183,36 @@ void eep_chip_erase(void)
 void eep_read_multi(uint32_t addr, uint32_t len, void* buf)
 {
   uint8_t* ptr = (uint8_t*)buf;
+
+  /* select slave */
+  EEP_SS(1);
+
+  /* send out the address and opcode */
+  addr_cycle(addr, OP_READ);
+
   while(len > 0)
   {
-    *ptr = eep_read(addr);
+    uint8_t rddata = 0u;
+    for(int i = 0; i < 8; i++)
+    {
+      /* transfer is msb first */
+      rddata = (uint8_t)(rddata << 1);
+
+      EEP_MOSI(0);
+      EEP_SCK(1);
+
+      /* save the transferred bit */
+      rddata |= EEP_MISO();
+
+      EEP_SCK(0);
+    }
+
+    *ptr = rddata;
     ptr++;
-    addr++;
     len--;
   }
+  /* de-select slave */
+  EEP_SS(0);
 }
 
 
@@ -207,45 +234,7 @@ void eep_write_multi(uint32_t addr, uint32_t len, void* buf)
 }
 
 
-void load_config(void)
-{
-  (void)memset(cfg.bytes, 0, EEP_SZ);
-  eep_read_multi(0, EEP_SZ, &cfg);
 
-  /* the checksum sits at the last 2 bytes in big endian format */
-  uint16_t rd_cksum = unpack_u16_be(cfg.bytes, CHECKSUM_OFFSET);
-
-  /* when the checksum is wrong, generate some meaningful initial data
-     and populate the eeprom. also ignore the data if the version is wrong */
-  uint16_t calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
-  if((rd_cksum != calc_checksum) || (cfg.version != CFG_VERSION))
-  {
-    (void)memset(cfg.bytes, 0, EEP_SZ);
-    cfg.version = CFG_VERSION;
-    cfg.last_dacval = 32768u;
-    cfg.use_gps = true;
-    cfg.use_glonass = false;
-    cfg.use_galileo = true;
-    cfg.rs232_baudrate = 115200u;
-
-    cfg.fixpos_valid = false;
-    cfg.svin_dur = 4*3600;
-    cfg.x = 0;
-    cfg.y = 0;
-    cfg.z = 0;
-    cfg.accuracy = 0;
-    cfg.accuracy_limit = 10000; /* 10m default accuracy for survey-in */
-
-    cfg.auto_svin = false;
-
-    cfg.tau = 250u;
-
-    cfg.elevation_mask = 15; /* 5 degree elevation mask */
-
-    cfg.timeoffset = 0;
-    cfg.pps_dur = 100u;
-  }
-}
 
 
 void save_config(void)
@@ -265,6 +254,45 @@ config_t* get_config(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+
+/*============================================================================*/
+static void load_config(void)
+/*------------------------------------------------------------------------------
+  Function:
+  reads the entire config from the eeprom, verifies the checksum and
+  initialises default values if the checksum is wrong
+  in:  none
+  out: none
+==============================================================================*/
+{
+  (void)memset(cfg.bytes, 0, EEP_SZ);
+  eep_read_multi(0, EEP_SZ, &cfg);
+
+  /* the checksum sits at the last 2 bytes in big endian format */
+  uint16_t rd_cksum = unpack_u16_be(cfg.bytes, CHECKSUM_OFFSET);
+
+  /* when the checksum is wrong, generate some meaningful initial data
+     and populate the eeprom. also ignore the data if the version is wrong */
+  uint16_t calc_checksum = fletcher16(cfg.bytes, CHECKSUM_OFFSET);
+  if((rd_cksum != calc_checksum) || (cfg.version != CFG_VERSION))
+  {
+    /* set all data to zero and then explicitly configure the items that are
+       nonzero by default */
+    (void)memset(cfg.bytes, 0, EEP_SZ);
+    cfg.version = CFG_VERSION;
+    cfg.last_dacval = 32768u;
+    cfg.use_gps = true;
+    cfg.use_galileo = true;
+    cfg.svin_dur = 86400u; /* 24 hours */
+    cfg.accuracy = UINT32_MAX;
+    cfg.accuracy_limit = 300; /* 300mm default accuracy for survey-in */
+    cfg.tau = 200u; /* 200 seconds default time constant */
+    cfg.elevation_mask = 45; /* 45 degree elevation mask */
+    cfg.pps_dur = 100u;
+  }
+}
+
 
 /*============================================================================*/
 static void addr_cycle(uint32_t addr, uint32_t opcode)

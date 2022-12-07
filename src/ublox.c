@@ -90,24 +90,19 @@
 #define RX_BUFFER_SIZE 200u
 #define TX_BUFFER_SIZE 50u
 #define RECEIVE_TIMEOUT pdMS_TO_TICKS(10u)
-#define ACK_TIMEOUT 100u /* ms */
+#define ACK_TIMEOUT pdMS_TO_TICKS(100u)
 #define RESET_DELAY pdMS_TO_TICKS(250u)
 
-#define FIX_3D 3u
-#define FIX_TIME 5u
+#define COMMAND_MANUAL_SVIN BIT_00
+#define COMMAND_SVIN_STOP BIT_01
+#define COMMAND_RECONFIG_GNSS BIT_02
 
-#define EVENT_DO_SVIN BIT_00
-#define EVENT_DISABLE_TMODE BIT_01
-#define EVENT_SET_FIXPOS_MODE BIT_02
-
-#define EVENT_TP_RECEIVED BIT_04
-#define EVENT_PVT_RECEIVED BIT_05
-#define EVENT_SAT_RECEIVED BIT_06
-#define EVENT_SVIN_RECEIVED BIT_07
-#define EVENT_TIMEPULSE_OK BIT_08
-#define EVENT_ACK_RECEIVED BIT_09
+#define EVENT_TP_RECEIVED BIT_15
+#define EVENT_PVT_RECEIVED BIT_14
+#define EVENT_SAT_RECEIVED BIT_13
+#define EVENT_SVIN_RECEIVED BIT_12
+#define EVENT_ACK_RECEIVED BIT_11
 #define EVENT_NAK_RECEIVED BIT_10
-#define EVENT_RECONFIG_GNSS BIT_11
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -161,6 +156,7 @@ typedef struct
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+static void gps_task(void* param);
 static void rx_task(void* param);
 static void init_uart(void);
 static void uart_config_baudrate(uint32_t baud);
@@ -184,7 +180,7 @@ static void ubx_receive_packet(ubxbuffer_t* rx);
 static void ubx_transmit_packet(const ubxbuffer_t* tx);
 
 static void init_pins(void);
-static void gps_reset(bool do_reset);
+static void gps_reset(void);
 
 static StreamBufferHandle_t rxstream;
 static StreamBufferHandle_t txstream;
@@ -208,144 +204,10 @@ static gnssstatus_t stat =
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void gps_task(void* param)
+void gnss_init(void)
 {
-  (void)param;
-
-  rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
-  txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
-  ublox_events = xEventGroupCreate();
-  (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
-  qerr.valid = false;
-  bool fixpos_verify = false;
-
-  /* initialise hardware */
-  init_pins();
-  init_uart();
-
-  /* the uart must use the initial baud rate after reset */
-  uart_config_baudrate(BAUD_INITIAL);
-
-  /* reset the gps module */
-  gps_reset(true);
-  vTaskDelay(RESET_DELAY);
-  gps_reset(false);
-  vTaskDelay(RESET_DELAY);
-
-  /* after the module has started up, the uart is reconfigured:
-   - high baud rate
-   - disable nmea messages */
-  ubx_config_baudrate(BAUD_RECONFIGURE);
-
-  /* the gps module is configured:
-   - gnss system to use
-   - dynamic model and elevation mask
-   - periodic reporting of certain messages
-   - survey-in, fixed-position or normal mode */
-  config_t* cfg = get_config();
-  ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
-  ubx_config_navmodel(cfg->elevation_mask);
-  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-  ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
-  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
-  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
-  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_DOP, 1);
-
-  /* if the fixed position in the eeprom is valid, we start a short survey-in
-     to validate the position. also, if auto svin is enabled, the survey-in
-     will be started as well. */
-  if(cfg->fixpos_valid)
-  {
-    fixpos_verify = true;
-    start_svin();
-  }
-  else if(cfg->auto_svin)
-  {
-    start_svin();
-  }
-
-  for(;;)
-  {
-    /* wait until at least one of the following events occurs:
-     - data received from the gps module
-     - request to disable timing mode
-     - request to perform a survey-in
-     - request to configure the fixed position mode
-     - request to change gnss systems used */
-    uint32_t bits = EVENT_DISABLE_TMODE |
-                    EVENT_DO_SVIN |
-                    EVENT_SET_FIXPOS_MODE |
-                    EVENT_SVIN_RECEIVED |
-                    EVENT_RECONFIG_GNSS;
-    bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
-
-    if(bits & EVENT_DISABLE_TMODE)
-    {
-      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
-    }
-
-    if(bits & EVENT_DO_SVIN)
-    {
-      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-      vTaskDelay(RESET_DELAY);
-      ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
-      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
-    }
-
-    if(bits & EVENT_SET_FIXPOS_MODE)
-    {
-      ubx_config_tmode(tmode_fixedpos, cfg->x, cfg->y, cfg->z, 0, cfg->accuracy, 0);
-    }
-
-    if(bits & EVENT_SVIN_RECEIVED)
-    {
-      if(svin_data.active)
-      {
-        /* we received data from the survey-in */
-        if((cfg->fixpos_valid) && fixpos_verify)
-        {
-          /* check if the currently determined distance is close to what is
-             saved in the eeprom */
-          float dx = (float)(cfg->x - svin_data.x);
-          float dy = (float)(cfg->y - svin_data.y);
-          float dz = (float)(cfg->z - svin_data.z);
-
-          /* calculate error vector in mm - ecef coordinates are in cm! */
-          float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
-          printf("# error vector magnitude: %f mm\n", mag);
-          if(mag < cfg->accuracy_limit)
-          {
-            fixpos_verify = false;
-            printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
-            ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
-            vTaskDelay(100u);
-            set_fixpos_mode();
-            ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
-          }
-        }
-      }
-      else if(svin_data.valid == true)
-      {
-        /* the survey-in is finished */
-        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
-
-        /* copy the svin data to the configuration */
-        cfg->x = svin_data.x;
-        cfg->y = svin_data.y;
-        cfg->z = svin_data.z;
-        cfg->accuracy = (uint32_t)sqrtf((float)svin_data.meanv);
-        cfg->fixpos_valid = true;
-      }
-    }
-
-    if(bits & EVENT_RECONFIG_GNSS)
-    {
-      ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
-    }
-  }
+  (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
 }
-
 
 bool get_timepulse_error(float* result)
 {
@@ -367,41 +229,21 @@ bool get_timepulse_error(float* result)
 }
 
 
-void start_svin(void)
+void manual_svin(void)
 {
-  (void)xEventGroupSetBits(ublox_events, EVENT_DO_SVIN);
-}
-
-
-void set_fixpos_mode(void)
-{
-  (void)xEventGroupSetBits(ublox_events, EVENT_SET_FIXPOS_MODE);
+  (void)xEventGroupSetBits(ublox_events, COMMAND_MANUAL_SVIN);
 }
 
 
 void reconfigure_gnss(void)
 {
-  (void)xEventGroupSetBits(ublox_events, EVENT_RECONFIG_GNSS);
+  (void)xEventGroupSetBits(ublox_events, COMMAND_RECONFIG_GNSS);
 }
 
 
-void disable_tmode(void)
+void manual_svin_stop(void)
 {
-  (void)xEventGroupSetBits(ublox_events, EVENT_DISABLE_TMODE);
-}
-
-
-bool gps_waitready(void)
-{
-  uint32_t bits = EVENT_TP_RECEIVED;
-  if(xEventGroupWaitBits(ublox_events, bits, true, true, 0))
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
+  (void)xEventGroupSetBits(ublox_events, COMMAND_SVIN_STOP);
 }
 
 
@@ -454,6 +296,153 @@ const gnssstatus_t* get_gnss_status(void)
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
+
+
+/*============================================================================*/
+static void gps_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  the task handling all gnss related stuff
+  in:  param -> not used (freertos)
+  out: none
+==============================================================================*/
+{
+  (void)param;
+
+  rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
+  txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
+  ublox_events = xEventGroupCreate();
+  (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
+  qerr.valid = false;
+  bool auto_svin = true;
+
+  /* initialise hardware */
+  init_pins();
+  init_uart();
+
+  /* the uart must use the initial baud rate after reset */
+  uart_config_baudrate(BAUD_INITIAL);
+
+  /* reset the gps module */
+  gps_reset();
+
+  /* after the module has started up, the uart is reconfigured:
+   - high baud rate
+   - disable nmea messages */
+  ubx_config_baudrate(BAUD_RECONFIGURE);
+
+  /* the gps module is configured:
+   - gnss system to use
+   - dynamic model and elevation mask
+   - periodic reporting of certain messages
+   - survey-in, fixed-position or normal mode */
+  config_t* cfg = get_config();
+  ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
+  ubx_config_navmodel(cfg->elevation_mask);
+  ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+  ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_TP, 1);
+  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_PVT, 1);
+  ubx_config_msgrate(UBX_CLASS_NAV, UBX_ID_NAV_SAT, 1);
+
+  /* start the survey-in */
+  ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
+  ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
+
+  for(;;)
+  {
+    /* wait until at least one of the following events occurs:
+     - data received from the gps module
+     - request to disable timing mode
+     - request to perform a survey-in
+     - request to configure the fixed position mode
+     - request to change gnss systems used */
+    uint32_t bits = COMMAND_SVIN_STOP |
+                    COMMAND_MANUAL_SVIN |
+                    EVENT_SVIN_RECEIVED |
+                    COMMAND_RECONFIG_GNSS;
+    bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
+
+    /* a stop of the currently running survey-in was requested. switch to
+       positioning mode. */
+    if(bits & COMMAND_SVIN_STOP)
+    {
+      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+    }
+
+    /* a survey-in was manually requested. first, switch to positioning mode,
+       then start the new survey-in. */
+    if(bits & COMMAND_MANUAL_SVIN)
+    {
+      auto_svin = false;
+      ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+      ubx_config_tmode(tmode_svin, 0, 0, 0, cfg->svin_dur, 0, cfg->accuracy_limit);
+      ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 1);
+    }
+
+    /* a reconfiguration of the used gnss was requested. */
+    if(bits & COMMAND_RECONFIG_GNSS)
+    {
+      ubx_config_gnss(cfg->use_gps, cfg->use_glonass, cfg->use_galileo);
+    }
+
+    /* survey-in telegrams are received. */
+    if(bits & EVENT_SVIN_RECEIVED)
+    {
+      /* a survey-in is currently in progress. */
+      if(svin_data.active)
+      {
+        /* if the survey-in is running and the data is valid, store the position
+           that was determined in the gpsdo configuration and disable
+           further survey-in messages. */
+        if(svin_data.valid == true)
+        {
+          ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+
+          /* copy the svin data to the configuration */
+          cfg->x = svin_data.x;
+          cfg->y = svin_data.y;
+          cfg->z = svin_data.z;
+          cfg->accuracy = (uint32_t)sqrtf((float)svin_data.meanv);
+          cfg->fixpos_valid = true;
+          auto_svin = false;
+        }
+
+        /* only do checks if this is an automatic survey-in (after powerup) */
+        if(auto_svin == true)
+        {
+          /* if automatic survey-in and the fixed position is known in the
+             configuration, verify the position */
+          if(cfg->fixpos_valid)
+          {
+            /* check if the currently determined position is close to what is
+               saved in the eeprom */
+            float dx = (float)(cfg->x - svin_data.x);
+            float dy = (float)(cfg->y - svin_data.y);
+            float dz = (float)(cfg->z - svin_data.z);
+
+            /* calculate error vector in mm - ecef coordinates are in cm! */
+            float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
+            (void)printf("# error vector magnitude: %f mm\n", mag);
+            if(mag <= cfg->accuracy_limit)
+            {
+              (void)printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
+              ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+              ubx_config_tmode(tmode_fixedpos, cfg->x, cfg->y, cfg->z, 0, cfg->accuracy, 0);
+              ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+            }
+          }
+        }
+      }
+      else
+      {
+        /* we received survey-in telegrams but no survey-in is in progress.
+           therefore, the survey-in telegrams can be switched off. */
+        ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+      }
+    }
+  }
+}
 
 /*============================================================================*/
 static void rx_task(void* param)
@@ -518,7 +507,6 @@ static void rx_task(void* param)
           case UBX_ID_NAV_DOP:
           {
             unpack_dop(rx.msg, &dop_info);
-            //(void)xEventGroupSetBits(ublox_events, EVENT_PVT_RECEIVED);
             break;
           }
 
@@ -577,9 +565,8 @@ static void init_uart(void)
 {
   /* enable usart 3 and install the irq handler */
   RCC->APB1ENR |= BIT_18;
-  USART3->BRR = (BAUD_FRAC(BAUD_INITIAL) << 0) | (BAUD_INT(BAUD_INITIAL) << 4);
+  uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
-  //USART3_CR1 |= BIT_05;
   vic_enableirq(IRQ_NUM, uart_irq_handler);
 }
 
@@ -607,7 +594,7 @@ static void init_pins(void)
 
 
 /*============================================================================*/
-static void gps_reset(bool do_reset)
+static void gps_reset(void)
 /*------------------------------------------------------------------------------
   Function:
   resets the gps module
@@ -615,16 +602,10 @@ static void gps_reset(bool do_reset)
   out: none
 ==============================================================================*/
 {
-  if(do_reset)
-  {
-    /* reset pin low */
-    GPIOD->BSRR = BIT_26;
-  }
-  else
-  {
-    /* reset pin high */
-    GPIOD->BSRR = BIT_10;
-  }
+  GPIOD->BSRR = BIT_26;
+  vTaskDelay(RESET_DELAY);
+  GPIOD->BSRR = BIT_10;
+  vTaskDelay(RESET_DELAY);
 }
 
 
@@ -827,6 +808,11 @@ static void ubx_receive_packet(ubxbuffer_t* rx)
         }
         break;
       }
+
+      default:
+      {
+        break;
+      }
     }
 
     /* fletcher8 checksum */
@@ -852,6 +838,7 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
   uint8_t ckb = 0;
   uint32_t read_pos = 0;
   uint8_t tmpdata = 0;
+  bool calc_cksum = false;
 
   do
   {
@@ -864,18 +851,19 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       {
         tmpdata = SYNC1;
         txstatus = ubx_header2;
-        goto send;
+        break;
       }
 
       case ubx_header2:
       {
         tmpdata = SYNC2;
         txstatus = ubx_class;
-        goto send;
+        break;
       }
 
       case ubx_class:
       {
+        calc_cksum = true;
         tmpdata = tx->msgclass;
         txstatus = ubx_id;
         break;
@@ -917,14 +905,16 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       {
         tmpdata = cka;
         txstatus = ubx_ckb;
-        goto send;
+        calc_cksum = false;
+        break;
       }
 
       case ubx_ckb:
       {
         tmpdata = ckb;
         done = true;
-        goto send;
+        calc_cksum = false;
+        break;
       }
 
       default:
@@ -933,11 +923,13 @@ static void ubx_transmit_packet(const ubxbuffer_t* tx)
       }
     }
 
-    /* fletcher8 checksum */
-    cka = cka + tmpdata;
-    ckb = ckb + cka;
+    if(calc_cksum)
+    {
+      /* fletcher8 checksum */
+      cka = cka + tmpdata;
+      ckb = ckb + cka;
+    }
 
-send:
     (void)xStreamBufferSend(txstream, &tmpdata, 1, portMAX_DELAY);
     enable_txempty_irq();
 
@@ -990,7 +982,7 @@ static bool gps_wait_ack(void)
 ==============================================================================*/
 {
   uint32_t bits = EVENT_ACK_RECEIVED | EVENT_NAK_RECEIVED;
-  bits = xEventGroupWaitBits(ublox_events, bits, true, false, pdMS_TO_TICKS(ACK_TIMEOUT));
+  bits = xEventGroupWaitBits(ublox_events, bits, true, false, ACK_TIMEOUT);
   if(bits & EVENT_ACK_RECEIVED)
   {
     return true;

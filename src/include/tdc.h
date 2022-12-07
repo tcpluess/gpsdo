@@ -65,23 +65,15 @@ extern void setup_tdc(void);
   out: none
 ==============================================================================*/
 
-/*============================================================================*/
-extern void enable_tdc(void);
-/*------------------------------------------------------------------------------
-  Function:
-  prepare the tdc for a new measurement
-  in:  none
-  out: none
-==============================================================================*/
-
 
 /*============================================================================*/
-extern bool get_tdc(float* result);
+extern bool read_tdc(float* result);
 /*------------------------------------------------------------------------------
   Function:
-  reads the measured time interval in nanoseconds
-  in:  none
-  out: measured time interval in ns - should always be between ca. 100 to 200ns
+  wait until a measurement is finished and return the measured time interval
+  in nanoseconds.
+  in:  result -> this is where the measurement result goes
+  out: returns true if the result is valid, false otherwise
 ==============================================================================*/
 
 /*******************************************************************************

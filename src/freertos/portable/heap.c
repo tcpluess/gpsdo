@@ -72,6 +72,11 @@ static int totalBytesProvidedBySBRK = 0;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
+/* forward declarations to keep the compiler silent */
+void __env_lock(void);
+void __env_unlock(void);
+char* sbrk(int incr);
+char* _sbrk(int incr);
 
 void __env_lock(void)
 {

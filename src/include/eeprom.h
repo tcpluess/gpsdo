@@ -39,7 +39,7 @@
  ******************************************************************************/
 
 #define EEP_SZ 512u
-#define CFG_VERSION 34u
+#define CFG_VERSION 10u
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -58,7 +58,6 @@ typedef union
     bool use_gps;
     bool use_glonass;
     bool use_galileo;
-    uint32_t rs232_baudrate;
 
     /* fixed positon data */
     bool fixpos_valid;
@@ -68,8 +67,6 @@ typedef union
     int32_t z;
     uint32_t accuracy;
     uint32_t accuracy_limit;
-
-    bool auto_svin; /* automatically start survey in at boot time */
 
     /* navigation model */
     int8_t elevation_mask;
@@ -153,17 +150,6 @@ extern void eep_write_multi(uint32_t addr, uint32_t len, void* buf);
   in:  addr -> start address
        len -> number of bytes
        buf -> buffer for the write data
-  out: none
-==============================================================================*/
-
-
-/*============================================================================*/
-extern void load_config(void);
-/*------------------------------------------------------------------------------
-  Function:
-  reads the entire config from the eeprom, verifies the checksum and
-  initialises default values if the checksum is wrong
-  in:  none
   out: none
 ==============================================================================*/
 

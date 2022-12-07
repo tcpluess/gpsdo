@@ -32,13 +32,8 @@
 #include "task.h"
 #include "stm32f407xx.h"
 #include "misc.h"
-#include "temperature.h"
 
-#include "dac.h"
-#include "tdc.h"
-#include "timebase.h"
 #include "nvic.h"
-#include "adc.h"
 #include "eeprom.h"
 #include "console.h"
 #include "cntl.h"
@@ -78,10 +73,10 @@ int main(void)
 {
   vic_init();
 
-  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
+  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
 
   vTaskStartScheduler();
-  /*lint -unreachable */
+
   return 0;
 }
 
@@ -106,14 +101,15 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
 #endif
 }
 
+void vApplicationIdleHook(void);
 
 void vApplicationIdleHook(void)
 {
   static int i = 0;
-  i++;
+  i++; /*lint -e830 -e550 not accessed */
 
-  /* this services the watchdog. if the code hangs for some reason the
-     watchdog will time out after approx. 2 sec. */
+  /* this services the watchdog. if the code hangs for some reason and the idle
+     task never runs, the watchdog will time out after approx. 2 sec. */
   IWDG->KR = 0xaaaau;
 }
 
@@ -148,18 +144,11 @@ static void init(void* param)
   (void)param;
   led_setup();
   eep_init();
-  load_config();
-  timebase_init();
-  dac_setup();
-  tmp_init();
-  setup_tdc();
-  adc_init();
-  ppsenable(false);
 
-  (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
-  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
-  (void)xTaskCreate(console_task, "console", 1500, NULL, 2, NULL);
-  (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 2, NULL);
+  gnss_init();
+  control_init();
+  console_init();
+  nmea_init();
 
   /* initialise the watchdog for 2 second timeout */
   DBGMCU->APB1FZ |= BIT_12; /* watchdog stopped during debug */

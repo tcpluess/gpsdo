@@ -33,9 +33,7 @@
 #include "ublox.h"
 #include "checksum.h"
 #include "nmea_output.h"
-#include "temperature.h"
-#include "adc.h"
-#include "cntl.h"
+#include "task.h"
 
 #include <stdio.h>
 
@@ -61,14 +59,29 @@
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
+#if 0
+static void nmea_task(void* param);
 static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes);
+#endif
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
+void nmea_init(void)
+{
+  #if 0
+  (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 2, NULL);
+  #endif
+}
+
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+#if 0
 /*============================================================================*/
-void nmea_task(void* param)
+static void nmea_task(void* param)
 /*------------------------------------------------------------------------------
   Function:
   outputs the nmea sentences.
@@ -164,10 +177,6 @@ void nmea_task(void* param)
   }
 }
 
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
-
 /*============================================================================*/
 static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes)
 /*------------------------------------------------------------------------------
@@ -182,6 +191,8 @@ static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes)
     *degrees = decimal / 10000000;
     *minutes = (float)((((float)(decimal % 10000000)) * 60.0) / 1e7);
 }
+
+#endif
 
 /*******************************************************************************
  * END OF CODE

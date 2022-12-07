@@ -96,12 +96,11 @@ typedef enum
   stable
 } controlstatus_t;
 
-extern volatile float stat_e;
-
 /*******************************************************************************
  * PRIVATE FUNCTION PROTOTYPES (STATIC)
  ******************************************************************************/
 
+static void cntl_task(void* param);
 static uint16_t pi_control(double KP, double TI, float u);
 static bool cntl(void);
 static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
@@ -123,13 +122,45 @@ static cntlstatus_t ctl;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void cntl_task(void* param)
+void control_init(void)
+{
+  tmp_init();
+  adc_init();
+  timebase_init();
+  dac_setup();
+  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
+}
+
+
+void cntl_restart(void)
+{
+  cntlstat = fast_track;
+}
+
+
+const cntlstatus_t* get_cntlstatus(void)
+{
+  return &ctl;
+}
+
+/*******************************************************************************
+ * PRIVATE FUNCTIONS (STATIC)
+ ******************************************************************************/
+
+/*============================================================================*/
+static void cntl_task(void* param)
+/*------------------------------------------------------------------------------
+  Function:
+  this is called while the ocxo needs to warm up to stabilise.
+  in:  none
+  out: returns the next status of the controller.
+==============================================================================*/
 {
   (void)param;
   status_t gpsdostatus = warmup;
   cntlstat = fast_track;
 
-  ctl.esum = get_config()->last_dacval;
+  ctl.esum = (double)(get_config()->last_dacval);
   ctl.mode = "";
   dac_sethold(false);
 
@@ -158,24 +189,15 @@ void cntl_task(void* param)
         gpsdostatus = track_lock_handler();
         break;
       }
+
+      default:
+      {
+        break;
+      }
     }
   }
 }
 
-void cntl_restart(void)
-{
-  cntlstat = fast_track;
-}
-
-
-const cntlstatus_t* get_cntlstatus(void)
-{
-  return &ctl;
-}
-
-/*******************************************************************************
- * PRIVATE FUNCTIONS (STATIC)
- ******************************************************************************/
 
 /*============================================================================*/
 static status_t warmup_handler(void)
@@ -305,7 +327,7 @@ static bool get_phase_err(void)
 
   /* obtain the interpolator value */
   float tdc;
-  if(get_tdc(&tdc) == false)
+  if(read_tdc(&tdc) == false)
   {
     return false;
   }
@@ -350,11 +372,11 @@ static uint16_t pi_control(double KP, double TI, float u)
                                       2*Ti 1-z^-1
      now this is the z-transfer function of the integrator which is then
      converted to the below difference equation. */
-  ctl.esum = fminf(fmaxf(0.0, ctl.esum + KP*(u + uold)/(2.0*TI)), 65535.0);
+  ctl.esum = fmin(fmax(0.0, ctl.esum + KP*(u + uold)/(2.0*TI)), 65535.0);
   uold = u;
 
   /* calculate the output signal and limit it ("output saturation") */
-  float efc = fminf(fmaxf(0.0, KP*u + ctl.esum), 65535.0);
+  float efc = (float)(fmin(fmax(0.0, KP*u + ctl.esum), 65535.0));
   return (uint16_t)efc;
 }
 
@@ -474,6 +496,11 @@ static bool cntl(void)
         cntlstat = locked;
       }
 
+      break;
+    }
+
+    default:
+    {
       break;
     }
   }
