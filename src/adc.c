@@ -77,7 +77,7 @@ static SemaphoreHandle_t adc_ready;
 
 void adc_init(void)
 {
-  vSemaphoreCreateBinary(adc_ready);
+  adc_ready = xSemaphoreCreateBinary();
 
   /* enable gpio b */
   RCC->AHB1ENR |= BIT_01;
