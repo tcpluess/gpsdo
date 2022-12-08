@@ -112,7 +112,8 @@ MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
-CPFLAGS += -ffunction-sections -fdata-sections
+CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough
+CPFLAGS += -Wmisleading-indentation -Wswitch-default -Wunused -Wmissing-prototypes
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
 CXXFLAGS = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
