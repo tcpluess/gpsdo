@@ -112,7 +112,7 @@ void timebase_init(void)
   enable_timer();
 
   /* enable the interpolator */
-  setup_tdc();
+  tdc_setup();
 
   /* the 1pps output is disabled by default */
   ppsenable(false);

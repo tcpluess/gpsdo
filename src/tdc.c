@@ -112,7 +112,7 @@ static SemaphoreHandle_t tdc_sem;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-void setup_tdc(void)
+void tdc_setup(void)
 {
   init_hardware();
 
@@ -128,7 +128,6 @@ void setup_tdc(void)
   /* sanity check if the communication works. */
   uint8_t config2 = tdc_read(ADDR_CONFIG2);
   uint8_t intmask = tdc_read(ADDR_INT_MASK);
-
   if((config2 == DEFAULT_CONFIG2) && (intmask == DEFAULT_INT_MASK))
   {
     /* configure the measurement mode, # of average cycles and interrupt when
@@ -148,7 +147,7 @@ void setup_tdc(void)
 }
 
 
-bool read_tdc(float* result)
+bool tdc_readtic(float* result)
 {
   if(tdc_waitready())
   {

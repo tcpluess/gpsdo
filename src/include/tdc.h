@@ -38,7 +38,7 @@
  ******************************************************************************/
 
 /*============================================================================*/
-extern void setup_tdc(void);
+extern void tdc_setup(void);
 /*------------------------------------------------------------------------------
   Function:
   initialise the hardware and configure the tdc (e.g. #of averaging cycles)
@@ -48,7 +48,7 @@ extern void setup_tdc(void);
 
 
 /*============================================================================*/
-extern bool read_tdc(float* result);
+extern bool tdc_readtic(float* result);
 /*------------------------------------------------------------------------------
   Function:
   wait until a measurement is finished and return the measured time interval
