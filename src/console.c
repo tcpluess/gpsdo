@@ -120,10 +120,10 @@ void console_init(void)
 static void console_task(void* param)
 /*------------------------------------------------------------------------------
   Function:
-  the interpreter gets the number of arguments and the individual arguments,
-  searches the command to be executed and passes the arguments to it
-  in:  argc -> number of arguments, including the command itself
-       argv -> array of strings
+  this is the actual task that handles the console i/o. at startup, the version
+  information is printed, then the line editor is called which waits for user
+  input.
+  in:  param -> not used
   out: none
 ==============================================================================*/
 {
@@ -151,10 +151,13 @@ static int interpreter(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   the interpreter gets the number of arguments and the individual arguments,
-  searches the command to be executed and passes the arguments to it
+  searches the command to be executed and passes the arguments to it.
   in:  argc -> number of arguments, including the command itself
        argv -> array of strings
-  out: none
+  out: if the command is found, the command's exit code is returned. for empty
+       commands, the return code 0 is used (success) and if the command cannot
+       be found, -1 is returned (error). commands shall use the same behaviour
+       (return 0 on success, -1 on error.)
 ==============================================================================*/
 {
   if(argc >= 1)
@@ -190,11 +193,11 @@ static int interpreter(int argc, const char* const argv[])
 static int help(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  the interpreter gets the number of arguments and the individual arguments,
-  searches the command to be executed and passes the arguments to it
-  in:  argc -> number of arguments, including the command itself
-       argv -> array of strings
-  out: none
+  the help command displays all available commands together with their help
+  strings.
+  in:  argc -> not used
+       argv -> not used
+  out: always succeeds (returns 0)
 ==============================================================================*/
 {
   /* unused */
@@ -220,11 +223,13 @@ static int help(int argc, const char* const argv[])
 static int gnss(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  configure the gnss systems to be used
+  configure the gnss systems to be used. if called without arguments, it
+  displays which gnss systems are enabled. if called with arguments, the
+  specified gnss systems are enabled and the others are disabled.
   in:  argc -> number of arguments, see below
        argv -> array of strings, any combination of "gps", "glonass" and
        "galileo"
-  out: none
+  out: returns 0 on success, -1 in case of errors.
 ==============================================================================*/
 {
   bool use_gps = false;
@@ -282,11 +287,12 @@ static int gnss(int argc, const char* const argv[])
 static int elev_mask(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  configure the elevation mask
+  configure the elevation mask. if called without arguments, it will return the
+  currently configured elevation mask; if called with one numeric argument, a
+  new elevation mask will be configured.
   in:  argc -> number of arguments, see below
-       argv -> array of strings; usually only one element which is an integer
-       which is then used as the elevation mask in degrees
-  out: none
+       argv -> a number between 0 and 90
+  out: returns 0 on success, -1 in case of errors.
 ==============================================================================*/
 {
   if(argc == 0)
@@ -316,10 +322,12 @@ static int elev_mask(int argc, const char* const argv[])
 static int conf(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
-  displays or saves the currently used configuration data
+  displays or saves the currently used configuration data. if called without
+  arguments, the configuration is displayed. if called as "conf save", the
+  current configuration is saved to the eeprom.
   in:  argc -> number of arguments, see below
-       argv -> array of strings; none required
-  out: none
+       argv -> "save" to save the configuration
+  out: returns 0 on success, -1 in case of errors.
 ==============================================================================*/
 {
   if(argc == 0)
@@ -365,9 +373,9 @@ static int disp(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   enables the auto-display
-  in:  argc -> number of arguments, see below
-       argv -> array of strings; none required
-  out: none
+  in:  argc -> not used
+       argv -> not used
+  out:
 ==============================================================================*/
 {
   /* unused */
