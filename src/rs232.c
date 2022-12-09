@@ -113,15 +113,6 @@ void txchar(char c)
   enable_txempty_irq();
 }
 
-void txstr(const char* str)
-{
-  while(*str != '\0')
-  {
-    txchar(*str);
-    str++;
-  }
-}
-
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
