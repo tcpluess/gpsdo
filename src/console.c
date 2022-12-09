@@ -18,6 +18,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "console.h"
 #include "rs232.h"
 #include "eeprom.h"
 #include "ublox.h"
