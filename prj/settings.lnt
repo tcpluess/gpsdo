@@ -32,7 +32,7 @@ in case of this, append a text to the message that clarifies this a bit. */
 /* clarify some Lint diagnostics */
 -append(716, - better use for(;;) if you intend to define an endless loop. See Lint manual.)
 -append(19, - mostly due to an extraneous semicolon (probably in macro definition?))
-/*+e900  always produce at least one line of output */
++e900  /*always produce at least one line of output*/
 /*--ffn  use full path names in output, otherwise Ultraedit can't find files */
 -width(180,4) /* break exceedingly long lines */
 -hF1 /* always supply a file */
