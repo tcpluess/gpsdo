@@ -651,7 +651,7 @@ static int uptime(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   shows the uptime. does not need arguments
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -680,7 +680,7 @@ static int info(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   show version info
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -699,7 +699,7 @@ static int pps(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -753,7 +753,7 @@ static int reboot(int argc, const char* const argv[])
 /*------------------------------------------------------------------------------
   Function:
   tight loop to force a watchdog reset
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {

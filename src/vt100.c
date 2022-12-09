@@ -112,7 +112,7 @@ void vt100_init(vt100_t* term, interpreter_func intr, FILE* out, FILE* in)
 /*------------------------------------------------------------------------------
   Function:
   the line editor works similar to gnu's libreadline.
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -130,7 +130,7 @@ int vt100_lineeditor(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   the line editor works similar to gnu's libreadline.
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -189,7 +189,7 @@ char* vt100_line(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   the line editor works similar to gnu's libreadline.
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -205,7 +205,7 @@ static void backspace(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -226,7 +226,7 @@ static void delete(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -246,7 +246,7 @@ static void term_cursorleft(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -263,7 +263,7 @@ static void term_cursorright(vt100_t* term, size_t num)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -280,7 +280,7 @@ static bool handle_esc(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -466,7 +466,7 @@ static void cntlchar(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -548,7 +548,7 @@ static void insertchar(vt100_t* term, int c)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -586,7 +586,7 @@ static void key_end(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -600,7 +600,7 @@ static void key_del(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -615,7 +615,7 @@ static void key_home(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -629,7 +629,7 @@ static void key_left(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -646,7 +646,7 @@ static void key_right(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -663,7 +663,7 @@ static void key_bksp(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -690,7 +690,7 @@ static void key_ctrl_u(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -706,7 +706,7 @@ static void key_ctrl_k(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
@@ -721,7 +721,7 @@ static void key_enter(vt100_t* term)
 /*------------------------------------------------------------------------------
   Function:
   set the duration of the pps pulse
-  in:  noen
+  in:  none
   out: none
 ==============================================================================*/
 {
