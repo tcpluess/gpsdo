@@ -62,7 +62,7 @@ ResetHandler:
 1:
 
 /* this enables the FPU if necessary */
-#ifdef __FPU_USED
+#if defined(__VFP_FP__) && !defined(__SOFTFP__)
     ldr    r0, =0xe000ed88
     ldr    r1, [r0]
     orr    r1, r1, #(0xf << 20)
