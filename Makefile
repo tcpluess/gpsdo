@@ -124,7 +124,7 @@ CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT)
 LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
 LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
-LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch $(LIBDIR)
+LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segment $(LIBDIR)
 
 .PHONY: all
 all: $(OBJS) bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).s19 \
