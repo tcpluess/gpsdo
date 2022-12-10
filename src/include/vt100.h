@@ -20,15 +20,19 @@
  ******************************************************************************/
 
 #include <stdio.h>
-#include <stdint.h>
 #include <stdbool.h>
 
 /*******************************************************************************
  * CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define MAX_LINELEN 80
-#define MAX_TOKENS 10
+#ifndef VT100_MAX_LINELEN
+#define VT100_MAX_LINELEN 80
+#endif
+
+#ifndef VT100_MAX_TOKENS
+#define VT100_MAX_TOKENS 10
+#endif
 
 /*******************************************************************************
  * MACRO DEFINITIONS
@@ -42,7 +46,7 @@ typedef int (*interpreter_func)(int argc, const char* const argv[]);
 
 typedef struct
 {
-  char linebuffer[MAX_LINELEN];
+  char linebuffer[VT100_MAX_LINELEN];
   size_t cursor;
   size_t linelen;
   bool escape;
