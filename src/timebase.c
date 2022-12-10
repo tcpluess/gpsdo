@@ -32,9 +32,6 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-/* interrupt vector number for the timer 2 */
-#define TIM2_VECTOR 28
-
 #define HSECLK 10000000u
 #define PLLN 160u /* vco runs at 320 MHz */
 #define PLLM 5u
@@ -303,7 +300,7 @@ static void enable_timer(void)
   out: none
 ==============================================================================*/
 {
-  vic_enableirq(TIM2_VECTOR, capture_irq);
+  vic_enableirq(TIM2_IRQn, capture_irq);
 
   /* enable gpio a */
   RCC->AHB1ENR |= BIT_00;
