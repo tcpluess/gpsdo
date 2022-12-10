@@ -75,10 +75,12 @@ SECTIONS
   {
     . = ALIGN(4);
     _sbss = .;
+    __bss_start__ = .;
     *(.bss*)
     *(COMMON)
     . = ALIGN(4);
     _ebss = .;
+    __bss_end__ = .;
   } > ram
 
   .bkpram (NOLOAD) :
@@ -92,6 +94,10 @@ SECTIONS
     *(.ccmram);
   } > ccmram
 
+  /* from the gnu ld description:
+     Space is not allocated in memory for a COPY section. While a COPY section
+     is in the output file, it is not loaded to the target. Everything else is
+     the same as a regular section. */
   .stack_heap (COPY) :
   {
     . = ALIGN(8);
@@ -103,6 +109,7 @@ SECTIONS
     PROVIDE(stackstart = .);
     . = . + __STACK_SIZE;
     PROVIDE(StackTop = .);
+    PROVIDE(__stack = .);
     ASSERT(StackTop - stackstart <= LENGTH(ccmram), "Stack does not fit into RAM");
   } > ccmram
 }

@@ -71,6 +71,7 @@ ResetHandler:
     isb
 #endif
 
+#if 0
 /* clear the bss region */
     mov    r0, #0
     ldr    r1, =_sbss
@@ -80,14 +81,22 @@ ResetHandler:
     str    r0, [r1], #4
     b      1b
 1:
+#endif
 
+#if 0
     ldr    r0, =__libc_fini_array
     bl     atexit
     bl     __libc_init_array
 
     mov    r0, #0
     mov    r1, #0
-    bl     main
+#endif
+
+    /* to see how this works, look at newlib/libgloss/arm/crt0.S
+       newlib does bss initialisation by itself, but not the copying from
+       flash to ram. calling _start makes sure the c library is initialised
+       correctly. */
+    bl     _start
     bl     exit
 
     .end
