@@ -95,10 +95,11 @@ SECTIONS
   } > ccmram
 
   /* from the gnu ld description:
-     Space is not allocated in memory for a COPY section. While a COPY section
-     is in the output file, it is not loaded to the target. Everything else is
-     the same as a regular section. */
-  .stack_heap (COPY) :
+     DSECT stands for Dummy Section. Space is not allocated in the memory map
+     for a DSECT, nor does it appear in the output file. Thus, a DSECT is not
+     loaded to the target. Any references to symbols in the DSECT are patched as
+     if the section were allocated to the address given for the section. */
+  .stack_heap (DSECT) :
   {
     . = ALIGN(8);
     PROVIDE(heapstart = .);
