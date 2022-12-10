@@ -12,8 +12,9 @@
 # Creation-Date:  03.03.2020
 ################################################################################
 
-MAKEFLAGS := --jobs=8
-MAKEFLAGS += --output-sync=target
+# uncomment if build is too slow.
+#MAKEFLAGS := --jobs=8
+#MAKEFLAGS += --output-sync=target
 
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
