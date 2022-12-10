@@ -40,14 +40,6 @@
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-static inline void delay(void)
-{
-  for(int i = 0; i < 1000; i++)
-  {
-    asm volatile ("nop");
-  }
-}
-
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
@@ -56,38 +48,44 @@ void tmp_init(void)
 {
   /* enable gpio port b and configure the spi pins */
   RCC->AHB1ENR |= BIT_01;
-
   GPIOB->MODER &= ~((3u << 13) | (3u << 12) |(3u << 10));
   GPIOB->MODER |= (1u << 10) | (1u << 14);
 
-  /* ss and clk to inactive state */
+  /* ss and clk to inactive state (high) */
   GPIOB->BSRR = BIT_05 | BIT_07;
 }
 
 float get_temperature(void)
 {
-  uint32_t ret = 0;
+  uint32_t bits = 0;
+  float ret;
 
   /* ss active */
   GPIOB->BSRR = BIT_21;
-  delay();
   for(int i = 0; i < 16; i++)
   {
-    delay();
+    /* sclk low */
     GPIOB->BSRR = BIT_23;
-    delay();
 
-    ret = ret << 1;
+    /* data is clocked in on the falling edge of sclk */
+    bits = bits << 1;
     if(GPIOB->IDR & BIT_06)
     {
-      ret |= BIT_00;
+      bits |= BIT_00;
     }
+
+    /* sclk high */
     GPIOB->BSRR = BIT_07;
   }
-  delay();
+
+  /* ss inactive */
   GPIOB->BSRR = BIT_05;
 
-  return ((float)ret)/32.0f;
+  /* convert digital code to temperature. */
+  ret = (float)bits;
+  ret /= 32.0f;
+
+  return ret;
 }
 
 /*******************************************************************************
