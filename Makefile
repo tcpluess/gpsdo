@@ -23,7 +23,6 @@ CXX  = arm-none-eabi-g++
 CP   = arm-none-eabi-objcopy
 AS   = arm-none-eabi-gcc -x assembler-with-cpp
 SZ   = arm-none-eabi-size
-GDB  = arm-none-eabi-gdb
 DUMP = arm-none-eabi-objdump
 
 MCU  = cortex-m4
@@ -41,7 +40,7 @@ DLIBDIR =
 DLIBS = -lm
 
 # Define project name and Ram/Flash mode here
-PROJECT        = gnssdo
+PROJECT        = $(notdir $(CURDIR))
 RUN_FROM_FLASH = 0
 HEAP_SIZE      = 4k
 STACK_SIZE     = 2k
@@ -113,18 +112,19 @@ MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
-CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough
+CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough -Wshadow
 CPFLAGS += -Wmisleading-indentation -Wswitch-default -Wunused -Wmissing-prototypes
+CPFLAGS += -Wformat=2 -Wformat-truncation -Wundef -fno-common
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-CXXFLAGS = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
+CXXFLAGS = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++20 -fverbose-asm
 CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
 CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
 LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT)
 LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
 LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
-LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segment $(LIBDIR)
+LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segments $(LIBDIR)
 
 .PHONY: all
 all: $(OBJS) bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).s19 \
