@@ -8,9 +8,7 @@ Build: `make` generates the output files in the `bin` directory, in the
 `elf`, `bin`, `hex` and `s19` formats.
 
 Change `RUN_FROM_FLASH` in the makefile to switch between a ROM and a RAM
-build. This also automatically changes the optimisation level. Note that
-a `make clean`/`make` sequence is required if any changes have been
-made to the makefile.
+build. This also automatically changes the optimisation level.
 
 Recommended packages for Sublime Text
 =====================================
