@@ -27,6 +27,7 @@
 #include "misc.h"
 #include "rs232.h"
 #include "nmea_output.h"
+#include "stm32f407xx.h"
 
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
@@ -221,6 +222,46 @@ void _exit(int status)
   for(;;);
 }
 
+
+#if (configCHECK_FOR_STACK_OVERFLOW == 1)
+
+void vApplicationStackOverflowHook(TaskHandle_t task, char* taskname)
+{
+  (void)task;
+  (void)taskname;
+  /* This will get called if a stack overflow is detected during the context
+     switch.  Set configCHECKFORSTACKOVERFLOWS to 2 to also check for stack
+     problems within nested interrupts, but only do this for debug purposes as
+     it will increase the context switch time. /
+  (void)pxTask;
+  (void)pcTaskName;
+  taskDISABLE_INTERRUPTS();
+  / Write your code here … */
+  (void)printf("# stack overflow!\n");
+#ifndef DEBUG
+  for(;;);
+#else
+  asm volatile ("bkpt #0");
+#endif
+}
+
+#endif
+
+#if (configUSE_IDLE_HOOK == 1)
+
+void vApplicationIdleHook(void);
+
+void vApplicationIdleHook(void)
+{
+  static int i = 0;
+  i++; /*lint -e830 -e550 not accessed */
+
+  /* this services the watchdog. if the code hangs for some reason and the idle
+     task never runs, the watchdog will time out after approx. 2 sec. */
+  IWDG->KR = 0xaaaau;
+}
+
+#endif
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
