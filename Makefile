@@ -61,10 +61,10 @@ INCDIR = src/freertos/include \
 #
 # Define optimisation level here
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3 -Wa,-g
-else
+ifeq ($(RUN_FROM_FLASH), 1)
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+else
+OPT = -O0 -g3 -Wa,-g
 endif
 
 ################################################################################
@@ -86,17 +86,17 @@ endif
 #
 # Define FPU settings here.
 #
-ifeq ($(USE_HARD_FPU), 0)
-FPU =
-else
+ifeq ($(USE_HARD_FPU), 1)
 FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16
+else
+FPU =
 endif
 
 #
 # define an additional symbol when code runs from ram
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-DEFS += -DRUN_FROM_RAM
+ifeq ($(RUN_FROM_FLASH), 1)
+DEFS += -DRUN_FROM_FLASH
 endif
 
 #
@@ -107,10 +107,10 @@ INCDIR += $(sort $(dir $(call find,src/include/,*)))
 #
 # Define linker script file here depending on the ram/flash mode
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-LDSCRIPT = ./prj/stm32f407ve_ram.ld
-else
+ifeq ($(RUN_FROM_FLASH), 1)
 LDSCRIPT = ./prj/stm32f407ve_flash.ld
+else
+LDSCRIPT = ./prj/stm32f407ve_ram.ld
 endif
 
 #
