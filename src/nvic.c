@@ -50,18 +50,6 @@ extern void vPortSVCHandler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-/* suppress "unused" warnings for these variables */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-const-variable"
-static volatile uint8_t* const NVIC_IPR = (volatile uint8_t* const)0xE000E400u;
-static volatile uint32_t* const NVIC_ISER = (volatile uint32_t* const)0xE000E100;
-static volatile uint32_t* const NVIC_ICER = (volatile uint32_t* const)0xE000E180;
-static volatile uint32_t* const NVIC_ISPR = (volatile uint32_t* const)0xE000E200;
-static volatile uint32_t* const NVIC_ICPR = (volatile uint32_t* const)0xE000E280;
-static volatile uint32_t* const NVIC_IABR = (volatile uint32_t* const)0xE000E300;
-#pragma GCC diagnostic pop
-
-
 __attribute__((aligned (1024))) static void* vector_table[] =
 {
     /* __initial_sp */                      &StackTop,
@@ -188,8 +176,8 @@ void vic_enableirq(int32_t intnum, funcptr_t func)
     uint32_t shift = ((uint32_t)intnum) % 32u;
     uint32_t offset = ((uint32_t)intnum) / 32u;
 
-    NVIC_ISER[offset] = (1u << shift); /*lint !e647 cast is ok */
-    NVIC_IPR[intnum] = LOWEST_IRQ_PRIO;
+    NVIC->ISER[offset] = (1u << shift); /*lint !e647 cast is ok */
+    NVIC->IP[intnum] = LOWEST_IRQ_PRIO;
   }
 }
 
