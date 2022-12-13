@@ -160,9 +160,9 @@ int vt100_lineeditor(vt100_t* term)
     {
       key_enter(term);
 
-      const char* toks[MAX_TOKENS];
-      int ntoks = find_tokens(term->linebuffer, &toks[0], MAX_TOKENS);
-      if(ntoks > MAX_TOKENS)
+      const char* toks[VT100_MAX_TOKENS];
+      int ntoks = find_tokens(term->linebuffer, &toks[0], VT100_MAX_TOKENS);
+      if(ntoks > VT100_MAX_TOKENS)
       {
         errno = E2BIG;
         return -1;
@@ -559,11 +559,11 @@ static void insertchar(vt100_t* term, int c)
     term->cursor++;
     return;
   }
-  if(term->cursor < MAX_LINELEN - 2)
+  if(term->cursor < VT100_MAX_LINELEN - 2)
   {
     (void)memmove(term->linebuffer + term->cursor + 1,
                   term->linebuffer + term->cursor,
-                  (MAX_LINELEN - term->linelen) - 1u);
+                  (VT100_MAX_LINELEN - term->linelen) - 1u);
     term->linebuffer[term->cursor] = (char)c;
 
     if(term->cursor == term->linelen)

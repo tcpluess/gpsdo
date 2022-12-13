@@ -43,9 +43,6 @@
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
 #define BAUD_FRAC(x) ((uint32_t)((40000000.0/x-16.0*BAUD_INT(x))+0.5))
 
-/* usart interrupt vector number */
-#define IRQ_NUM 39
-
 /* maximum length of the buffers */
 #define MAX_UBX_LEN 500u
 
@@ -551,7 +548,7 @@ static void init_uart(void)
   RCC->APB1ENR |= BIT_18;
   uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
-  vic_enableirq(IRQ_NUM, uart_irq_handler);
+  vic_enableirq(USART3_IRQn, uart_irq_handler);
 }
 
 

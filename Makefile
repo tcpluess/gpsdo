@@ -12,47 +12,75 @@
 # Creation-Date:  03.03.2020
 ################################################################################
 
-MAKEFLAGS := --jobs=8
-MAKEFLAGS += --output-sync=target
+# uncomment if build is too slow.
+#MAKEFLAGS := --jobs=8
+#MAKEFLAGS += --output-sync=target
 
-rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
-
-CC   = arm-none-eabi-gcc
-CXX  = arm-none-eabi-g++
-CP   = arm-none-eabi-objcopy
-AS   = arm-none-eabi-gcc -x assembler-with-cpp
-SZ   = arm-none-eabi-size
-GDB  = arm-none-eabi-gdb
-DUMP = arm-none-eabi-objdump
+find=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call find,$d/,$2))
 
 MCU  = cortex-m4
 
+#
 # List all defines here, like -D_DEBUG=1
+#
 DEFS =
 
-# List all default directories to look for include files here
-DINCDIR = $(sort $(dir $(call rwildcard,src/include/,*)))
+#
+# List the user directory to look for the libraries here
+#
+LIBDIR =
 
-# List the default directory to look for the libraries here
-DLIBDIR =
+#
+# List used libraries here
+#
+LIBS = -lm
 
-# List all default libraries here
-DLIBS = -lm
-
-# Define project name and Ram/Flash mode here
-PROJECT        = gnssdo
+#
+# Define Ram/Flash mode here and optionally a project name
+#
+PROJECT        =
 RUN_FROM_FLASH = 0
 HEAP_SIZE      = 4k
 STACK_SIZE     = 2k
 USE_HARD_FPU   = 1
 
 #
-# Define linker script file here
+# manually add c, assembly or c++ source files if necessary.
+# for instance: SRC = somefolder/file.c OR $(call find,somefolder/,*.c)
+#
+SRC    =
+CXXSRC =
+ASRC   =
+
+#
+# List all include directories here (besides src/include)
+#
+INCDIR = src/freertos/include \
+         src/freertos/portable/GCC/ARM_CM4F
+
+#
+# Define optimisation level here
 #
 ifeq ($(RUN_FROM_FLASH), 0)
-LDSCRIPT = ./prj/stm32f407ve_ram.ld
+OPT = -O0 -g3 -Wa,-g
 else
-LDSCRIPT = ./prj/stm32f407ve_flash.ld
+OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+endif
+
+################################################################################
+
+CC   = arm-none-eabi-gcc
+CXX  = arm-none-eabi-g++
+CP   = arm-none-eabi-objcopy
+AS   = arm-none-eabi-gcc -x assembler-with-cpp
+SZ   = arm-none-eabi-size
+DUMP = arm-none-eabi-objdump
+
+#
+# automatically determine project file name based on directory name if empty
+#
+ifndef PROJECT
+PROJECT = $(notdir $(CURDIR))
 endif
 
 #
@@ -64,66 +92,59 @@ else
 FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16
 endif
 
-# when running from RAM, assume this is a debug build ...
+#
+# define an additional symbol when code runs from ram
+#
 ifeq ($(RUN_FROM_FLASH), 0)
-# DEFS += -DDEBUG
-endif
-
-# List C source files here
-SRC = $(call rwildcard,src/,*.c)
-
-# List C++ source files here
-CXXSRC = $(call rwildcard,src/,*.cpp)
-
-# List ASM source files here
-ASRC = $(call rwildcard,src/,*.s)
-ASRC += $(call rwildcard,src/,*.S)
-
-# List all user directories here
-UINCDIR = src/freertos/include \
-          src/freertos/portable/GCC/ARM_CM4F
-
-# List the user directory to look for the libraries here
-ULIBDIR =
-
-# List all user libraries here
-ULIBS =
-
-# Define optimisation level here
-ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3 -Wa,-g
-else
-OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+DEFS += -DRUN_FROM_RAM
 endif
 
 #
-# End of user defines
-##############################################################################################
+# default directories to look for include files
+#
+INCDIR += $(sort $(dir $(call find,src/include/,*)))
 
-INCDIR  = $(patsubst %,-I%,$(DINCDIR) $(UINCDIR))
-LIBDIR  = $(patsubst %,-L%,$(DLIBDIR) $(ULIBDIR))
+#
+# Define linker script file here depending on the ram/flash mode
+#
+ifeq ($(RUN_FROM_FLASH), 0)
+LDSCRIPT = ./prj/stm32f407ve_ram.ld
+else
+LDSCRIPT = ./prj/stm32f407ve_flash.ld
+endif
+
+#
+# automatically find all c, assembly and c++ source files
+#
+SRC    += $(call find,src/,*.c)
+CXXSRC += $(call find,src/,*.cpp)
+ASRC   += $(call find,src/,*.s)
+ASRC   += $(call find,src/,*.S)
+
+INC  = $(patsubst %,-I%,$(INCDIR))
+LIB  = $(patsubst %,-L%,$(LIBDIR))
 
 OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
 LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
 DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
-LIBS    = $(DLIBS) $(ULIBS)
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
 ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
-CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough
+CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough -Wshadow
 CPFLAGS += -Wmisleading-indentation -Wswitch-default -Wunused -Wmissing-prototypes
+CPFLAGS += -Wformat=2 -Wformat-truncation -Wundef -fno-common
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-CXXFLAGS = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++17 -fverbose-asm
-CXXFLAGS+= -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
+CXXFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++20 -fverbose-asm
+CXXFLAGS += -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
 CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
 LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT)
 LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
 LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
-LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch $(LIBDIR)
+LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segments $(LIB)
 
 .PHONY: all
 all: $(OBJS) bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).s19 \
@@ -132,12 +153,12 @@ bin/$(PROJECT).bin lst/$(PROJECT).lss $(LDSCRIPT) Makefile
 
 %.c.o : %.c $(LDSCRIPT) Makefile
 	@echo "CC      $<"
-	@$(CC) -c $(CPFLAGS) $(INCDIR) $< -o $@
+	@$(CC) -c $(CPFLAGS) $(INC) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 %.cpp.o : %.cpp $(LDSCRIPT) Makefile
 	@echo "CXX     $<"
-	@$(CXX) -c $(CXXFLAGS) $(INCDIR) $< -o $@
+	@$(CXX) -c $(CXXFLAGS) $(INC) $< -o $@
 	@$(DUMP) -S -d $@ > $(addsuffix .lss, $<)
 
 %.s.o : %.s $(LDSCRIPT) Makefile
