@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <envlock.h>
 
 
 #include "FreeRTOS.h"
@@ -60,20 +61,15 @@ static int totalBytesProvidedBySBRK = 0;
  * MODULE FUNCTIONS (PUBLIC)
  ******************************************************************************/
 
-/* forward declarations to keep the compiler silent */
-void __env_lock(void);
-void __env_unlock(void);
-char* sbrk(int incr);
-char* _sbrk(int incr);
-
-void __env_lock(void)
+void __env_lock(struct _reent* r)
 {
+  (void)r;
   vTaskSuspendAll();
 }
 
-
-void __env_unlock(void)
+void __env_unlock(struct _reent* r)
 {
+  (void)r;
   (void)xTaskResumeAll();
 }
 
@@ -153,22 +149,6 @@ void* _sbrk_r(struct _reent* r, int incr)
   xTaskResumeAll();
   return (void*)previousHeapEnd;
 }
-
-
-/* non-reentrant sbrk uses is actually reentrant by using current context
-   because the current _reent structure is pointed to by global _impure_ptr */
-char* sbrk(int incr)
-{
-  return _sbrk_r(_impure_ptr, incr);
-}
-
-
-/* _sbrk is a synonym for sbrk */
-char* _sbrk(int incr)
-{
-  return sbrk(incr);
-}
-
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
