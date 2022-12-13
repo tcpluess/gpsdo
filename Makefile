@@ -58,13 +58,15 @@ ASRC   =
 INCDIR = src/freertos/include \
          src/freertos/portable/GCC/ARM_CM4F
 
+MEMORYMAP = ./prj/stm32f407ve.ld
+
 #
 # Define optimisation level here
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-OPT = -O0 -g3 -Wa,-g
-else
+ifeq ($(RUN_FROM_FLASH), 1)
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
+else
+OPT = -O0 -g3 -Wa,-g
 endif
 
 ################################################################################
@@ -86,17 +88,17 @@ endif
 #
 # Define FPU settings here.
 #
-ifeq ($(USE_HARD_FPU), 0)
-FPU =
-else
+ifeq ($(USE_HARD_FPU), 1)
 FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16
+else
+FPU =
 endif
 
 #
 # define an additional symbol when code runs from ram
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-DEFS += -DRUN_FROM_RAM
+ifeq ($(RUN_FROM_FLASH), 1)
+DEFS += -DRUN_FROM_FLASH
 endif
 
 #
@@ -107,10 +109,10 @@ INCDIR += $(sort $(dir $(call find,src/include/,*)))
 #
 # Define linker script file here depending on the ram/flash mode
 #
-ifeq ($(RUN_FROM_FLASH), 0)
-LDSCRIPT = ./prj/stm32f407ve_ram.ld
+ifeq ($(RUN_FROM_FLASH), 1)
+LDSCRIPT = ./prj/flash.ld
 else
-LDSCRIPT = ./prj/stm32f407ve_flash.ld
+LDSCRIPT = ./prj/ram.ld
 endif
 
 #
@@ -127,21 +129,28 @@ LIB  = $(patsubst %,-L%,$(LIBDIR))
 OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
 LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
 DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
+
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
+
+WARNFLAGS  = -Wall -Wextra -Wimplicit-fallthrough -Wshadow -Wunused
+WARNFLAGS += -Wmisleading-indentation -Wswitch-default
+WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef
+
+COMMONFLAGS = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
 
 ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
-CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wstrict-prototypes -Wextra -fverbose-asm
-CPFLAGS += -ffunction-sections -fdata-sections -Wimplicit-fallthrough -Wshadow
-CPFLAGS += -Wmisleading-indentation -Wswitch-default -Wunused -Wmissing-prototypes
-CPFLAGS += -Wformat=2 -Wformat-truncation -Wundef -fno-common
+CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNFLAGS) $(COMMONFLAGS)
+CPFLAGS += -Wstrict-prototypes -Wmissing-prototypes
 CPFLAGS += -MD -MP -MF $(@:.o=.d)
 
-CXXFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) -Wall -Wextra -std=c++20 -fverbose-asm
+CXXFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNFLAGS) $(COMMONFLAGS)
+CXXFLAGS += -std=c++20
 CXXFLAGS += -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
 CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
-LDFLAGS  = $(MCFLAGS) -T$(LDSCRIPT)
+LDFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNGLAGS) $(COMMONFLAGS)
+LDFLAGS += -T$(MEMORYMAP) -T$(LDSCRIPT)
 LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
 LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
 LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segments $(LIB)

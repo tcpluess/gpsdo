@@ -27,39 +27,36 @@
 .thumb_func
 ResetHandler:
 
-/* copy initialised data from flash to ram */
+/* copy initialised data from flash to ram.
+   not necessary if we run from ram anyways. */
+#ifdef RUN_FROM_FLASH
+    ldr    r0, =_sdata
     ldr    r1, =_etext
-    ldr    r2, =_sdata
-    ldr    r3, =_edata
-    subs   r3, r2
-    ble    1f
-1:  subs   r3, #4
-    ldr    r0, [r1, r3]
-    str    r0, [r2, r3]
-    bgt    1b
-1:
+    ldr    r2, =_edata
+    sub    r2, r0
+    blx    memcpy
+#endif
+
 
 /* this fills the stack initially with some pattern; this allows one to find out
    the max. stack usage */
-    ldr    r0,=stackstart
-    mov    r1,#0xdcdcdcdc
-1:  cmp    sp,r0
-    beq    1f
-    str    r1,[r0]
-    add    r0,#4
-    b      1b
-1:
+    ldr    r3, =heapend
+    mov    sp, r3
+    ldr    r0, =stackstart
+    mov    r1, #0xdc
+    ldr    r2, =StackTop
+    sub    r2, r0
+    blx    memset
+    ldr    sp, =StackTop
+
 
 /* fill the heap with some pattern. */
-    ldr    r0,=heapstart
-    ldr    r1,=heapend
-    mov    r2,#0xaaaaaaaa
-1:  cmp    r0, r1
-    beq    1f
-    str    r2, [r0]
-    add    r0, #4
-    b      1b
-1:
+    ldr    r0, =heapstart
+    mov    r1, #0x55
+    ldr    r2, =heapend
+    subs   r2, r2, r0
+    blx    memset
+
 
 /* this enables the FPU if necessary */
 #if defined(__VFP_FP__) && !defined(__SOFTFP__)
@@ -71,31 +68,10 @@ ResetHandler:
     isb
 #endif
 
-#if 0
-/* clear the bss region */
-    mov    r0, #0
-    ldr    r1, =_sbss
-    ldr    r2, =_ebss
-1:  cmp    r1, r2
-    beq    1f
-    str    r0, [r1], #4
-    b      1b
-1:
-#endif
 
-#if 0
-    ldr    r0, =__libc_fini_array
-    bl     atexit
-    bl     __libc_init_array
-
-    mov    r0, #0
-    mov    r1, #0
-#endif
-
-    /* to see how this works, look at newlib/libgloss/arm/crt0.S
-       newlib does bss initialisation by itself, but not the copying from
-       flash to ram. calling _start makes sure the c library is initialised
-       correctly. */
+/* to see how this works, look at newlib/libgloss/arm/crt0.S
+   newlib does bss initialisation by itself, but not the copying from flash to
+   ram. calling _start makes sure the c library is initialised correctly. */
     bl     _start
     bl     exit
 
