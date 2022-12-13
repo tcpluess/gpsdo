@@ -300,7 +300,7 @@ static void enable_timer(void)
   out: none
 ==============================================================================*/
 {
-  vic_enableirq(TIM2_IRQn, capture_irq);
+  vic_enableirq(TIM2_IRQn, capture_irq); /*lint !e641 enum conversion */
 
   /* enable gpio a */
   RCC->AHB1ENR |= BIT_00;

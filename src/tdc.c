@@ -372,7 +372,7 @@ static void tdc_config_interrupt(void)
   out: none
 ==============================================================================*/
 {
-  vic_enableirq(EXTI9_5_IRQn, tdc_irqhandler);
+  vic_enableirq(EXTI9_5_IRQn, tdc_irqhandler); /*lint !e641 enum conversion */
 
   /* configure pa9 as external interrupt */
   SYSCFG->EXTICR[2] = (0u << 4);

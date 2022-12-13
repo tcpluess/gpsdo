@@ -94,7 +94,7 @@ void adc_init(void)
   ADC1->CR2 |= (3u << 16) | (1u << 20);
 
   /* trigger an interrupt when the adc has finished the conversion */
-  vic_enableirq(ADC_IRQn, adc1_interrupt);
+  vic_enableirq(ADC_IRQn, adc1_interrupt); /*lint !e641 enum conversion */
   ADC1->CR1 |= BIT_07;
 }
 

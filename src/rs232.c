@@ -65,7 +65,7 @@ void rs232_init(void)
   txstream = xStreamBufferCreate(RS232_BUFFERSIZE, 1);
   rxstream = xStreamBufferCreate(RS232_BUFFERSIZE, 1);
 
-  vic_enableirq(USART2_IRQn, irq_handler);
+  vic_enableirq(USART2_IRQn, irq_handler); /*lint !e641 enum conversion */
 
   /* enable port d */
   RCC->AHB1ENR |= BIT_03;

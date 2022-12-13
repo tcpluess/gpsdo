@@ -548,7 +548,7 @@ static void init_uart(void)
   RCC->APB1ENR |= BIT_18;
   uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
-  vic_enableirq(USART3_IRQn, uart_irq_handler);
+  vic_enableirq(USART3_IRQn, uart_irq_handler); /*lint !e641 enum conversion */
 }
 
 
