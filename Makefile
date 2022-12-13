@@ -48,15 +48,16 @@ USE_HARD_FPU   = 1
 # manually add c, assembly or c++ source files if necessary.
 # for instance: SRC = somefolder/file.c OR $(call find,somefolder/,*.c)
 #
-SRC    =
+SRC    = $(call find,3rdparty/freertos/,*.c)
 CXXSRC =
 ASRC   =
 
 #
 # List all include directories here (besides src/include)
 #
-INCDIR = src/freertos/include \
-         src/freertos/portable/GCC/ARM_CM4F
+INCDIR = 3rdparty/freertos/include \
+         3rdparty/freertos/portable/GCC/ARM_CM4F \
+         3rdparty/cmsis
 
 MEMORYMAP = ./prj/stm32f407ve.ld
 
