@@ -54,11 +54,6 @@
  ******************************************************************************/
 
 
-/* forward declarations to keep the compiler silent */
-int _isatty(int file);
-int _getpid(void);
-int _kill(int pid, int sig);
-
 _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
   switch(file)
@@ -88,7 +83,7 @@ _ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 }
 
 
-int _isatty(int file)
+int _isatty_r(struct _reent *r, int file)
 {
   switch (file)
   {
@@ -98,8 +93,7 @@ int _isatty(int file)
       return 1;
 
     default:
-      // errno = ENOTTY;
-      errno = EBADF;
+      r->_errno = EBADF;
       return -1;
   }
 }
@@ -199,16 +193,21 @@ int _fstat_r(struct _reent *r, int file, struct stat *st)
 }
 
 
-__attribute__((used))
-int _getpid(void)
+//__attribute__((used))
+pid_t _getpid(void);
+pid_t _getpid(void)
 {
   TaskHandle_t current = xTaskGetCurrentTaskHandle();
   return uxTaskGetTaskNumber(current);
 }
 
 
-__attribute__((used))
-int _kill(int pid, int sig)
+
+
+
+//__attribute__((used))
+int _kill(pid_t pid, int sig);
+int _kill(pid_t pid, int sig)
 {
   (void)pid;
   (void)sig;
