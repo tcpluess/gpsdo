@@ -55,7 +55,7 @@ SECTIONS
 
   _etext = .;
 
-  .data : AT (_etext)
+  .data :
   {
     _sdata = .;
     . = ALIGN(4);
