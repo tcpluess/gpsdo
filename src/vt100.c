@@ -134,6 +134,10 @@ int vt100_lineeditor(vt100_t* term)
   out: none
 ==============================================================================*/
 {
+  /* console prompt */
+  (void)fputc('#', term->out);
+  (void)fputc(' ', term->out);
+
   for(;;)
   {
     int c = fgetc(term->in);

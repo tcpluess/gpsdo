@@ -132,10 +132,6 @@ static void console_task(void* param)
   (void)info(0, NULL);
   for(;;)
   {
-    /* console prompt */
-    txchar('#');
-    txchar(' ');
-
     /* the line editor receives characters and then invokes the interpreter
        callback function with the input tokens */
     if(vt100_lineeditor(&term) != 0)
