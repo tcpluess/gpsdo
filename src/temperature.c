@@ -66,6 +66,9 @@ float get_temperature(void)
   {
     /* sclk low */
     GPIOB->BSRR = BIT_23;
+    asm volatile ("nop");
+    asm volatile ("dsb");
+    asm volatile ("isb");
 
     /* data is clocked in on the falling edge of sclk */
     bits = bits << 1;
@@ -76,6 +79,9 @@ float get_temperature(void)
 
     /* sclk high */
     GPIOB->BSRR = BIT_07;
+    asm volatile ("nop");
+    asm volatile ("dsb");
+    asm volatile ("isb");
   }
 
   /* ss inactive */

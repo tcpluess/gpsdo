@@ -53,18 +53,10 @@
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
 
-static inline void delay(void)
-{
-  for(int i = 0; i<100; i++)
-  {
-    asm volatile ("nop");
-  }
-}
-
 /* macros for easy access to the e2prom */
-#define EEP_SS(x) { GPIOD->BSRR = ((x) ? BIT_14 : BIT_30); delay(); }
+#define EEP_SS(x) { GPIOD->BSRR = ((x) ? BIT_14 : BIT_30); asm volatile ("nop"); }
 #define EEP_MOSI(x) { GPIOD->BSRR = ((x) ? BIT_12 : BIT_28); }
-#define EEP_SCK(x) { GPIOD->BSRR = ((x) ? BIT_13 : BIT_29); delay(); }
+#define EEP_SCK(x) { GPIOD->BSRR = ((x) ? BIT_13 : BIT_29); asm volatile ("nop"); }
 #define EEP_MISO() ((GPIOD->IDR & BIT_11) != 0 ? 1u : 0u)
 
 /*******************************************************************************
