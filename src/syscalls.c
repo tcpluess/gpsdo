@@ -193,8 +193,8 @@ int _fstat_r(struct _reent *r, int file, struct stat *st)
 }
 
 
-//__attribute__((used))
 pid_t _getpid(void);
+__attribute__((used))
 pid_t _getpid(void)
 {
   TaskHandle_t current = xTaskGetCurrentTaskHandle();
@@ -205,8 +205,8 @@ pid_t _getpid(void)
 
 
 
-//__attribute__((used))
 int _kill(pid_t pid, int sig);
+__attribute__((used))
 int _kill(pid_t pid, int sig)
 {
   (void)pid;
