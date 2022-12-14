@@ -555,7 +555,7 @@ static void insertchar(vt100_t* term, int c)
   if((term->insert) && (term->cursor < term->linelen))
   {
     term->linebuffer[term->cursor] = (char)c;
-    (void)fputc(c, stdout);
+    (void)fputc(c, term->out);
     term->cursor++;
     return;
   }
@@ -568,7 +568,7 @@ static void insertchar(vt100_t* term, int c)
 
     if(term->cursor == term->linelen)
     {
-      (void)fputc(c, stdout);
+      (void)fputc(c, term->out);
     }
     else
     {
