@@ -85,6 +85,8 @@
 #define EVENT_ACK_RECEIVED BIT_11
 #define EVENT_NAK_RECEIVED BIT_10
 
+#define FIXEDPOS_TIMEOUT 30 /* min */
+
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
  ******************************************************************************/
@@ -396,6 +398,17 @@ static void gps_task(void* param)
              configuration, verify the position */
           if(cfg->fixpos_valid)
           {
+            /* if position still not within range after the fixedpos_timeout,
+               the fixed position is likely wrong. */
+            if(svin_data.obs >= (FIXEDPOS_TIMEOUT * 60u))
+            {
+              /* fixed position is invalid and survey-in is aborted. switch to
+                 normal 3d fix mode */
+              cfg->fixpos_valid = false;
+              ubx_config_tmode(tmode_disable, 0, 0, 0, 0, 0, 0);
+              ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+            }
+
             /* check if the currently determined position is close to what is
                saved in the eeprom */
             float dx = (float)(cfg->x - svin_data.x);
@@ -404,7 +417,6 @@ static void gps_task(void* param)
 
             /* calculate error vector in mm - ecef coordinates are in cm! */
             float mag = sqrtf(dx*dx + dy*dy + dz*dz) * 10.0f;
-            (void)printf("# error vector magnitude: %f mm\n", mag);
             if(mag <= cfg->accuracy_limit)
             {
               (void)printf("# error vector magnitude: %f mm, acc limit: %lu mm, set fix pos mode\n", mag, cfg->accuracy_limit);
