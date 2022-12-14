@@ -108,8 +108,6 @@ volatile uint16_t stat_dac = 0u;
 
 void console_init(void)
 {
-  rs232_init();
-  vt100_init(&term, interpreter, stdout, stdin);
   (void)xTaskCreate(console_task, "console", 1500, NULL, 2, NULL);
 }
 
@@ -129,6 +127,8 @@ static void console_task(void* param)
 ==============================================================================*/
 {
   (void)param;
+  rs232_init();
+  vt100_init(&term, interpreter, stdout, stdin);
   (void)info(0, NULL);
   for(;;)
   {
@@ -138,6 +138,7 @@ static void console_task(void* param)
     {
       const char* err = strerror(errno);
       (void)printf("%s\n", err);
+      vTaskDelay(100);
     }
   }
 }

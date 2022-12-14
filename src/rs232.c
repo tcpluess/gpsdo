@@ -102,6 +102,7 @@ bool canread(void)
   }
   else
   {
+    xStreamBufferReset(rxstream);
     return true;
   }
 }
