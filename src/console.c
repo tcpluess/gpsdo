@@ -28,6 +28,7 @@
 #include "dac.h"
 #include "cntl.h"
 #include "vt100.h"
+#include "stm32f407xx.h"
 
 #include <errno.h>
 #include <string.h>
@@ -767,7 +768,7 @@ static int reboot(int argc, const char* const argv[])
 {
   (void)argc;
   (void)argv;
-  for(;;);
+  __NVIC_SystemReset();
   return 0; /*lint !e527 unreachable */
 }
 
