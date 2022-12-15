@@ -79,7 +79,7 @@ static void led_setup(void)
   out: none
 ==============================================================================*/
 {
-  RCC->AHB1ENR |= BIT_04;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOEEN;
   GPIOE->MODER |= (1u << 28) | (1u << 30);
   GPIOE->BSRR = BIT_30 | BIT_31;
 }

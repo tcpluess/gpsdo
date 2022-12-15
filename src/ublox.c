@@ -557,7 +557,7 @@ static void init_uart(void)
 ==============================================================================*/
 {
   /* enable usart 3 and install the irq handler */
-  RCC->APB1ENR |= BIT_18;
+  RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
   uart_config_baudrate(BAUD_INITIAL);
   USART3->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
   vic_enableirq(USART3_IRQn, uart_irq_handler); /*lint !e641 enum conversion */
@@ -574,7 +574,7 @@ static void init_pins(void)
 ==============================================================================*/
 {
   /* enable port d */
-  RCC->AHB1ENR |= BIT_03;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;
 
   /* configure the reset pin */
   GPIOD->MODER |= (1u << 20);

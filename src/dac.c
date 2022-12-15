@@ -55,10 +55,10 @@ void dac_setup(void)
   hold = false;
 
   /* enable gpio b */
-  RCC->AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
   /* enable spi2 */
-  RCC->APB1ENR |= BIT_14;
+  RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
 
   /* ss gpio, mosi and sck: spi2 (alt. func. 5) */
   GPIOB->MODER |= (2u << 30) | (2u << 26) | (1u << 24);

@@ -68,13 +68,13 @@ void adc_init(void)
   adc_ready = xSemaphoreCreateBinary();
 
   /* enable gpio b */
-  RCC->AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
   /* configure analog input for pb1 */
   GPIOB->MODER |= (3u << 2);
 
   /* enable the adc */
-  RCC->APB2ENR |= BIT_08;
+  RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
   ADC1->CR2 = BIT_00;
 
   /* enable the internal voltage reference */

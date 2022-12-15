@@ -203,7 +203,7 @@ static void init_hardware(void)
 ==============================================================================*/
 {
   /* enable port a */
-  RCC->AHB1ENR |= BIT_00;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
   /* ss and enable are gpios; mosi, miso and sck belong to spi1.
      use a internal pullup for the irq pin */
@@ -212,7 +212,7 @@ static void init_hardware(void)
   GPIOA->AFR[0] |= (5u << 20) | (5u << 24) | (5u << 28);
 
   /* enable spi1 */
-  RCC->APB2ENR |= BIT_12;
+  RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
   /* configure spi1 */
   SPI1->CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;

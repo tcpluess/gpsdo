@@ -47,7 +47,7 @@
 void tmp_init(void)
 {
   /* enable gpio port b and configure the spi pins */
-  RCC->AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
   GPIOB->MODER &= ~((3u << 13) | (3u << 12) |(3u << 10));
   GPIOB->MODER |= (1u << 10) | (1u << 14);
 

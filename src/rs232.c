@@ -68,14 +68,14 @@ void rs232_init(void)
   vic_enableirq(USART2_IRQn, irq_handler); /*lint !e641 enum conversion */
 
   /* enable port d */
-  RCC->AHB1ENR |= BIT_03;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;
 
   /* select uart pins for pd5 and pd6 */
   GPIOD->MODER |= (2u << 10) | (2u << 12);
   GPIOD->AFR[0] |= (7u << 20) | (7u << 24);
 
   /* enable and configure usart2 */
-  RCC->APB1ENR |= BIT_17;
+  RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
   USART2->BRR = (BAUD_FRAC(RS232_BAUD) << 0) | (BAUD_INT(RS232_BAUD) << 4);
   USART2->CR1 = BIT_13 | BIT_05 | BIT_03 | BIT_02;
 }

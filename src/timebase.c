@@ -38,15 +38,19 @@
 #define PLLQ 2u
 #define PLLP 0u /* vco frequency divided by 2 -> 160 MHz pll output */
 #define HPRE 0u /* ahb clock = pll clock */
+
+/* apb2: high speed */
 #define PPRE2 4u /* apb2 clock divided by 2 -> apb2 runs at 80 MHz */
+
+/* apb1: low speed */
 #define PPRE1 5u /* apb1 clock divided by 4 -> apb1 runs at 40 MHz */
 
 #define FVCO ((HSECLK/PLLM)*PLLN)
 #define PLL_INCLK (HSECLK/PLLM)
-#define CPUCLK (FVCO/((PLLP + 1u) * 2u))
+#define PLLCLK (FVCO/((PLLP + 1u) * 2u))
 
-#if (CPUCLK > 168000000)
-#error "The CPU clock is too high"
+#if (PLLCLK > 168000000)
+#error "The PLL output clock is too high"
 #endif
 
 #if (PLL_INCLK < 1000000u) || (PLL_INCLK > 2000000u)
@@ -61,7 +65,49 @@
 #error "The VCO frequency shall be between 100MHz and 432MHz"
 #endif
 
-#define TIMER_DIVISION 8u /* 40 MHz divided by 4 -> 10 MHz */
+#if HPRE < 8
+#define AHBCLK PLLCLK
+#elif HPRE == 8
+#define AHBCLK (PLLCLK/2)
+#elif HPRE == 9
+#define AHBCLK (PLLCLK/4)
+#elif HPRE == 10
+#define AHBCLK (PLLCLK/8)
+#elif HPRE == 11
+#define AHBCLK (PLLCLK/16)
+#elif HPRE == 12
+#define AHBCLK (PLLCLK/64)
+#elif HPRE == 13
+#define AHBCLK (PLLCLK/128)
+#elif HPRE == 14
+#define AHBCLK (PLLCLK/256)
+#elif HPRE == 15
+#define AHBCLK (PLLCLK/512)
+#else
+#error "Wrong HPRE value"
+#endif
+
+#if PPRE1 < 4
+#define APB1CLK AHBCLK
+#define APB1TIMCLK APB1CLK
+#elif PPRE1 < 8
+#define APB1CLK (AHBCLK / (1u << (PPRE1 - 3u)))
+#define APB1TIMCLK (2u * APB1CLK)
+#else
+#error "Wrong value for PPRE1"
+#endif
+
+#if PPRE2 < 4
+#define APB2CLK AHBCLK
+#define APB2TIMCLK APB1CLK
+#elif PPRE2 < 8
+#define APB2CLK (AHBCLK / (1u << (PPRE2 - 3u)))
+#define APB2TIMCLK (2u * APB2CLK)
+#else
+#error "Wrong value for PPRE2"
+#endif
+
+#define TIMER_FREQ 10000000u /* the timer shall run at 10MHz */
 
 /*******************************************************************************
  * PRIVATE MACRO DEFINITIONS
@@ -215,10 +261,10 @@ static void enable_osc(void)
 ==============================================================================*/
 {
   /* enable the external oscillator and wait until it is ready */
-  RCC->CR |= BIT_16;
+  RCC->CR |= RCC_CR_HSEON;
   do
   {
-    if(RCC->CR & BIT_17)
+    if(RCC->CR & RCC_CR_HSERDY)
     {
       break;
     }
@@ -228,16 +274,20 @@ static void enable_osc(void)
   FLASH->ACR = BIT_10 | BIT_09 | BIT_08 | 7u;
 
   /* configure the clock dividers */
-  RCC->CFGR = (PPRE2 << 13) | (PPRE1 << 10) | (HPRE << 4);
+  RCC->CFGR = (PPRE2 << RCC_CFGR_PPRE2_Pos) |
+              (PPRE1 << RCC_CFGR_PPRE1_Pos) |
+              (HPRE << RCC_CFGR_HPRE_Pos);
 
   /* configure the pll for 160MHz ahb clock */
-  RCC->PLLCFGR = (PLLQ << 24) | BIT_22 | (PLLP << 16) | (PLLN << 6) | PLLM;
+  RCC->PLLCFGR = (PLLQ << RCC_PLLCFGR_PLLQ_Pos) |
+                 (PLLP << RCC_PLLCFGR_PLLP_Pos) |
+                 (PLLN << RCC_PLLCFGR_PLLN_Pos) | PLLM | RCC_PLLCFGR_PLLSRC;
 
   /* enable the pll and wait until it is ready */
-  RCC->CR |= BIT_24;
+  RCC->CR |= RCC_CR_PLLON;
   do
   {
-    if(RCC->CR & BIT_25)
+    if(RCC->CR & RCC_CR_PLLRDY)
     {
       break;
     }
@@ -254,7 +304,7 @@ static void enable_osc(void)
   } while(true);
 
   /* disable internal osc. */
-  RCC->CR &= ~BIT_00;
+  RCC->CR &= ~RCC_CR_HSION;
 }
 
 /*============================================================================*/
@@ -270,7 +320,7 @@ static void enable_mco(void)
   RCC->CFGR |= BIT_22;
 
   /* enable gpio port a */
-  RCC->AHB1ENR |= BIT_00;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
   GPIOA->MODER |= (2u << 16);
 }
 
@@ -284,7 +334,7 @@ static void configure_ppsenable(void)
 ==============================================================================*/
 {
   /* enable gpio b */
-  RCC->AHB1ENR |= BIT_01;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
   /* set ppsen as output and set it to high */
   GPIOB->MODER |= (1u << 18);
@@ -303,19 +353,19 @@ static void enable_timer(void)
   vic_enableirq(TIM2_IRQn, capture_irq); /*lint !e641 enum conversion */
 
   /* enable gpio a */
-  RCC->AHB1ENR |= BIT_00;
+  RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
   GPIOA->MODER |= (2u << 2) | (2u << 4);
   GPIOA->AFR[0] |= (1u << 4) | (1u << 8);
 
   /* enable timer */
-  RCC->APB1ENR |= BIT_00;
+  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
-  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 40 MHz.
+  /* prescaler - the timer runs at twice the apb1 frequency, i.e. at 80 MHz.
      a prescaler of N divides by N+1. the timer shall run at 10 MHz */
-  TIM2->PSC = (TIMER_DIVISION - 1u);
+  TIM2->PSC = ((APB1TIMCLK / TIMER_FREQ) - 1u);
 
   /* timer wraps after 1 second */
-  TIM2->ARR = 9999999ul;
+  TIM2->ARR = TIMER_FREQ - 1u;
 
   /* pwm mode for the pps output (channel 2), set pulse duration */
   TIM2->SMCR = 0;
