@@ -32,14 +32,14 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-#define CAL_PERIODS 40u
-#if CAL_PERIODS == 2u
+#define CAL_PERIODS 40ul
+#if CAL_PERIODS == 2ul
 #define CONFIG2 (0u << 6)
-#elif CAL_PERIODS == 10u
+#elif CAL_PERIODS == 10ul
 #define CONFIG2 (1u << 6)
-#elif CAL_PERIODS == 20u
+#elif CAL_PERIODS == 20ul
 #define CONFIG2 (2u << 6)
-#elif CAL_PERIODS == 40u
+#elif CAL_PERIODS == 40ul
 #define CONFIG2 (3u << 6)
 #else
 #error "CAL_PERIODS must be one of 2, 10, 20 or 40"
@@ -66,7 +66,8 @@
 
 #define DATA_MSK 0xffffffu
 
-#define TDC_SPI_DIVIDER 2u /* apb2 clock is 80 MHz, 4 amounts to divider 32 */
+/* apb2 clock is 80 MHz, 1 amounts to divider 4, TDC7200 max. clk is 20 MHz */
+#define TDC_SPI_DIVIDER 1u
 
 /* timeout to wait for the tdc */
 #define TDC_READY_TIMEOUT pdMS_TO_TICKS(10u) /* ms */
@@ -151,15 +152,17 @@ bool tdc_readtic(float* result)
   {
     /* read the measurement data, then prepare for the next measurement
        by setting enable */
-    float calib1 = tdc_read24(ADDR_CALIB1);
-    float calib2 = tdc_read24(ADDR_CALIB2);
-    float time1 = tdc_read24(ADDR_TIME1);
+    uint32_t calib1 = tdc_read24(ADDR_CALIB1);
+    uint32_t calib2 = tdc_read24(ADDR_CALIB2);
+    uint32_t time1 = tdc_read24(ADDR_TIME1);
     enable_tdc();
 
     /*                                  CAL_PERIODS - 1
-       the result is: (clock period) *  ---------------
-                                        calib2 - calib1 */
-    float ns = 100.0f * (time1 * (CAL_PERIODS - 1u))/(calib2 - calib1);
+       the result is: (clock period) *  --------------- * TIME1
+                                        calib2 - calib1         */
+    uint32_t num = 100 * (time1 * (CAL_PERIODS - 1ul));
+    uint32_t den = (calib2 - calib1);
+    float ns = ((float)num)/((float)den);
 
     /* sanity check, allow +/-10% deviation. min. 90ns, max. 220ns */
     if((ns < 90.0f) || (ns > 220.0f))
