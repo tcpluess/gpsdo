@@ -218,11 +218,12 @@ static void init_hardware(void)
   RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 
   /* configure spi1 */
-  SPI1->CR1 = BIT_14 | BIT_11 | BIT_09 | BIT_08 | (TDC_SPI_DIVIDER << 3) |  BIT_02;
+  SPI1->CR1 = SPI_CR1_BIDIOE | SPI_CR1_DFF | SPI_CR1_SSM | SPI_CR1_SSI |
+              (TDC_SPI_DIVIDER << SPI_CR1_BR_Pos) |  SPI_CR1_MSTR;
   SPI1->CR2 = 0;
 
   /* enable spi2 */
-  SPI1->CR1 |= BIT_06;
+  SPI1->CR1 |= SPI_CR1_SPE;
 
   /* also configure interrupts */
   tdc_config_interrupt();
