@@ -29,6 +29,7 @@
 #include "cntl.h"
 #include "vt100.h"
 #include "stm32f407xx.h"
+#include "datetime.h"
 
 #include <errno.h>
 #include <string.h>
@@ -73,6 +74,7 @@ static int uptime(int argc, const char* const argv[]);
 static int info(int argc, const char* const argv[]);
 static int pps(int argc, const char* const argv[]);
 static int reboot(int argc, const char* const argv[]);
+static int date(int argc, const char* const argv[]);
 static bool str2num(const char* str, int32_t* value, int32_t max, int32_t min);
 
 
@@ -97,6 +99,7 @@ static command_t cmds[] =
   {info,            "info",       "show version information"},
   {reboot,          "reboot",     "reboot the system"},
   {pps,             "pps",        "offset <ns> | dur <ms> - configures the duration of the PPS pulse in ms and the offset in ns"},
+  {date,            "date",       "show date and time"},
 };
 
 volatile uint16_t stat_dac = 0u;
@@ -767,6 +770,24 @@ static int reboot(int argc, const char* const argv[])
   (void)argv;
   __NVIC_SystemReset();
   return 0; /*lint !e527 unreachable */
+}
+
+
+/*============================================================================*/
+static int date(int argc, const char* const argv[])
+/*------------------------------------------------------------------------------
+  Function:
+  print date and time
+  in:  none
+  out: none
+==============================================================================*/
+{
+  (void)argc;
+  (void)argv;
+  char buffer[30];
+  datetime_print(buffer);
+  (void)puts(buffer);
+  return 0;
 }
 
 

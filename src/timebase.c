@@ -25,6 +25,7 @@
 #include "tdc.h"
 #include "ublox.h"
 #include "eeprom.h"
+#include "datetime.h"
 
 #include <stdio.h>
 
@@ -126,6 +127,7 @@ static void enable_mco(void);
 static void configure_ppsenable(void);
 static void enable_timer(void);
 static void capture_irq(void);
+static void datetime_task(void* arg);
 
 /*******************************************************************************
  * PRIVATE VARIABLES (STATIC)
@@ -153,6 +155,13 @@ void timebase_init(void)
   enable_mco();
   configure_ppsenable();
   enable_timer();
+
+  (void)xTaskCreate(datetime_task,
+                    "datetime",
+                    configMINIMAL_STACK_SIZE,
+                    NULL,
+                    tskIDLE_PRIORITY+1,
+                    NULL);
 
   /* enable the interpolator */
   tdc_setup();
@@ -414,6 +423,26 @@ static void capture_irq(void)
   TIM2->SR = 0;
 }
 
+
+/*============================================================================*/
+static void datetime_task(void* arg)
+/*------------------------------------------------------------------------------
+  Function:
+  this task handles the date and time. if the gnss module has no signal,
+  this task makes sure the date and time are counted.
+  as soon as the gnss module receives date and time they will be correctly set.
+  in:  arg -> not used
+  out: none
+==============================================================================*/
+{
+  (void)arg;
+  datetime_init();
+  for(;;)
+  {
+    datetime_tick();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
 
 void vApplicationTickHook(void)
 {

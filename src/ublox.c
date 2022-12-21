@@ -27,6 +27,7 @@
 #include "timebase.h"
 #include "convert.h"
 #include "eeprom.h"
+#include "datetime.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -342,7 +343,8 @@ static void gps_task(void* param)
     uint32_t bits = COMMAND_SVIN_STOP |
                     COMMAND_MANUAL_SVIN |
                     EVENT_SVIN_RECEIVED |
-                    COMMAND_RECONFIG_GNSS;
+                    COMMAND_RECONFIG_GNSS |
+                    EVENT_PVT_RECEIVED;
     bits = xEventGroupWaitBits(ublox_events, bits, true, false, portMAX_DELAY);
 
     /* a stop of the currently running survey-in was requested. switch to
@@ -432,6 +434,18 @@ static void gps_task(void* param)
         /* we received survey-in telegrams but no survey-in is in progress.
            therefore, the survey-in telegrams can be switched off. */
         ubx_config_msgrate(UBX_CLASS_TIM, UBX_ID_TIM_SVIN, 0);
+      }
+    }
+
+    /* position, velocity, time received? */
+    if(bits & EVENT_PVT_RECEIVED)
+    {
+      /* check if time and date are valid. */
+      if(pvt_info.flags & (BIT_00 | BIT_01))
+      {
+        /* correct the date and time. */
+        datetime_set(pvt_info.sec, pvt_info.min, pvt_info.hour,
+                     pvt_info.day, pvt_info.month, pvt_info.year);
       }
     }
   }
