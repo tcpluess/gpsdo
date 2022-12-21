@@ -24,8 +24,6 @@
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
 
-extern uint32_t StackTop; /* defined by the linker */
-
 /* priority of all interrupts. should be numerically higher than
    configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY */
 #define LOWEST_IRQ_PRIO 0xe0u
@@ -50,9 +48,9 @@ extern void vPortSVCHandler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-__attribute__((aligned (1024))) static void* vector_table[] =
+__attribute__((aligned (1024))) static void (*vector_table[])(void) =
 {
-    /* __initial_sp */                      &StackTop,
+    /* __initial_sp */                      0,
     /* Reset_Handler */                     0,
     /* NMI_Handler */                       0,
     /* HardFault_Handler */                 0,
