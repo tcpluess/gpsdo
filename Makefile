@@ -90,7 +90,7 @@ endif
 # Define FPU settings here.
 #
 ifeq ($(USE_HARD_FPU), 1)
-FPU = -mfloat-abi=hard -mfpu=fpv4-sp-d16
+FPU = -mhard-float -mfloat-abi=hard -mfpu=fpv4-sp-d16
 else
 FPU =
 endif
@@ -135,7 +135,7 @@ MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
 WARNFLAGS  = -Wall -Wextra -Wimplicit-fallthrough -Wshadow -Wunused
 WARNFLAGS += -Wmisleading-indentation -Wswitch-default
-WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef
+WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef -Wpedantic
 
 COMMONFLAGS = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
 
