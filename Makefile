@@ -138,6 +138,7 @@ MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 WARNFLAGS  = -Wall -Wextra -Wimplicit-fallthrough -Wshadow -Wunused
 WARNFLAGS += -Wmisleading-indentation -Wswitch-default
 WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef -Wpedantic
+WARNFLAGS += -Wstack-usage=540
 
 COMMONFLAGS  = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
 COMMONFLAGS += -fstack-usage #-fcallgraph-info
