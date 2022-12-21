@@ -59,7 +59,7 @@ static void decimal2deg(int32_t decimal, int32_t* degrees, float* minutes);
 void nmea_init(void)
 {
   #if 0
-  (void)xTaskCreate(nmea_task, "nmea output", 1500, NULL, 2, NULL);
+  (void)xTaskCreate(nmea_task, "nmea output", NMEA_STACK, NULL, NMEA_PRIO, NULL);
   #endif
 }
 

@@ -59,7 +59,7 @@ int main(void)
 {
   vic_init();
 
-  (void)xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, NULL);
+  (void)xTaskCreate(init, "init", INIT_STACK, NULL, INIT_PRIO, NULL);
 
   vTaskStartScheduler();
 

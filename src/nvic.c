@@ -48,9 +48,12 @@ extern void vPortSVCHandler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-__attribute__((aligned (1024))) static void (*vector_table[])(void) =
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+extern uint32_t StackTop;
+__attribute__((aligned (1024))) static void* vector_table[] =
 {
-    /* __initial_sp */                      0,
+    /* __initial_sp */                      &StackTop,
     /* Reset_Handler */                     0,
     /* NMI_Handler */                       0,
     /* HardFault_Handler */                 0,
@@ -149,6 +152,7 @@ __attribute__((aligned (1024))) static void (*vector_table[])(void) =
     /* 80: 0 */                             0,
     /* 81: FPU_IRQHandler */                0
 };
+#pragma GCC diagnostic pop
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)

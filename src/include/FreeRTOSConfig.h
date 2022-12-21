@@ -62,5 +62,22 @@ header file. */
 printf("# assertion failure: %s:%d\n", __FILE__, __LINE__); taskDISABLE_INTERRUPTS(); for( ;; ); }
 
 
+#define CNTL_STACK 1500
+#define NMEA_STACK 1500
+#define GPS_STACK 2500
+#define GPS_RX_STACK 1024
+#define INIT_STACK (configMINIMAL_STACK_SIZE)
+#define CONSOLE_STACK 1500
+#define DATE_STACK (configMINIMAL_STACK_SIZE)
+
+#define CNTL_PRIO (tskIDLE_PRIORITY+2)
+#define NMEA_PRIO (tskIDLE_PRIORITY+1)
+#define GPS_PRIO (tskIDLE_PRIORITY+2)
+#define GPS_RX_PRIO (tskIDLE_PRIORITY+2)
+#define INIT_PRIO (tskIDLE_PRIORITY+4)
+#define CONSOLE_PRIO (tskIDLE_PRIORITY+1)
+#define DATE_PRIO (tskIDLE_PRIORITY+1)
+
+
 #endif /* FREERTOS_CONFIG_H */
 

@@ -116,7 +116,7 @@ void control_init(void)
   adc_init();
   timebase_init();
   dac_setup();
-  (void)xTaskCreate(cntl_task, "control", 1500, NULL, 1, NULL);
+  (void)xTaskCreate(cntl_task, "control", CNTL_STACK, NULL, CNTL_PRIO, NULL);
 }
 
 

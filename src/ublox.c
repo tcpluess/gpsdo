@@ -190,7 +190,7 @@ static gnssstatus_t stat =
 
 void gnss_init(void)
 {
-  (void)xTaskCreate(gps_task, "gps", 2500, NULL, 1, NULL);
+  (void)xTaskCreate(gps_task, "gps", GPS_STACK, NULL, GPS_PRIO, NULL);
 }
 
 bool get_timepulse_error(float* result)
@@ -296,7 +296,7 @@ static void gps_task(void* param)
   rxstream = xStreamBufferCreate(RX_BUFFER_SIZE, 10);
   txstream = xStreamBufferCreate(TX_BUFFER_SIZE, 1);
   ublox_events = xEventGroupCreate();
-  (void)xTaskCreate(rx_task, "gps rx", 512, NULL, 2, NULL);
+  (void)xTaskCreate(rx_task, "gps rx", GPS_RX_STACK, NULL, GPS_RX_PRIO, NULL);
   qerr.valid = false;
   bool auto_svin = true;
 

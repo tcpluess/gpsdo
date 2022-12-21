@@ -111,7 +111,7 @@ volatile uint16_t stat_dac = 0u;
 
 void console_init(void)
 {
-  (void)xTaskCreate(console_task, "console", 1500, NULL, 2, NULL);
+  (void)xTaskCreate(console_task, "console", CONSOLE_STACK, NULL, CONSOLE_PRIO, NULL);
 }
 
 /*******************************************************************************

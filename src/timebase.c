@@ -158,9 +158,9 @@ void timebase_init(void)
 
   (void)xTaskCreate(datetime_task,
                     "datetime",
-                    configMINIMAL_STACK_SIZE,
+                    DATE_STACK,
                     NULL,
-                    tskIDLE_PRIORITY+1,
+                    DATE_PRIO,
                     NULL);
 
   /* enable the interpolator */
