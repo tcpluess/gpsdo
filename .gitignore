@@ -9,6 +9,7 @@ lst/*
 *.o
 *.c.d
 *.s.d
+*.su
 
 *.sublime-workspace
 *.jdebug.user

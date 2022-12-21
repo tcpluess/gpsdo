@@ -130,6 +130,8 @@ LIB  = $(patsubst %,-L%,$(LIBDIR))
 OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
 LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
 DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
+SU      = $(addsuffix .su, $(SRC) $(CXXSRC)) #stack usage
+#CI      = $(addsuffix .su, $(SRC) $(CXXSRC)) #callgraph info
 
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
@@ -137,7 +139,8 @@ WARNFLAGS  = -Wall -Wextra -Wimplicit-fallthrough -Wshadow -Wunused
 WARNFLAGS += -Wmisleading-indentation -Wswitch-default
 WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef -Wpedantic
 
-COMMONFLAGS = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
+COMMONFLAGS  = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
+COMMONFLAGS += -fstack-usage #-fcallgraph-info
 
 ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
 
@@ -150,7 +153,7 @@ CXXFLAGS += -std=c++20
 CXXFLAGS += -fno-threadsafe-statics -fno-use-cxa-atexit -fno-rtti -fno-exceptions
 CXXFLAGS += -MD -MP -MF $(@:.o=.d)
 
-LDFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNGLAGS) $(COMMONFLAGS)
+LDFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNFLAGS) $(COMMONFLAGS)
 LDFLAGS += -T$(MEMORYMAP) -T$(LDSCRIPT)
 LDFLAGS += -Xlinker --defsym=__HEAP_SIZE=$(HEAP_SIZE)
 LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
@@ -208,7 +211,7 @@ doc:
 
 .PHONY: clean
 clean:
-	@rm -rfv $(OBJS) $(LIST) $(DEP)
+	@rm -rfv $(OBJS) $(LIST) $(DEP) $(SU)
 	@rm -rfv bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).bin bin/$(PROJECT).s19
 	@rm -rfv lst/$(PROJECT).lss lst/$(PROJECT).map
 
