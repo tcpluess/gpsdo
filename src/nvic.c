@@ -20,6 +20,9 @@
 #include "stm32f407xx.h"
 #include "misc.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+
 /*******************************************************************************
  * PRIVATE CONSTANT DEFINITIONS
  ******************************************************************************/
@@ -48,8 +51,6 @@ extern void vPortSVCHandler(void);
  * PRIVATE VARIABLES (STATIC)
  ******************************************************************************/
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
 extern uint32_t StackTop;
 __attribute__((aligned (1024))) static void* vector_table[] =
 {
@@ -152,7 +153,6 @@ __attribute__((aligned (1024))) static void* vector_table[] =
     /* 80: 0 */                             0,
     /* 81: FPU_IRQHandler */                0
 };
-#pragma GCC diagnostic pop
 
 /*******************************************************************************
  * MODULE FUNCTIONS (PUBLIC)
@@ -182,6 +182,8 @@ void vic_enableirq(int32_t intnum, funcptr_t func)
     NVIC->IP[intnum] = LOWEST_IRQ_PRIO;
   }
 }
+
+#pragma GCC diagnostic pop
 
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
