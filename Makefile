@@ -67,7 +67,7 @@ MEMORYMAP = ./prj/stm32f407ve.ld
 ifeq ($(RUN_FROM_FLASH), 1)
 OPT = -O3 -falign-functions=16 -fno-inline -fomit-frame-pointer -flto
 else
-OPT = -O0 -g3 -Wa,-g
+OPT = -Og -g3 -Wa,-g -fstack-usage
 endif
 
 ################################################################################
@@ -130,20 +130,18 @@ LIB  = $(patsubst %,-L%,$(LIBDIR))
 OBJS    = $(addsuffix .o, $(ASRC) $(SRC) $(CXXSRC))
 LIST    = $(addsuffix .lss, $(ASRC) $(SRC) $(CXXSRC))
 DEP     = $(addsuffix .d, $(ASRC) $(SRC) $(CXXSRC))
-SU      = $(addsuffix .su, $(SRC) $(CXXSRC)) #stack usage
-#CI      = $(addsuffix .su, $(SRC) $(CXXSRC)) #callgraph info
+SU      = $(addsuffix .su, $(SRC) $(CXXSRC))
 
 MCFLAGS = -mcpu=$(MCU) -mthumb $(FPU)
 
 WARNFLAGS  = -Wall -Wextra -Wimplicit-fallthrough -Wshadow -Wunused
 WARNFLAGS += -Wmisleading-indentation -Wswitch-default
 WARNFLAGS += -Wformat=2 -Wformat-truncation -Wundef -Wpedantic
-WARNFLAGS += -Wstack-usage=540
+WARNFLAGS += -Wstack-usage=1000
 
 COMMONFLAGS  = -ffunction-sections -fdata-sections -fverbose-asm -fno-common
-COMMONFLAGS += -fstack-usage #-fcallgraph-info
 
-ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS)
+ASFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNFLAGS) $(COMMONFLAGS)
 
 CPFLAGS  = $(MCFLAGS) $(OPT) $(DEFS) $(WARNFLAGS) $(COMMONFLAGS)
 CPFLAGS += -Wstrict-prototypes -Wmissing-prototypes
