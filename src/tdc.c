@@ -67,7 +67,7 @@
 #define DATA_MSK 0xffffffu
 
 /* apb2 clock is 80 MHz, 1 amounts to divider 4, TDC7200 max. clk is 20 MHz */
-#define TDC_SPI_DIVIDER 1u
+#define TDC_SPI_DIVIDER 2u
 
 /* timeout to wait for the tdc */
 #define TDC_READY_TIMEOUT pdMS_TO_TICKS(10u) /* ms */
