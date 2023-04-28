@@ -22,3 +22,9 @@ Fancy:
 * `Intel HEX` for nicer display of the `.hex` file
 * `SREC` for nicer display of the `.s19` file
 * `MAPListing` for nicer display of the map file (`https://github.com/abcminiuser/sublimetext-gnu-map`)
+
+Header Files
+============
+
+* CMSIS Header files from `https://github.com/ARM-software/CMSIS_5.git`
+* STM32 Device Header files from `https://github.com/modm-io/cmsis-header-stm32.git`

@@ -39,7 +39,7 @@ LIBS = -lm
 # Define Ram/Flash mode here and optionally a project name
 #
 PROJECT        =
-RUN_FROM_FLASH = 0
+RUN_FROM_FLASH = 1
 HEAP_SIZE      = 4k
 STACK_SIZE     = 2k
 USE_HARD_FPU   = 1
