@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V10.6.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -52,7 +52,7 @@
 #endif
 
 #ifndef configSET_TLS_BLOCK
-    #define configSET_TLS_BLOCK( xTLSBlock )   ( _impure_ptr = &( xTLSBlock ) )
+    #define configSET_TLS_BLOCK( xTLSBlock )    ( _impure_ptr = &( xTLSBlock ) )
 #endif
 
 #ifndef configDEINIT_TLS_BLOCK

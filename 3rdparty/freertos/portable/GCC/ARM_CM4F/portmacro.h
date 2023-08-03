@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V10.6.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -82,7 +82,6 @@
     #define portTICK_PERIOD_MS    ( ( TickType_t ) 1000 / configTICK_RATE_HZ )
     #define portBYTE_ALIGNMENT    8
     #define portDONT_DISCARD      __attribute__( ( used ) )
-    #define portNORETURN         __attribute__( ( noreturn ) )
 /*-----------------------------------------------------------*/
 
 /* Scheduler utilities. */
