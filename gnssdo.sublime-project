@@ -3,7 +3,8 @@
   [
     {
       "path": ".",
-      "file_exclude_patterns": ["*.bin", "*.elf", ".keep", "*.d", "*.jdebug.user"]
+      "file_exclude_patterns": ["*.bin", "*.elf", ".keep", "*.d", "*.jdebug.user"],
+      "folder_exclude_patterns": [ "bin" ]
     }
   ],
   "build_systems":
