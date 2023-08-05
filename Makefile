@@ -57,7 +57,8 @@ ASRC   =
 #
 INCDIR = 3rdparty/freertos/include \
          3rdparty/freertos/portable/GCC/ARM_CM4F \
-         3rdparty/cmsis
+         3rdparty/cmsis/CMSIS/Core/Include \
+         3rdparty/cmsis-header-stm32/stm32f4xx/Include
 
 MEMORYMAP = ./prj/stm32f407ve.ld
 
@@ -159,8 +160,8 @@ LDFLAGS += -Xlinker --defsym=__STACK_SIZE=$(STACK_SIZE)
 LDFLAGS += -Wl,-Map=lst/$(PROJECT).map,--cref,--gc-sections,--no-warn-mismatch,--no-warn-rwx-segments $(LIB)
 
 .PHONY: all
-all: $(OBJS) bin/$(PROJECT).elf bin/$(PROJECT).hex bin/$(PROJECT).s19 \
-bin/$(PROJECT).bin lst/$(PROJECT).lss $(LDSCRIPT) Makefile
+all: $(OBJS) bin/$(PROJECT).elf \
+lst/$(PROJECT).lss $(LDSCRIPT) Makefile
 	@$(SZ) --format=Berkeley -d bin/$(PROJECT).elf
 
 %.c.o : %.c $(LDSCRIPT) Makefile
@@ -186,18 +187,6 @@ bin/$(PROJECT).bin lst/$(PROJECT).lss $(LDSCRIPT) Makefile
 bin/$(PROJECT).elf: $(OBJS) $(LDSCRIPT) Makefile
 	@echo "LD      $@"
 	@$(CXX) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
-
-bin/$(PROJECT).hex: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
-	@echo "OBJCOPY $@"
-	@$(CP) -O ihex $< $@
-
-bin/$(PROJECT).s19: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
-	@echo "OBJCOPY $@"
-	@$(CP) -O srec $< $@
-
-bin/$(PROJECT).bin:  bin/$(PROJECT).elf $(LDSCRIPT) Makefile
-	@echo "OBJCOPY $@"
-	@$(CP) -O binary $< $@
 
 lst/$(PROJECT).lss: bin/$(PROJECT).elf $(LDSCRIPT) Makefile
 	@echo "OBJDUMP $(PROJECT).elf"
