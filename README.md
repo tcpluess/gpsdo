@@ -35,3 +35,4 @@ Push to Github
 Normally, my own Git server is used (`https://hb9fsx.ch/git`) but to push the
 repo also to Github, use:
 `git push git@github.com:tcpluess/gpsdo.git --force`
+Therefore, the Github repo does not always contain all changes and branches etc.
