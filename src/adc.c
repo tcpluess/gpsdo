@@ -71,31 +71,33 @@ void adc_init(void)
   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
   /* configure analog input for pb1 */
-  GPIOB->MODER |= (3u << 2);
+  GPIOB->MODER |= (3u << GPIO_MODER_MODER1_Pos);
 
   /* enable the adc */
   RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
-  ADC1->CR2 = BIT_00;
+  ADC1->CR2 = ADC_CR2_ADON;
 
   /* enable the internal voltage reference */
-  ADC->CCR = BIT_23;
+  ADC->CCR = ADC_CCR_TSVREFE;
 
   /* scan the injected channels */
-  ADC1->CR1 = BIT_08;
+  ADC1->CR1 = ADC_CR1_SCAN;
 
-  /* use the slowest sampling rate for both channels */
-  ADC1->SMPR1 = (7u << 21);
-  ADC1->SMPR2 = (7u << 27);
+  /* use the slowest sampling rate for both channels (480 cycles) */
+  ADC1->SMPR1 = (7u << ADC_SMPR1_SMP17_Pos);
+  ADC1->SMPR2 = (7u << ADC_SMPR2_SMP9_Pos);
 
-  /* convert channels 9 and 17; 9 is the ocxo current, 17 is the reference */
-  ADC1->JSQR = (1u << 20) | (17u << 15) | (9u << 10);
+  /* convert channels 9 and 17; 9 is the ocxo current, 17 is the reference
+     JL is the number of conversions minus 1 */
+  ADC1->JSQR = (1u << ADC_JSQR_JL_Pos) |
+               (17u << ADC_JSQR_JSQ4_Pos) | (9u << ADC_JSQR_JSQ3_Pos);
 
   /* timer2 trigger output starts the adc conversion */
-  ADC1->CR2 |= (3u << 16) | (1u << 20);
+  ADC1->CR2 |= (3u << ADC_CR2_JEXTSEL_Pos) | (1u << ADC_CR2_JEXTEN_Pos);
 
   /* trigger an interrupt when the adc has finished the conversion */
   vic_enableirq(ADC_IRQn, adc1_interrupt); /*lint !e641 enum conversion */
-  ADC1->CR1 |= BIT_07;
+  ADC1->CR1 |= ADC_CR1_JEOCIE;
 }
 
 
@@ -116,7 +118,6 @@ float get_iocxo(void)
   }
 }
 
-
 /*******************************************************************************
  * PRIVATE FUNCTIONS (STATIC)
  ******************************************************************************/
@@ -132,9 +133,9 @@ static void adc1_interrupt(void)
 {
   /* acknowledge the interrupt and signal the semaphore to wake waiting tasks */
   uint32_t sr = ADC1->SR;
-  if(sr & BIT_02)
+  if(sr & ADC_SR_JEOC)
   {
-    sr &= ~BIT_02;
+    sr &= ~ADC_SR_JEOC;
     ADC1->SR = sr;
     (void)xSemaphoreGiveFromISR(adc_ready, NULL);
   }
