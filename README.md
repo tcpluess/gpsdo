@@ -28,3 +28,10 @@ Header Files
 
 * CMSIS Header files from `https://github.com/ARM-software/CMSIS_5.git`
 * STM32 Device Header files from `https://github.com/modm-io/cmsis-header-stm32.git`
+
+Push to Github
+==============
+
+Normally, my own Git server is used (`https://hb9fsx.ch/git`) but to push the
+repo also to Github, use:
+`git push git@github.com:tcpluess/gpsdo.git --force`
