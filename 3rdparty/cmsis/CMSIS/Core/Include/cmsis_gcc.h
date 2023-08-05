@@ -1,8 +1,8 @@
 /**************************************************************************//**
  * @file     cmsis_gcc.h
  * @brief    CMSIS compiler GCC header file
- * @version  V5.4.2
- * @date     17. December 2022
+ * @version  V5.4.1
+ * @date     27. May 2021
  ******************************************************************************/
 /*
  * Copyright (c) 2009-2021 Arm Limited. All rights reserved.
@@ -116,12 +116,6 @@
 #ifndef   __COMPILER_BARRIER
   #define __COMPILER_BARRIER()                   __ASM volatile("":::"memory")
 #endif
-#ifndef __NO_INIT
-  #define __NO_INIT                              __attribute__ ((section (".bss.noinit")))
-#endif
-#ifndef __ALIAS
-  #define __ALIAS(x)                             __attribute__ ((alias(x)))
-#endif
 
 /* #########################  Startup and Lowlevel Init  ######################## */
 
@@ -138,13 +132,13 @@ __STATIC_FORCEINLINE __NO_RETURN void __cmsis_start(void)
 {
   extern void _start(void) __NO_RETURN;
 
-  typedef struct __copy_table {
+  typedef struct {
     uint32_t const* src;
     uint32_t* dest;
     uint32_t  wlen;
   } __copy_table_t;
 
-  typedef struct __zero_table {
+  typedef struct {
     uint32_t* dest;
     uint32_t  wlen;
   } __zero_table_t;
