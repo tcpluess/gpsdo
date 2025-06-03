@@ -29,7 +29,7 @@ void OnProjectLoad (void) {
   //
   // User settings
   //
-  Project.SetOSPlugin ("FreeRTOSPlugin");
+  Project.SetOSPlugin ("FreeRTOSPlugin_CM4");
   File.Open ("../bin/gpsdo_sw.elf");
 }
 

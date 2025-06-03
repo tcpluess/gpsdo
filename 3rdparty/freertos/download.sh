@@ -1,5 +1,5 @@
 #/bin/bash
-VERSION=V10.6.0
+VERSION=V11.2.0
 
 get () {
   curl --create-dirs https://raw.githubusercontent.com/FreeRTOS/FreeRTOS-Kernel/$VERSION/$1 -o $1
