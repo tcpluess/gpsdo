@@ -5,7 +5,7 @@ get () {
   curl --create-dirs https://raw.githubusercontent.com/ARM-software/CMSIS_6/refs/tags/v$VERSION/$1 -o $1
 }
 
-get "LICENSE.txt"
+get "LICENSE"
 get "CMSIS/Core/Include/cmsis_compiler.h"
 get "CMSIS/Core/Include/cmsis_gcc.h"
 get "CMSIS/Core/Include/cmsis_version.h"
