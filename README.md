@@ -23,9 +23,10 @@ Fancy:
 * `SREC` for nicer display of the `.s19` file
 * `MAPListing` for nicer display of the map file (`https://github.com/abcminiuser/sublimetext-gnu-map`)
 
-Header Files
-============
+Additional Files
+================
 
+* FreeRTOS Kernel `https://github.com/FreeRTOS/FreeRTOS-Kernel.git`
 * CMSIS Header files from `https://github.com/ARM-software/CMSIS_6.git`
 * STM32 Device Header files from `https://github.com/modm-io/cmsis-header-stm32.git`
 
