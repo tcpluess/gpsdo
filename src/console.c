@@ -102,7 +102,7 @@ static command_t cmds[] =
   {date,            "date",       "show date and time"},
 };
 
-volatile uint16_t stat_dac = 0u;
+volatile float stat_dac = 0.0f;
 
 
 /*******************************************************************************
@@ -401,9 +401,9 @@ static int disp(int argc, const char* const argv[])
       uint32_t meanv = (uint32_t)sqrtf((float)mygnss->svi->meanv);
 
 
-      (void)printf("%-10llu e=%-7.2f eI=%-10.4f D=%-5d I=%.1f T=%.1f sat=%-2d " \
+      (void)printf("%-10llu e=%-7.2f eI=%-10.4f D=%-5.3f I=%.1f T=%.1f sat=%-2d " \
                    "lat=%ld lon=%ld obs=%-5lu mv=%-5lu tacc=%-3lu " \
-                   "status=%s\n",
+                   "status=%c\n",
                    now, ctl->e, ctl->esum, stat_dac, i, t, mygnss->sat->numsv,
                    mygnss->pvt->lat, mygnss->pvt->lon, mygnss->svi->obs, meanv,
                    mygnss->pvt->tacc, ctl->mode);
@@ -636,11 +636,11 @@ static int hold(int argc, const char* const argv[])
     else
     {
       /* command is given hold <number> ? */
-      int32_t dac;
-      if(str2num(argv[0], &dac, 0, UINT16_MAX))
+      float dacval = strtof(argv[0], NULL);
+      if((dacval >= 0.0f) && (dacval <= 65535.0f))
       {
         dac_sethold(true);
-        set_dac((uint16_t)dac);
+        set_dac(dacval, true);
         return 0;
       }
       else
