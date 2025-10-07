@@ -166,8 +166,8 @@ void timebase_init(void)
   /* enable the interpolator */
   tdc_setup();
 
-  /* the 1pps output is disabled by default */
-  ppsenable(false);
+  /* the 1pps output is enabled by default */
+  ppsenable(true);
 }
 
 bool pps_elapsed(void)
