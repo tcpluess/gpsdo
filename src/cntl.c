@@ -40,11 +40,11 @@
 #define OCXO_CURRENT_LIM 210.0f /* approx. 2.5 Watts @ 12 V */
 
 /* define the time limits after which the control loop constants are switched */
-#define FASTTRACK_TIME_LIMIT 5u /* min */
-#define LOCKED_TIME_LIMIT 15u /* min */
+#define FASTTRACK_TIME_LIMIT 1u /* min */
+#define LOCKED_TIME_LIMIT 1u /* min */
 
 /* allowed phase error to change the control loop constants */
-#define MAX_PHASE_ERR 100.0f /* ns */
+#define MAX_PHASE_ERR 1000.0f /* ns */
 
 /* minimum time the 1pps pulses must be present to switch out from holdover */
 #define HOLDOVER_PPS_LIMIT 10u
@@ -53,7 +53,7 @@
    (pwm output for the 1pps output) is reset */
 #define MAX_ALLOWED_PHASE_ERR 1000u /* 1000 ns = 1 us */
 
-#define TAU_FASTTRACK 10.0
+#define TAU_FASTTRACK 20.0
 #define TAU_LOCKED 100.0
 
 #define KP_FASTTRACK (1.0/(OSCGAIN * TAU_FASTTRACK))
@@ -89,7 +89,7 @@ typedef enum
  ******************************************************************************/
 
 static void cntl_task(void* param);
-static uint16_t pi_control(double KP, double TI, float u);
+static float pi_control(double KP, double TI, float u);
 static bool cntl(void);
 static inline void ledon(void) { GPIOE->BSRR = BIT_15; }
 static inline void ledoff(void) { GPIOE->BSRR = BIT_31; }
@@ -149,7 +149,7 @@ static void cntl_task(void* param)
   cntlstat = fast_track;
 
   ctl.esum = (double)(get_config()->last_dacval);
-  ctl.mode = "";
+  ctl.mode = ' ';
   dac_sethold(false);
 
   for(;;)
@@ -196,7 +196,7 @@ static status_t warmup_handler(void)
   out: returns the next status of the controller.
 ==============================================================================*/
 {
-  ctl.mode = "warmup";
+  ctl.mode = 'W';
 
   for(;;)
   {
@@ -225,7 +225,7 @@ static status_t holdover_handler(void)
 ==============================================================================*/
 {
   uint32_t holdover_tic_count = 0u;
-  ctl.mode = "holdover";
+  ctl.mode = 'H';
   ledon();
 
   for(;;)
@@ -335,7 +335,7 @@ static bool get_phase_err(void)
 
 
 /*============================================================================*/
-static uint16_t pi_control(double KP, double TI, float u)
+static float pi_control(double KP, double TI, float u)
 /*------------------------------------------------------------------------------
   Function:
   this is the actual pi controller.
@@ -365,7 +365,7 @@ static uint16_t pi_control(double KP, double TI, float u)
 
   /* calculate the output signal and limit it ("output saturation") */
   float efc = (float)(fmin(fmax(0.0, KP*u + ctl.esum), 65535.0));
-  return (uint16_t)efc;
+  return efc;
 }
 
 
@@ -390,15 +390,15 @@ static bool cntl(void)
   float abs_err = fabsf(ctl.e);
   if(abs_err < MAX_PHASE_ERR)
   {
-    ppsenable(true);
+    //ppsenable(true);
   }
   else
   {
-    ppsenable(false);
+    //ppsenable(false);
   }
 
   static uint32_t lock_counter = 0u;
-  uint16_t dacval = 0u;
+  float dacval = 0.0f;
   switch(cntlstat)
   {
     /* fast track: is normally used shortly after the ocxo has just
@@ -406,7 +406,7 @@ static bool cntl(void)
        more quickly */
     case fast_track:
     {
-      ctl.mode = "fast_track";
+      ctl.mode = 'F';
       dacval = pi_control(KP_FASTTRACK, KI_FASTTRACK, ctl.e);
 
       if(abs_err < MAX_PHASE_ERR)
@@ -434,7 +434,7 @@ static bool cntl(void)
        settled for a while. */
     case locked:
     {
-      ctl.mode = "locked";
+      ctl.mode = 'L';
       dacval = pi_control(KP_LOCKED, KI_LOCKED, ctl.e);
 
       if(abs_err < MAX_PHASE_ERR)
@@ -465,7 +465,7 @@ static bool cntl(void)
     /* this should be the normal operating state. */
     case stable:
     {
-      ctl.mode = "stable";
+      ctl.mode = 'S';
 
       /* kp, ki and prefilter are stored in the eeprom */
       double ki = (double)get_config()->tau;
@@ -493,7 +493,7 @@ static bool cntl(void)
     }
   }
 
-  set_dac(dacval);
+  set_dac(dacval, false);
   return true;
 }
 

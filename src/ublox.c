@@ -38,7 +38,7 @@
 
 /* usart configuration */
 #define BAUD_INITIAL 9600u /* initial baudrate */
-#define BAUD_RECONFIGURE 921600u /* baudrate after initialisation */
+#define BAUD_RECONFIGURE 230400u /* baudrate after initialisation */
 
 /* macros to set the integer and fractional part of the baudrate generator */
 #define BAUD_INT(x) ((uint32_t)(40000000.0/(16.0*(x))))
@@ -260,7 +260,7 @@ bool gps_check_health(void)
     ret = false;
   }
 
-  if(pvt_info.tacc > 100)
+  if(pvt_info.tacc > 2000)
   {
     #ifdef DEBUG
     (void)printf("# time accuracy too low!\n");

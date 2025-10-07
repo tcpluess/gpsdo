@@ -23,7 +23,7 @@ MCU  = cortex-m4
 #
 # List all defines here, like -D_DEBUG=1
 #
-DEFS =
+DEFS = -DUSE_DAC_INTERPOLATION
 
 #
 # List the user directory to look for the libraries here

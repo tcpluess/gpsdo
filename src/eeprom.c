@@ -21,6 +21,8 @@
 #include "misc.h"
 #include "convert.h"
 #include "checksum.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include <string.h>
 
 /*******************************************************************************
@@ -261,7 +263,7 @@ static void load_config(void)
     cfg.version = CFG_VERSION;
     cfg.last_dacval = 32768u;
     cfg.use_gps = true;
-    cfg.use_galileo = true;
+    cfg.use_galileo = false;
     cfg.svin_dur = 86400u; /* 24 hours */
     cfg.accuracy = UINT32_MAX;
     cfg.accuracy_limit = 300; /* 300mm default accuracy for survey-in */

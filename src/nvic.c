@@ -179,8 +179,13 @@ void vic_enableirq(int32_t intnum, funcptr_t func)
     uint32_t offset = ((uint32_t)intnum) / 32u;
 
     NVIC->ISER[offset] = (1u << shift); /*lint !e647 cast is ok */
-    NVIC->IP[intnum] = LOWEST_IRQ_PRIO;
+    NVIC->IPR[intnum] = LOWEST_IRQ_PRIO;
   }
+}
+
+void vic_setpriority(int32_t intnum, uint8_t prio)
+{
+  NVIC->IPR[intnum] = prio;
 }
 
 #pragma GCC diagnostic pop

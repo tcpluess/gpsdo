@@ -26,7 +26,7 @@ Fancy:
 Header Files
 ============
 
-* CMSIS Header files from `https://github.com/ARM-software/CMSIS_5.git`
+* CMSIS Header files from `https://github.com/ARM-software/CMSIS_6.git`
 * STM32 Device Header files from `https://github.com/modm-io/cmsis-header-stm32.git`
 
 Push to Github
