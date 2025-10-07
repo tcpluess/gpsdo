@@ -48,11 +48,12 @@ extern void dac_setup(void);
 ==============================================================================*/
 
 /*============================================================================*/
-extern void set_dac(uint16_t data);
+extern void set_dac(float dacval, bool force);
 /*------------------------------------------------------------------------------
   Function:
   initialise pin assignment and the usart 2
-  in:  none
+  in:  dacval -> floating point value to be sent to the dac
+       force -> force update of the dac even if manual hold is active
   out: none
 ==============================================================================*/
 
